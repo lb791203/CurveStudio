@@ -1,0 +1,27 @@
+channel,tone,measured_tone,density,source
+C,20,37.8,,KBA105 report
+C,30,52.5,,KBA105 report
+C,40,67.0,,KBA105 report
+C,50,79.2,,KBA105 report
+C,60,88.0,,KBA105 report
+C,70,93.0,,KBA105 report
+C,80,97.5,,KBA105 report
+M,20,30.8,,KBA105 report
+M,30,43.0,,KBA105 report
+M,40,55.0,,KBA105 report
+M,50,68.0,,KBA105 report
+M,60,76.7,,KBA105 report
+M,70,84.7,,KBA105 report
+M,80,91.6,,KBA105 report
+Y,20,41.1,0.97,KBA105 report
+Y,30,55.4,0.97,KBA105 report
+Y,40,67.7,0.97,KBA105 report
+Y,50,78.0,0.97,KBA105 report
+Y,60,85.0,0.97,KBA105 report
+Y,70,90.0,0.97,KBA105 report
+Y,80,95.0,0.97,KBA105 report
+K,20,36.3,,KBA105 report
+K,25,43.9,,KBA105 report
+K,50,73.2,,KBA105 report
+K,70,86.2,,KBA105 report
+K,75,89.4,,KBA105 report

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "CTV Curve",
+  "version": "0.1.0",
+  "identifier": "com.fmprint.ctvcurve",
+  "build": {
+    "beforeDevCommand": "python3 -m http.server 4173",
+    "beforeBuildCommand": "",
+    "devUrl": "http://localhost:4173",
+    "frontendDist": "../"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "CTV Curve",
+        "width": 1320,
+        "height": 880,
+        "minWidth": 1100,
+        "minHeight": 720
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "category": "Business",
+    "shortDescription": "TVI / CTV / G7 compensation curve tool",
+    "longDescription": "Print compensation curve tool for TVI, ISO 20654 CTV, G7 verification, Lab comparison, and RIP export."
+  }
+}
