@@ -44,13 +44,13 @@ test("visibleWarnings keeps non-import warnings available after view split", () 
     storageWarning: "storage warning",
     results: [
       { metricName: "TVI fallback", metricMethod: "reported_tone" },
-      { metricName: "TVI", metricMethod: "single-wavelength-mvp" },
+      { metricName: "TVI", metricMethod: "status_t_spectral" },
     ],
   }), els());
 
   assert.ok(warnings.some((item) => item.includes("手动测量表已修改")));
   assert.ok(warnings.some((item) => item.includes("CTV 模式需要")));
-  assert.ok(warnings.some((item) => item.includes("单波长 MVP")));
+  assert.ok(warnings.some((item) => item.includes("ISO 5-3 Status-T 加权")));
   assert.ok(warnings.includes("storage warning"));
 });
 

@@ -1,6 +1,7 @@
 import { cmykFromManualRow, cmykKey, labFromRow } from "./standards.js";
 import { average, groupByChannel, number } from "./shared.js";
 import { labFromSpectralRow } from "./spectral-color.js";
+import { buildNpdcVerification, summarizeNpdc, buildGrayVerification, summarizeGrayBalance, buildColorspaceVerification, classifyColorspacePatches } from "./g7-targets.js";
 
 const MID_TONES = new Set([40, 45, 50, 55, 60]);
 
@@ -459,6 +460,11 @@ export function g7Preview(options = {}) {
     completenessRows,
     verificationRows,
     tolerances,
+    npdcVerification: buildNpdcVerification(actualKOnly),
+    npdcSummary: summarizeNpdc(buildNpdcVerification(actualKOnly)),
+    grayVerification: buildGrayVerification(grayRows),
+    graySummary: summarizeGrayBalance(buildGrayVerification(grayRows)),
+    colorspaceRows: buildColorspaceVerification(classifyColorspacePatches([...rawRows, ...g7LabRows.map(function(r) { return Object.assign({}, r, { cmyk_c: r.cmyk && r.cmyk.c, cmyk_m: r.cmyk && r.cmyk.m, cmyk_y: r.cmyk && r.cmyk.y, cmyk_k: r.cmyk && r.cmyk.k }); })]), options.standardPatchMap, options.deltaEFn || deltaE76),
   };
 }
 
@@ -487,6 +493,11 @@ function emptyG7Preview(message) {
     patchClasses: { p2pTotal: 0, paper: 0, cmykSolids: 0, kOnly: 0, cmyNeutralGray: 0 },
     verificationRows,
     tolerances: {},
+    npdcVerification: [],
+    npdcSummary: { count: 0, avgDeltaL: NaN, maxDeltaL: NaN, status: "Missing" },
+    grayVerification: [],
+    graySummary: { count: 0, avgChroma: NaN, maxChroma: NaN, status: "Missing" },
+    colorspaceRows: [],
     completenessRows: [
       completenessRow("P2P/CGATS 色块", 0, "真实测量文件", false),
       completenessRow("纸白", 0, ">=1", false),
@@ -754,8 +765,8 @@ function isLikelyG7GrayCandidate(row) {
   const { c, m, y, k } = cmyk;
   if (k > 0.01 || c <= 0 || m <= 0 || y <= 0) return false;
   const myClose = Math.abs(m - y) <= 2.5;
-  const cLower = c <= m + 2.5 && c <= y + 2.5;
-  return myClose && cLower;
+  const cInRange = c >= m - 3 && c <= m + 10 && c >= y - 3 && c <= y + 10;
+  return myClose && cInRange;
 }
 
 function classifyG7Patches(rows) {
