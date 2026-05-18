@@ -92,8 +92,8 @@ export function visibleWarnings(state, els) {
   if (els.modeSelect.value === "ctv" && state.results.some((row) => row.metricName === "TVI fallback")) {
     warnings.push("CTV 模式需要纸白、实地和阶调 Lab/XYZ；当前部分点已降级为 TVI 计算。");
   }
-  if (state.results.some((row) => /single-wavelength|spectral_density_mvp/.test(String(row.metricMethod || "")))) {
-    warnings.push("光谱密度当前为单波长 MVP 估算，不等同于正式 Status-T/Status-E 密度。");
+  if (state.results.some((row) => /status_t_spectral/.test(String(row.metricMethod || "")))) {
+    warnings.push("光谱密度使用 ISO 5-3 Status-T 加权计算。若需 Status-E，请在设置中切换。");
   }
   if (state.storageWarning) warnings.push(state.storageWarning);
   return [...new Set(warnings.filter(Boolean))];

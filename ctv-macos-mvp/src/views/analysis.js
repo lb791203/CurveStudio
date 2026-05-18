@@ -196,5 +196,47 @@ export function renderG7(state, els) {
       </tr>
     `).join("")
     : "<tr><td colspan=\"5\">缺少 CMY gray / 灰平衡 Lab。</td></tr>";
+
+  // ─── G7 Certification-level: NPDC L* verification ───
+  els.g7NpdcVerificationBody.innerHTML = g7.npdcVerification?.length
+    ? g7.npdcVerification.filter((r) => Number.isFinite(r.deltaL)).map((r) => `
+      <tr>
+        <td>K ${num(r.tone)}%</td>
+        <td>${num(r.measuredL)}</td>
+        <td>${num(r.targetL)}</td>
+        <td class="${Math.abs(r.deltaL) > 3 ? "negative" : ""}">${signed(r.deltaL)}</td>
+      </tr>
+    `).join("")
+    : "<tr><td colspan=\"4\">缺少 K-only 光谱 Lab 数据。</td></tr>";
+  els.g7NpdcSummary.innerHTML = g7.npdcSummary?.count
+    ? `NPDC L*: avg ΔL ${num(g7.npdcSummary.avgDeltaL)} / max ΔL ${num(g7.npdcSummary.maxDeltaL)} — ${statusClass(g7.npdcSummary.status)}`
+    : "NPDC L*: 数据不足";
+
+  // ─── G7 Certification-level: Gray Balance ΔCh ───
+  els.g7GrayVerificationBody.innerHTML = g7.grayVerification?.length
+    ? g7.grayVerification.map((r) => `
+      <tr>
+        <td>${escapeHtml(r.label)}</td>
+        <td>${num(r.a)}</td>
+        <td>${num(r.b)}</td>
+        <td class="${r.chroma > 6 ? "negative" : r.chroma > 3 ? "warn" : ""}">${num(r.chroma)}</td>
+      </tr>
+    `).join("")
+    : "<tr><td colspan=\"4\">缺少 CMY gray 灰平衡 Lab。</td></tr>";
+  els.g7GraySummary.innerHTML = g7.graySummary?.count
+    ? `灰平衡 Ch: avg ${num(g7.graySummary.avgChroma)} / max ${num(g7.graySummary.maxChroma)} — ${statusClass(g7.graySummary.status)}`
+    : "灰平衡 Ch: 数据不足";
+
+  // ─── G7 Certification-level: Colorspace Compliance ───
+  els.g7ColorspaceBody.innerHTML = g7.colorspaceRows?.length
+    ? g7.colorspaceRows.map((r) => `
+      <tr>
+        <td>${escapeHtml(r.label)}</td>
+        <td class="${r.status === "Fail" ? "negative" : r.status === "Warning" ? "warn" : ""}">${num(r.deltaE)}</td>
+        <td><span class="status ${statusClass(r.status)}">${escapeHtml(r.status)}</span></td>
+      </tr>
+    `).join("")
+    : "<tr><td colspan=\"3\">缺少标准参考数据或测量 Lab。</td></tr>";
+
   renderG7Charts({ npdcChart: els.g7NpdcChart, grayChart: els.g7GrayChart }, g7, targetSeries("g7"));
 }

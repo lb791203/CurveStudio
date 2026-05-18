@@ -1,9 +1,8 @@
 import { groupByChannel, number } from "./shared.js";
 import { formatManualActionZh } from "./formatters.js";
-import { labFromSpectralRow, labFromXyz, xyzFromSpectralRow } from "./spectral-color.js";
+import { densityFromSpectralRow, labFromSpectralRow, labFromXyz, xyzFromSpectralRow } from "./spectral-color.js";
 
 const CHANNELS = ["C", "M", "Y", "K"];
-const DENSITY_WAVELENGTH_NM = { C: 620, M: 530, Y: 430, K: 560 };
 const DEFAULT_OUTPUT_GRID = [0, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 100];
 const CHANNEL_FIELD_ALIASES = {
   C: ["cmyk_c", "cyan", "c"],
@@ -475,19 +474,19 @@ function measurementMetrics(row, channel, tone, context) {
   let paperRelativeDensity = false;
 
   if (!Number.isFinite(density)) {
-    density = spectralDensity(row, context.paperRow, channel);
+    density = densityFromSpectralRow(row, context.paperRow, channel);
     paperRelativeDensity = Number.isFinite(density);
-    densityMethod = Number.isFinite(density) ? "single-wavelength-mvp" : undefined;
+    densityMethod = Number.isFinite(density) ? "status_t_spectral" : undefined;
   }
 
   if (!Number.isFinite(measuredTone) && Number.isFinite(density) && context.solidRow) {
     if (!Number.isFinite(solidDensity)) {
-      solidDensity = spectralDensity(context.solidRow, context.paperRow, channel);
+      solidDensity = densityFromSpectralRow(context.solidRow, context.paperRow, channel);
       paperRelativeDensity = Number.isFinite(solidDensity);
     }
     measuredTone = murrayDaviesToneFromDensity(density, solidDensity, paperRelativeDensity ? 0 : paperDensity);
     if (Number.isFinite(measuredTone)) {
-      measuredToneMethod = paperRelativeDensity ? "murray_davies_spectral_density_mvp" : "murray_davies_density";
+      measuredToneMethod = paperRelativeDensity ? "murray_davies_status_t_spectral" : "murray_davies_density";
       densityMethod ||= measuredToneMethod;
     }
   }
@@ -743,28 +742,6 @@ function pureSingleChannel(row) {
   const [single] = active;
   const othersZero = CHANNELS.every((channel) => channel === single.channel || approxZero(channelPercent(row, channel)));
   return othersZero ? single : null;
-}
-
-function spectralDensity(row, paperRow, channel) {
-  if (!row || !paperRow) return NaN;
-  const sample = spectralValue(row, DENSITY_WAVELENGTH_NM[channel]);
-  const paper = spectralValue(paperRow, DENSITY_WAVELENGTH_NM[channel]);
-  if (!Number.isFinite(sample) || !Number.isFinite(paper) || sample <= 0 || paper <= 0) return NaN;
-  return Math.max(0, Math.log10(paper / sample));
-}
-
-function spectralValue(row, targetNm) {
-  const exact = number(readValue(row, `spectral_nm${targetNm}`));
-  if (Number.isFinite(exact)) return exact;
-
-  let best = { distance: Infinity, value: NaN };
-  for (const [key, value] of Object.entries(row)) {
-    const match = key.match(/^spectral_nm(\d+)$/);
-    if (!match) continue;
-    const distance = Math.abs(Number(match[1]) - targetNm);
-    if (distance < best.distance) best = { distance, value: number(value) };
-  }
-  return best.distance <= 20 ? best.value : NaN;
 }
 
 function colorimetricToneFromColor(row, paperRow, solidRow) {
