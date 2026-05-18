@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CTV Curve MVP</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <div>
+          <h1>CTV Curve</h1>
+          <p class="subtle">TVI / CTV / G7 compensation MVP</p>
+        </div>
+
+        <nav class="nav-list" aria-label="主要页面">
+          <button class="nav-button active" type="button" data-view-button="job">工作</button>
+          <button class="nav-button" type="button" data-view-button="standard">标准</button>
+          <button class="nav-button" type="button" data-view-button="measurement">测量</button>
+          <button class="nav-button" type="button" data-view-button="analyze">分析</button>
+          <button class="nav-button" type="button" data-view-button="curve">曲线</button>
+          <button class="nav-button" type="button" data-view-button="g7">G7</button>
+          <button class="nav-button" type="button" data-view-button="export">导出</button>
+          <button class="nav-button" type="button" data-view-button="report">报告</button>
+          <button class="nav-button" type="button" data-view-button="settings">设置</button>
+        </nav>
+
+        <section class="panel">
+          <h2>计算设置</h2>
+          <label>
+            曲线模式
+            <select id="modeSelect">
+              <option value="tvi">TVI 补偿</option>
+              <option value="ctv">CTV 线性化</option>
+              <option value="g7">G7 近似灰平衡 / NPDC</option>
+            </select>
+          </label>
+          <label>
+            TVI 目标曲线
+            <select id="targetSelect"></select>
+          </label>
+          <label>
+            平滑强度
+            <span class="range-row">
+              <input id="smoothInput" type="range" min="0" max="4" step="1" value="2" />
+              <span id="smoothValue" class="range-value">2</span>
+            </span>
+          </label>
+          <label>
+            单点最大修正
+            <input id="limitInput" type="number" min="1" max="40" step="1" value="18" />
+          </label>
+          <label>
+            欠补偿比例 %
+            <input id="ratioInput" type="number" min="0" max="100" step="5" value="50" />
+          </label>
+          <button id="calculateButton" type="button">计算补偿曲线</button>
+          <p id="ctvModeWarning" class="ctv-warning" hidden></p>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <header class="toolbar">
+          <div>
+            <strong id="jobTitle">未加载测量数据</strong>
+            <span id="jobMeta"></span>
+          </div>
+          <div class="status-pill" id="diagnosisBadge">等待诊断</div>
+        </header>
+
+        <section class="view active" data-view="job">
+          <section class="panel wide-panel">
+            <div class="table-title">
+              <div>
+                <h2>Job / Run 项目记录</h2>
+                <span>记录客户、机器、纸张、测量设备和每次曲线生成结果。</span>
+              </div>
+              <div class="inline-actions">
+                <button id="saveRunButton" type="button">保存当前 Run</button>
+                <button id="clearRunsButton" type="button">清空 Run</button>
+              </div>
+            </div>
+            <div class="job-grid">
+              <label>客户<input id="jobCustomerInput" type="text" value="现场客户" /></label>
+              <label>机器<input id="jobPressInput" type="text" value="KBA" /></label>
+              <label>纸张<input id="jobPaperInput" type="text" value="Coated" /></label>
+              <label>测量设备<input id="jobDeviceInput" type="text" value="Techkon SpectroPlate / X-Rite eXact" /></label>
+              <label>操作员<input id="jobOperatorInput" type="text" value="" /></label>
+              <label>备注<input id="jobNoteInput" type="text" value="" /></label>
+            </div>
+            <div class="table-wrap compact">
+              <table>
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>标准</th>
+                    <th>测量点</th>
+                    <th>曲线点</th>
+                    <th>诊断</th>
+                    <th>欠补偿</th>
+                    <th>平均TVI偏差</th>
+	                    <th>最大ΔE</th>
+	                    <th>档案路径</th>
+	                    <th>G7</th>
+	                    <th>曲线质量</th>
+	                  </tr>
+                </thead>
+                <tbody id="runBody"></tbody>
+              </table>
+            </div>
+            <div class="summary-box" id="runCompareSummary"></div>
+          </section>
+        </section>
+
+        <section class="view" data-view="standard">
+          <section class="panel wide-panel">
+            <div class="table-title">
+              <div>
+                <h2>Standard Library</h2>
+                <span>选择印刷标准，查看 TVI 目标和 Lab 参考色块。</span>
+              </div>
+              <button id="reloadStandardButton" type="button">重新加载标准</button>
+            </div>
+            <div class="split-grid">
+              <div class="stack">
+                <label>
+                  印刷标准
+                  <select id="standardSelect"></select>
+                </label>
+                <div class="summary-box" id="standardSummary"></div>
+                <div class="summary-box">
+                  <strong>自定义 TVI 目标</strong>
+                  <div class="mini-grid">
+                    <label>25%<input id="customTvi25Input" type="number" min="0" max="40" step="0.1" value="12" /></label>
+                    <label>50%<input id="customTvi50Input" type="number" min="0" max="40" step="0.1" value="16" /></label>
+                    <label>75%<input id="customTvi75Input" type="number" min="0" max="40" step="0.1" value="12" /></label>
+                  </div>
+                  <button id="applyCustomTargetButton" type="button">应用自定义目标</button>
+                </div>
+              </div>
+              <div class="table-wrap compact">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>输入</th>
+                      <th>目标 TVI</th>
+                      <th>目标网点</th>
+                    </tr>
+                  </thead>
+                  <tbody id="targetCurveBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>色块</th>
+                    <th>C</th>
+                    <th>M</th>
+                    <th>Y</th>
+                    <th>K</th>
+                    <th>L*</th>
+                    <th>a*</th>
+                    <th>b*</th>
+                  </tr>
+                </thead>
+                <tbody id="standardPatchBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" data-view="measurement">
+          <section class="panel wide-panel">
+            <div class="table-title">
+              <div>
+                <h2>Measurement 数据采集</h2>
+                <span>支持文件导入、单点手动记录、Excel/WPS 粘贴和现场样例。</span>
+              </div>
+              <div class="inline-actions">
+                <select id="sampleSelect">
+                  <option value="">示例数据</option>
+                  <option value="kba105">KBA105 报告现场记录</option>
+                  <option value="kba162">KBA162 报告现场记录</option>
+                  <option value="ctvLab">CTV Lab 计算样例</option>
+                  <option value="p2p51">P2P51 G7 测量样例</option>
+                  <option value="tc1617">TC1617 G7 测量样例</option>
+                  <option value="sample">通用 CSV 示例</option>
+                </select>
+                <button id="loadSampleButton" type="button">载入</button>
+              </div>
+            </div>
+            <div class="split-grid">
+              <div class="stack">
+                <label class="file-drop">
+                  <input id="fileInput" type="file" accept=".csv,.txt,.cgats,.it8,.rwxf,.cxf,.json" />
+                  <span>选择 CSV / CGATS / IT8 / TXT / JSON 项目档案</span>
+                </label>
+                <textarea id="rawInput" spellcheck="false" placeholder="可粘贴 CSV/CGATS，或从 Excel/WPS 复制表格后粘贴到下方手动表。"></textarea>
+                <button id="parseButton" type="button">解析文本数据</button>
+              </div>
+              <div class="stack">
+                <div class="summary-box" id="measurementSummary"></div>
+                <div class="summary-box" id="importAuditSummary"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel wide-panel">
+            <div class="table-title">
+              <div>
+                <h2>手动测量表</h2>
+                <span>纸白、实地、阶调、灰平衡和叠印色都可记录 Lab / 密度 / 网点。</span>
+              </div>
+              <div class="inline-actions">
+                <select id="manualModeSelect">
+                  <option value="platePrint">版材/印刷品网点</option>
+                  <option value="density">密度 TVI</option>
+                  <option value="labCtv">CTV Lab</option>
+                  <option value="g7">G7 验证</option>
+                </select>
+                <button id="insertManualModeButton" type="button">按此模式插入</button>
+                <button id="templateFieldButton" type="button">纸白/实地</button>
+                <button id="template2575Button" type="button">25/50/75</button>
+                <button id="templateFullRampButton" type="button">完整阶调</button>
+                <button id="templateG7Button" type="button">灰平衡/叠印</button>
+                <button id="addManualRowButton" type="button">添加点</button>
+                <button id="applyManualButton" type="button">应用测量表</button>
+                <button id="clearManualButton" type="button">清空</button>
+              </div>
+            </div>
+            <div class="summary-box" id="manualHealthSummary"></div>
+            <div class="manual-wrap">
+              <table class="manual-table">
+                <thead>
+                  <tr>
+                    <th>类型</th>
+                    <th>通道/色块</th>
+                    <th>输入网点</th>
+                    <th>版/印实测网点</th>
+                    <th>密度 D</th>
+                    <th>L*</th>
+                    <th>a*</th>
+                    <th>b*</th>
+                    <th>来源</th>
+                    <th>备注</th>
+                    <th>计算路径</th>
+                    <th>数据状态</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="manualBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" data-view="analyze">
+          <section class="kpi-grid" id="diagnosisCards"></section>
+          <section class="panel wide-panel">
+            <div class="table-title">
+              <div>
+                <h2>Lab / ΔE 色差校验</h2>
+                <span>支持 ΔE76 / ΔE94 / ΔE2000 / CMC，判定公式在 Settings 中切换。</span>
+              </div>
+              <label class="inline-checkbox"><input id="sccaInput" type="checkbox" /> SCCA 纸白校正</label>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>色块</th>
+                    <th>测量 Lab</th>
+                    <th>标准 Lab</th>
+                    <th>ΔL</th>
+                    <th>Δa</th>
+                    <th>Δb</th>
+                    <th>ΔE76</th>
+                    <th>ΔE94</th>
+                    <th>ΔE2000</th>
+                    <th>CMC</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody id="labBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" data-view="curve">
+          <section class="chart-grid">
+            <article class="chart-panel">
+              <div class="chart-title">
+                <h2>测量 TVI / CTV / 目标</h2>
+                <span>Measured vs target</span>
+              </div>
+              <svg id="measurementChart" viewBox="0 0 720 420" role="img" aria-label="Measurement chart"></svg>
+            </article>
+            <article class="chart-panel">
+              <div class="chart-title">
+                <h2>补偿输出曲线</h2>
+                <span>Input tone to output tone</span>
+              </div>
+              <svg id="curveChart" viewBox="0 0 720 420" role="img" aria-label="Compensation curve chart"></svg>
+            </article>
+          </section>
+
+          <section class="panel wide-panel">
+            <div class="table-title">
+              <h2>曲线数据 / RIP 手动录入参考</h2>
+              <span id="statusText">等待导入</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>通道</th>
+                    <th>输入网点</th>
+                    <th>实测网点</th>
+                    <th>目标网点</th>
+                    <th>TVI/CTV偏差</th>
+                    <th>理论输出</th>
+                    <th>生产输出</th>
+	                    <th>Harmony/RIP 调整</th>
+	                    <th>建议录入网点</th>
+	                    <th>曲线检查</th>
+	                    <th>锁定</th>
+                    <th>人工输出</th>
+                    <th>自动输出</th>
+                    <th>来源</th>
+                    <th>算法来源</th>
+                  </tr>
+                </thead>
+                <tbody id="resultBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel wide-panel">
+            <div class="table-title">
+              <div>
+                <h2>Harmony / Prinergy 手动录入验收</h2>
+                <span>现场交付用：减少/增加百分比与建议录入网点。</span>
+              </div>
+            </div>
+            <div class="summary-box" id="curveAcceptanceSummary"></div>
+            <div class="table-wrap compact">
+              <table>
+                <thead>
+                  <tr>
+                    <th>通道</th>
+                    <th>输入网点</th>
+                    <th>操作</th>
+                    <th>调整%</th>
+                    <th>建议录入网点</th>
+                    <th>实测网点</th>
+                    <th>目标网点</th>
+                    <th>来源</th>
+                    <th>算法</th>
+                  </tr>
+                </thead>
+                <tbody id="ripEntryBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel wide-panel">
+            <div class="table-title">
+              <h2>曲线安全检查</h2>
+              <span>单调性、相邻跳变、高光/暗调保护</span>
+            </div>
+            <div id="safetySummary" class="summary-box"></div>
+          </section>
+        </section>
+
+        <section class="view" data-view="g7">
+          <section class="panel wide-panel">
+            <div class="table-title">
+              <div>
+                <h2>G7 验证</h2>
+                <span>第一阶段只做数据完整性和初步 NPDC / 灰平衡状态，不冒充认证级 G7。</span>
+              </div>
+              <button id="runG7Button" type="button">运行 G7 校验</button>
+            </div>
+            <div class="kpi-grid" id="g7Cards"></div>
+            <section class="chart-grid">
+              <article class="chart-panel">
+                <div class="chart-title">
+                  <h2>K-only NPDC</h2>
+                  <span>第一阶段预检曲线</span>
+                </div>
+                <svg id="g7NpdcChart" viewBox="0 0 720 420" role="img" aria-label="G7 NPDC chart"></svg>
+              </article>
+              <article class="chart-panel">
+                <div class="chart-title">
+                  <h2>灰平衡 a*b*</h2>
+                  <span>越接近 0 越中性</span>
+                </div>
+                <svg id="g7GrayChart" viewBox="0 0 720 420" role="img" aria-label="G7 gray balance chart"></svg>
+              </article>
+            </section>
+            <section class="split-grid">
+              <div class="table-wrap compact">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>K 输入</th>
+                      <th>实测 NPDC</th>
+                      <th>目标</th>
+                      <th>ΔTone</th>
+                      <th>ΔL*</th>
+                    </tr>
+                  </thead>
+                  <tbody id="g7NpdcBody"></tbody>
+                </table>
+              </div>
+              <div class="table-wrap compact">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>灰/叠印</th>
+                      <th>a*</th>
+                      <th>b*</th>
+                      <th>ΔCh</th>
+                      <th>ΔE</th>
+                    </tr>
+                  </thead>
+                  <tbody id="g7GrayBody"></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        </section>
+
+        <section class="view" data-view="export">
+          <section class="panel wide-panel">
+            <div class="table-title">
+              <div>
+                <h2>Export 导出</h2>
+                <span>导出字段必须记录标准、算法、欠补偿比例和生成时间。</span>
+              </div>
+            </div>
+            <div class="export-grid">
+              <button id="exportCsvButton" type="button">导出曲线 CSV</button>
+              <button id="exportHarmonyButton" type="button">导出 Harmony 手录表</button>
+              <button id="exportPrinergyButton" type="button">导出 Prinergy CSV</button>
+              <button id="exportSimpleRipButton" type="button">导出简化 RIP CSV</button>
+              <button id="exportCgatsButton" type="button">导出 CGATS TXT</button>
+              <button id="exportG7CsvButton" type="button">导出 G7 验证 CSV</button>
+              <button id="exportG7JsonButton" type="button">导出 G7 报告 JSON</button>
+              <button id="exportJsonButton" type="button">导出 JSON 项目档案</button>
+            </div>
+            <div class="summary-box" id="exportSummary"></div>
+          </section>
+        </section>
+
+        <section class="view" data-view="report">
+          <section class="panel wide-panel report-panel">
+            <div class="table-title">
+              <div>
+                <h2>现场报告</h2>
+                <span>汇总 Job、标准、曲线、Lab、G7 和 Run 对比，供现场复盘、打印或留档。</span>
+              </div>
+              <div class="inline-actions report-actions">
+                <button id="printReportButton" type="button">打印报告</button>
+              </div>
+            </div>
+            <div id="reportSummary" class="report-grid"></div>
+          </section>
+
+          <section class="panel wide-panel report-panel">
+            <div class="table-title">
+              <div>
+                <h2>G7 结论</h2>
+                <span>状态、主要问题和复测建议。</span>
+              </div>
+            </div>
+            <div id="reportG7Conclusion" class="summary-box"></div>
+          </section>
+
+          <section class="split-grid report-split">
+            <section class="panel wide-panel report-panel">
+              <div class="table-title">
+                <div>
+                  <h2>Lab / ΔE 校验</h2>
+                  <span>纸白、实地、叠印色和灰平衡色块的色差摘要。</span>
+                </div>
+              </div>
+              <div id="reportLabSummary" class="summary-box"></div>
+            </section>
+
+            <section class="panel wide-panel report-panel">
+              <div class="table-title">
+                <div>
+                  <h2>曲线质量</h2>
+                  <span>补偿曲线安全检查、TVI 偏差和生产建议。</span>
+                </div>
+              </div>
+              <div id="reportCurveSummary" class="summary-box"></div>
+            </section>
+          </section>
+
+          <section class="panel wide-panel report-panel">
+            <div class="table-title">
+              <div>
+                <h2>Run 对比</h2>
+                <span>保存两次以上 Run 后显示补偿前后变化。</span>
+              </div>
+            </div>
+            <div id="reportRunCompare" class="summary-box"></div>
+          </section>
+        </section>
+
+        <section class="view" data-view="settings">
+          <section class="panel wide-panel">
+            <div class="table-title">
+              <div>
+                <h2>Settings / Device / Packaging</h2>
+                <span>设备和桌面打包先建立接口与状态，不假装 SDK 已接入。</span>
+              </div>
+            </div>
+            <div class="settings-grid">
+              <div class="summary-box">
+                <strong>ΔE Formula</strong>
+                <label class="field-label">
+                  校验公式
+                  <select id="deltaFormulaSelect">
+                    <option value="de76">ΔE76</option>
+                    <option value="de94">ΔE94</option>
+                    <option value="de2000">ΔE2000</option>
+                    <option value="cmc">CMC (2:1)</option>
+                  </select>
+                </label>
+                <p>Lab 表、G7 预检和 Run 最大 ΔE 使用当前选择的公式判定。</p>
+              </div>
+              <div class="summary-box">
+                <strong>DeviceAdapter</strong>
+                <p>预留 connect / disconnect / calibrateWhite / readPatch / readStrip / getDeviceInfo。</p>
+                <p>当前状态：未接入 Techkon / X-Rite SDK。</p>
+              </div>
+              <div class="summary-box">
+                <strong>Desktop App</strong>
+                <div id="desktopSummary"></div>
+              </div>
+              <div class="summary-box">
+                <strong>Known Limits</strong>
+                <p>完整 G7 认证级补偿、RWXF/CxF 和真实设备 SDK 仍是下一阶段实现项。</p>
+              </div>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="./src/app.js?v=20260518-report-view"></script>
+  </body>
+</html>
