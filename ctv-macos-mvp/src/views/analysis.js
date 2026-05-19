@@ -1,12 +1,12 @@
-import { targetSeries, toExportRows } from "../curve-engine.js?v=20260518-report-view";
-import { summarizeLabVerification } from "../analysis-engine.js?v=20260518-report-view";
-import { buildCurveAcceptance } from "../curve-acceptance.js?v=20260518-report-view";
-import { renderCurveChart, renderG7Charts, renderMeasurementChart } from "../chart-renderer.js?v=20260518-report-view";
-import { curveRowKey } from "../curve-overrides.js?v=20260518-report-view";
-import { escapeAttr, escapeHtml } from "../shared.js?v=20260518-report-view";
-import { deltaFormulaLabel, methodLabel } from "../ui-labels.js?v=20260518-report-view";
-import { fmt, num, signed, kpiCard, statusClass, labText, renderCurveAcceptanceSummary } from "./helpers.js?v=20260518-report-view";
-import { visibleWarnings } from "./data.js?v=20260518-report-view";
+import { targetSeries, toExportRows } from "../curve-engine.js?v=20260519-instrument-verify";
+import { summarizeLabVerification } from "../analysis-engine.js?v=20260519-instrument-verify";
+import { buildCurveAcceptance } from "../curve-acceptance.js?v=20260519-instrument-verify";
+import { renderCurveChart, renderG7Charts, renderMeasurementChart } from "../chart-renderer.js?v=20260519-instrument-verify";
+import { curveRowKey } from "../curve-overrides.js?v=20260519-instrument-verify";
+import { escapeAttr, escapeHtml } from "../shared.js?v=20260519-instrument-verify";
+import { deltaFormulaLabel, methodLabel } from "../ui-labels.js?v=20260519-instrument-verify";
+import { fmt, num, signed, kpiCard, statusClass, labText, renderCurveAcceptanceSummary } from "./helpers.js?v=20260519-instrument-verify";
+import { visibleWarnings } from "./data.js?v=20260519-instrument-verify";
 
 export function renderAnalyze(state, els) {
   const diagnosis = state.diagnosis || { level: "empty", title: "未诊断", ratio: 50, messages: [] };

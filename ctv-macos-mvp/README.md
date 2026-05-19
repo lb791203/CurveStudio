@@ -65,13 +65,13 @@ Field-record examples from `KBA105_KBA162_完整TVI分析报告.docx` are saved 
 
 The two CSV files are retained as raw field-record references. The in-app `KBA105` / `KBA162` sample buttons load the normalized preset data from `samples/kba-presets.json`.
 
-The sample selector also includes a `CTV Lab 计算样例` plus P2P51 and TC1617 G7 measurement examples copied into `reference-data`. The CTV sample checks ISO 20654 Lab calculation. The G7 samples are useful for checking P2P patch detection, paper/solid classification, K-only NPDC behavior, and CMY gray candidates. Spectral-only files are intentionally marked `Data Incomplete` for Lab/G7 gray-balance until spectral-to-Lab conversion is implemented.
+The sample selector also includes a `CTV Lab 计算样例` plus P2P51 and TC1617 G7 measurement examples copied into `reference-data`. The CTV sample checks ISO 20654 Lab calculation. The G7 samples are useful for checking P2P patch detection, paper/solid classification, K-only NPDC behavior, and CMY gray candidates. Spectral files are converted to D50 XYZ/Lab for CTV and G7 checks when `SPECTRAL_NM*` columns are present.
 
 Structured import now supports files with `BEGIN_DATA_FORMAT` / `BEGIN_DATA`, including:
 
 - CGATS / IT8 characterization files with `CMYK_*`, `XYZ_*`, `LAB_*`.
 - P2P targets with CMYK patch definitions.
-- Spectral measurement files with `SPECTRAL_NM*` columns. For MVP, single-channel tint TVI is estimated from paper / tint / solid spectral density using one channel wavelength.
+- Spectral measurement files with `SPECTRAL_NM*` columns. Spectral TVI uses ISO 5-3 Status-T weighted density when paper / tint / solid patches are available. Status-E is not enabled yet and should not be reported until verified against official/vendor reference data.
 
 Pure standard or target files are parsed as reference patch data, but they do not generate compensation curves unless they include TVI, measured tone, density, or usable spectral measurement data.
 
@@ -88,7 +88,9 @@ The RIP adjustment is clamped by the configured single-point limit and then smoo
 
 For CTV mode, the same compensation pipeline uses `measured_ctv - target_ctv` as the deviation. CTV is calculated with ISO 20654 Vx/Vy/Vz normalization from Lab when Lab is present, or XYZ/D50 when XYZ is present. If CTV data is missing, the result is marked as a TVI fallback instead of silently pretending it is CTV.
 
-When spectral-only measurement files are used, the current density estimate is visibly marked as `single-wavelength-mvp` / `光谱密度 MVP`. This is a production warning, not a Status-T or Status-E density replacement.
+When spectral-only measurement files are used, the current density estimate is visibly marked as `status_t_spectral` / `ISO Status-T 密度`. Status-E remains a planned, disabled option.
+
+The `仪器验证` page compares software-calculated ISO 20654 CTV against vendor/instrument CTV fields when present. X-Rite i1Pro workflows should first export CGATS/IT8/CSV from X-Rite/i1Profiler/ColorPort with Lab, XYZ, or spectral data. If the file also contains `CTV`, `SCTV`, `instrument_ctv`, `measured_ctv`, or similar columns, the page reports software CTV, instrument CTV, ΔCTV, and Pass/Warning/Fail.
 
 The result table shows a manual-entry reference for Harmony, Prinergy, and other RIP tools:
 
@@ -112,12 +114,13 @@ The result table shows a manual-entry reference for Harmony, Prinergy, and other
 - Exported JSON archives include curve point overrides so locked manual output values can be restored.
 - CTV Lab sample generates ISO 20654 CTV rows and exports `measurement_method` metadata.
 - Lab verification supports ΔE76, ΔE94, ΔE2000, and CMC formula selection from Settings.
-- CTV fallback and single-wavelength spectral-density MVP warnings are visible in Curve and Export.
+- CTV fallback and Status-T spectral-density warnings are visible in Curve and Export.
+- Instrument cross verification reports ISO 20654 software CTV, instrument CTV, ΔCTV, and missing-field status.
 
 ## Next engineering steps
 
-- Replace MVP single-wavelength spectral density with full Status-T / Status-E style density calculation.
-- Validate ISO 20654 CTV results against vendor instrument exports from X-Rite / Techkon.
+- Add Status-E spectral-density weights only after official/vendor reference values are available.
+- Validate ISO 20654 CTV results against real X-Rite i1Pro and Techkon exports from measured test charts.
 - Turn G7 preview into certification-level NPDC / gray-balance verification once the exact P2P target mapping is finalized.
 - Wire the prepared `storagePlan` to real file-backed job archives once Tauri file APIs are available.
 - Evaluate CxF and RWXF from real X-Rite / Techkon exports.

@@ -108,6 +108,18 @@ test("parseImportText converts spectral patches to Lab for colorimetric workflow
   assert.ok(parsed.measurements.every((row) => Number.isFinite(row.colorimetricTone)));
 });
 
+test("parseImportText preserves instrument CTV fields for cross verification", () => {
+  const text = [
+    "channel,tone,lab_l,lab_a,lab_b,paper_lab_l,paper_lab_a,paper_lab_b,solid_lab_l,solid_lab_a,solid_lab_b,ctv,sample_id",
+    "C,50,70,-22,-31,95,0,-2,55,-38,-50,49.8,C50",
+  ].join("\n");
+  const parsed = parseImportText(text);
+
+  assert.equal(parsed.measurements.length, 1);
+  assert.equal(parsed.measurements[0].instrumentCtv, 49.8);
+  assert.equal(parsed.measurements[0].instrumentCtvMethod, "ctv");
+});
+
 test("headerless numeric rows parse with channel-rotation warning", () => {
   const parsed = parseImportText("50,68\n75,88");
 

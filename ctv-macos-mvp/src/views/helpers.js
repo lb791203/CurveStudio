@@ -23,7 +23,7 @@ export function statusClass(status) {
   if (status === "Pass" || status === "pass") return "pass";
   if (status === "Warning" || status === "warning") return "warning";
   if (status === "Fail" || status === "fail" || status === "danger") return "fail";
-  if (status === "Missing" || status === "Data Incomplete") return "warning";
+  if (status === "Missing" || status === "Data Incomplete" || String(status || "").startsWith("Missing ")) return "warning";
   return "neutral";
 }
 

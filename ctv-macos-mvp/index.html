@@ -18,6 +18,7 @@
           <button class="nav-button active" type="button" data-view-button="job">工作</button>
           <button class="nav-button" type="button" data-view-button="standard">标准</button>
           <button class="nav-button" type="button" data-view-button="measurement">测量</button>
+          <button class="nav-button" type="button" data-view-button="instrument">仪器验证</button>
           <button class="nav-button" type="button" data-view-button="analyze">分析</button>
           <button class="nav-button" type="button" data-view-button="curve">曲线</button>
           <button class="nav-button" type="button" data-view-button="g7">G7</button>
@@ -252,6 +253,37 @@
                   </tr>
                 </thead>
                 <tbody id="manualBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" data-view="instrument">
+          <section class="panel wide-panel">
+            <div class="table-title">
+              <div>
+                <h2>仪器交叉验证</h2>
+                <span>用 X-Rite / Techkon 导出的 Lab、XYZ 或光谱数据计算 ISO 20654 CTV，并与仪器/厂商软件 CTV 字段对比。</span>
+              </div>
+            </div>
+            <div class="summary-box" id="instrumentVerificationSummary"></div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>通道</th>
+                    <th>输入网点</th>
+                    <th>样本ID</th>
+                    <th>来源</th>
+                    <th>软件 CTV</th>
+                    <th>软件依据</th>
+                    <th>仪器 CTV</th>
+                    <th>仪器字段</th>
+                    <th>ΔCTV</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody id="instrumentVerificationBody"></tbody>
               </table>
             </div>
           </section>
@@ -602,6 +634,11 @@
                 <p>当前状态：未接入 Techkon / X-Rite SDK。</p>
               </div>
               <div class="summary-box">
+                <strong>光谱密度</strong>
+                <p>当前实现：ISO 5-3 Status-T 加权光谱密度，用于光谱文件的 Murray-Davies TVI。</p>
+                <p>Status-E 尚未启用；需要官方/厂商对照样本确认权重后再开放切换。</p>
+              </div>
+              <div class="summary-box">
                 <strong>Desktop App</strong>
                 <div id="desktopSummary"></div>
               </div>
@@ -615,6 +652,6 @@
       </section>
     </main>
 
-    <script type="module" src="./src/app.js?v=20260518-report-view"></script>
+    <script type="module" src="./src/app.js?v=20260519-instrument-verify"></script>
   </body>
 </html>
