@@ -7,13 +7,14 @@ import {
   toCsv,
   toHarmonyCsv,
   upsertTarget,
-} from "./curve-engine.js?v=20260518-report-view";
-import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260518-report-view";
+} from "./curve-engine.js?v=20260519-instrument-verify";
+import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260519-instrument-verify";
 import { applyCurveOverrides, curveRowKey, pruneCurveOverrides } from "./curve-overrides.js";
-import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260518-report-view";
+import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260519-instrument-verify";
 import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js";
-import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260518-report-view";
-import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260518-report-view";
+import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260519-instrument-verify";
+import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260519-instrument-verify";
+import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260519-instrument-verify";
 import { inspectImport } from "./import-inspector.js";
 import {
   canCalculateCurve,
@@ -33,7 +34,7 @@ import {
   updateManualRowFromEvent,
 } from "./manual-table.js";
 import { clearStoredRuns, loadStoredRuns, saveRunsAndLastProject } from "./run-store.js";
-import { buildRunMetrics } from "./run-compare.js?v=20260518-report-view";
+import { buildRunMetrics } from "./run-compare.js?v=20260519-instrument-verify";
 import { STANDARD_LIBRARY, buildPatchMap, standardById, targetOptions } from "./standards.js";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 
@@ -101,6 +102,8 @@ const els = {
   g7Cards: document.querySelector("#g7Cards"),
   standardSummary: document.querySelector("#standardSummary"),
   measurementSummary: document.querySelector("#measurementSummary"),
+  instrumentVerificationSummary: document.querySelector("#instrumentVerificationSummary"),
+  instrumentVerificationBody: document.querySelector("#instrumentVerificationBody"),
   exportSummary: document.querySelector("#exportSummary"),
   reportSummary: document.querySelector("#reportSummary"),
   reportG7Conclusion: document.querySelector("#reportG7Conclusion"),
@@ -389,6 +392,8 @@ function applyManualRows() {
       paperDensity: Number.isFinite(paperDensity) ? paperDensity : undefined,
       colorimetricTone: Number.isFinite(row.colorimetricTone) ? row.colorimetricTone : undefined,
       colorimetricMethod: row.colorimetricMethod,
+      instrumentCtv: Number.isFinite(row.instrumentCtv) ? row.instrumentCtv : undefined,
+      instrumentCtvMethod: row.instrumentCtvMethod,
       lab: labFromManual(row),
       source: row.source,
       note: row.note,
@@ -470,6 +475,7 @@ function render() {
   renderShell(state, els);
   renderStandard(state, els);
   renderMeasurement(state, els);
+  renderInstrument(state, els);
   renderManualTable();
   renderAnalyze(state, els);
   renderCurve(state, els);
@@ -495,6 +501,10 @@ function renderStandard() {
 
 function renderMeasurement() {
   _renderMeasurement(state, els);
+}
+
+function renderInstrument() {
+  _renderInstrument(state, els);
 }
 
 function renderManualTable() {
@@ -809,6 +819,7 @@ function updateCurveOverride(event) {
   _renderAnalyze(state, els);
   _renderCurve(state, els);
   _renderG7(state, els);
+  _renderInstrument(state, els);
   _renderExport(state, els);
   _renderReport(state, els);
 }
@@ -818,6 +829,7 @@ function updateManualCell(event) {
   markManualDirty();
   renderShell(state, els);
   _renderMeasurement(state, els);
+  _renderInstrument(state, els);
   _renderExport(state, els);
   _renderReport(state, els);
 }
@@ -827,6 +839,7 @@ function deleteManualRow(event) {
   markManualDirty();
   renderManualTable();
   _renderMeasurement(state, els);
+  _renderInstrument(state, els);
   _renderReport(state, els);
 }
 
@@ -842,6 +855,7 @@ function pasteManualTable(event) {
   markManualDirty();
   renderManualTable();
   _renderMeasurement(state, els);
+  _renderInstrument(state, els);
   _renderReport(state, els);
 }
 

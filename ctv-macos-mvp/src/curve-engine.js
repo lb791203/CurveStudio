@@ -1,6 +1,6 @@
 import { groupByChannel, number } from "./shared.js";
 import { formatManualActionZh } from "./formatters.js";
-import { densityFromSpectralRow, labFromSpectralRow, labFromXyz, xyzFromSpectralRow } from "./spectral-color.js";
+import { densityFromSpectralRow, labFromSpectralRow, labFromXyz, xyzFromSpectralRow } from "./spectral-color.js?v=20260519-instrument-verify";
 
 const CHANNELS = ["C", "M", "Y", "K"];
 const DEFAULT_OUTPUT_GRID = [0, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 100];
@@ -469,6 +469,7 @@ function measurementMetrics(row, channel, tone, context) {
   let density = densityFromRow(row, channel);
   let densityMethod;
   let measuredToneMethod = Number.isFinite(measuredTone) ? "reported_tone" : undefined;
+  const instrumentCtv = instrumentCtvFromRow(row, channel);
   let solidDensity = solidDensityForRow(row, channel, context);
   let paperDensity = paperDensityForRow(row, channel, context);
   let paperRelativeDensity = false;
@@ -504,6 +505,8 @@ function measurementMetrics(row, channel, tone, context) {
     measuredToneMethod,
     colorimetricTone: Number.isFinite(colorimetric.tone) ? colorimetric.tone : undefined,
     colorimetricMethod: colorimetric.method,
+    instrumentCtv: Number.isFinite(instrumentCtv.value) ? instrumentCtv.value : undefined,
+    instrumentCtvMethod: instrumentCtv.method,
     density: Number.isFinite(density) ? density : undefined,
     solidDensity: Number.isFinite(solidDensity) ? solidDensity : undefined,
     paperDensity: Number.isFinite(paperDensity) ? paperDensity : undefined,
@@ -840,6 +843,28 @@ function densityFromRow(row, channel) {
   return number(readValue(row, "density", `density_${lower}`, `d_${lower}`, "status_density", "density_status"));
 }
 
+function instrumentCtvFromRow(row, channel) {
+  const lower = channel.toLowerCase();
+  const aliases = [
+    "instrument_ctv",
+    "instrument_sctv",
+    "measured_ctv",
+    "ctv",
+    "sctv",
+    "iso_20654_ctv",
+    "iso20654_ctv",
+    "colorimetric_tone",
+    `instrument_ctv_${lower}`,
+    `ctv_${lower}`,
+    `sctv_${lower}`,
+  ];
+  for (const alias of aliases) {
+    const value = number(readValue(row, alias));
+    if (Number.isFinite(value)) return { value, method: alias };
+  }
+  return { value: NaN, method: "" };
+}
+
 function paperDensityForRow(row, channel, context) {
   const lower = channel.toLowerCase();
   const own = number(readValue(row, "paper_density", `paper_density_${lower}`, `density_paper_${lower}`));
@@ -895,6 +920,9 @@ function looksLikeHeader(header) {
     "measured_tvi",
     "measured_tone",
     "density",
+    "ctv",
+    "sctv",
+    "instrument_ctv",
     "patch_type",
     "sample_id",
     "sampleid",
