@@ -93,7 +93,7 @@ export function visibleWarnings(state, els) {
     warnings.push("CTV 模式需要纸白、实地和阶调 Lab/XYZ；当前部分点已降级为 TVI 计算。");
   }
   if (state.results.some((row) => /status_t_spectral/.test(String(row.metricMethod || "")))) {
-    warnings.push("光谱密度使用 ISO 5-3 Status-T 加权计算。若需 Status-E，请在设置中切换。");
+    warnings.push("光谱密度使用 ISO 5-3 Status-T 加权计算；Status-E 尚未启用，不能按 Status-E 报告。");
   }
   if (state.storageWarning) warnings.push(state.storageWarning);
   return [...new Set(warnings.filter(Boolean))];

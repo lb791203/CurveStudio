@@ -1,7 +1,7 @@
 import { channelsPresent } from "../curve-engine.js";
-import { summarizeLabVerification } from "../analysis-engine.js?v=20260518-report-view";
-import { buildSuggestedArchivePath, summarizeCurveSafety } from "../exporter.js?v=20260518-report-view";
-import { compareRuns, formatMetricChange } from "../run-compare.js?v=20260518-report-view";
+import { summarizeLabVerification } from "../analysis-engine.js?v=20260519-instrument-verify";
+import { buildSuggestedArchivePath, summarizeCurveSafety } from "../exporter.js?v=20260519-instrument-verify";
+import { compareRuns, formatMetricChange } from "../run-compare.js?v=20260519-instrument-verify";
 import { escapeHtml } from "../shared.js";
 import { algorithmDescription, deltaFormulaLabel } from "../ui-labels.js";
 import { num, statusClass } from "./helpers.js";

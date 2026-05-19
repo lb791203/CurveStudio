@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { statusText } from "../src/views/analysis.js";
 import { visibleWarnings } from "../src/views/data.js";
+import { renderInstrument } from "../src/views/instrument.js";
 import { renderExport, renderReport, renderRuns } from "../src/views/shell.js";
 
 function els(overrides = {}) {
@@ -14,6 +15,8 @@ function els(overrides = {}) {
     jobCustomerInput: { value: "Demo" },
     jobPressInput: { value: "KBA" },
     exportSummary: { innerHTML: "" },
+    instrumentVerificationSummary: { innerHTML: "" },
+    instrumentVerificationBody: { innerHTML: "" },
     reportSummary: { innerHTML: "" },
     reportG7Conclusion: { innerHTML: "" },
     reportLabSummary: { innerHTML: "" },
@@ -196,4 +199,21 @@ test("renderReport summarizes field report sections", () => {
   assert.match(localEls.reportCurveSummary.innerHTML, /曲线质量|平均 \|TVI\/CTV 偏差\|/);
   assert.match(localEls.reportRunCompare.innerHTML, /Run 对比|已解决/);
   assert.equal(localEls.printReportButton.disabled, false);
+});
+
+test("renderInstrument shows i1Pro cross verification rows", () => {
+  const localEls = els();
+  const localState = state({
+    measurements: [
+      { channel: "C", tone: 50, sampleId: "C50", sourceFormat: "X-Rite i1Pro CGATS", colorimetricTone: 50.2, colorimetricMethod: "iso_20654_lab", instrumentCtv: 49.9, instrumentCtvMethod: "ctv" },
+      { channel: "M", tone: 50, sampleId: "M50", sourceFormat: "Techkon CSV", colorimetricTone: 52.2, colorimetricMethod: "iso_20654_lab" },
+    ],
+  });
+
+  renderInstrument(localState, localEls);
+
+  assert.match(localEls.instrumentVerificationSummary.innerHTML, /仪器交叉验证/);
+  assert.match(localEls.instrumentVerificationSummary.innerHTML, /X-Rite i1Pro CGATS/);
+  assert.match(localEls.instrumentVerificationBody.innerHTML, /C50/);
+  assert.match(localEls.instrumentVerificationBody.innerHTML, /Missing Instrument CTV/);
 });
