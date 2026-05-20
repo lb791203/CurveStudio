@@ -1,8 +1,10 @@
 import { targetSeries } from "../curve-engine.js";
+import { classifyP2PPatch } from "../g7-targets.js";
 import { manualHealth, manualRowsToCsv } from "../manual-table.js";
 import { inspectImport } from "../import-inspector.js";
 import { cmykFromRow, cmykKey, labFromRow, targetOptions } from "../standards.js";
 import { escapeAttr, escapeHtml } from "../shared.js";
+import { buildPatchLayout, patchCoordinate, patchName } from "../target-layouts.js";
 import { deltaFormulaLabel, methodLabel } from "../ui-labels.js";
 import { renderImportAudit, fmt } from "./helpers.js";
 
@@ -153,10 +155,95 @@ function cmykToRgb(cmyk) {
 }
 
 function patchTitle(row, cmyk, lab) {
-  const id = row.sample_id || row.sampleid || row.id || row.name || "";
+  const id = patchName(row);
   const cmykText = `CMYK ${fmt(cmyk.c)}/${fmt(cmyk.m)}/${fmt(cmyk.y)}/${fmt(cmyk.k)}`;
   const labText = lab ? `Lab ${fmt(lab.l)} ${fmt(lab.a)} ${fmt(lab.b)}` : "无 Lab";
   return [id, cmykText, labText].filter(Boolean).join(" / ");
+}
+
+function patchKindLabel(cmyk) {
+  const classes = classifyP2PPatch(cmyk.c, cmyk.m, cmyk.y, cmyk.k);
+  if (classes.includes("paper")) return "纸白";
+  if (classes.includes("c_solid")) return "C 实地";
+  if (classes.includes("m_solid")) return "M 实地";
+  if (classes.includes("y_solid")) return "Y 实地";
+  if (classes.includes("k_solid")) return "K 实地";
+  if (classes.includes("npdc")) return "K-only NPDC";
+  if (classes.includes("gray_balance")) return "CMY 灰平衡";
+  if (classes.includes("overprint")) return "叠印";
+  return "普通色块";
+}
+
+function patchGuideRows(patches) {
+  return patches.map(({ row, cmyk, lab }, index) => {
+    const name = patchName(row) || `#${index + 1}`;
+    return `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(name)}</td>
+        <td>${fmt(cmyk.c)} / ${fmt(cmyk.m)} / ${fmt(cmyk.y)} / ${fmt(cmyk.k)}</td>
+        <td>${lab ? `${fmt(lab.l)} / ${fmt(lab.a)} / ${fmt(lab.b)}` : "无"}</td>
+        <td>${patchKindLabel(cmyk)}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function patchInspector(patches, selectedIndex, layout) {
+  const selected = selectedIndex !== null
+    && selectedIndex !== undefined
+    && Number.isFinite(Number(selectedIndex))
+    ? patches[Number(selectedIndex)]
+    : null;
+  if (!selected) {
+    return `
+      <div class="patch-inspector empty-state compact-empty">
+        <strong>点击色块查看数值</strong>
+        <p>选择导表中的任意色块后，这里显示坐标、Sample name、CMYK、Lab 和分类。</p>
+      </div>
+    `;
+  }
+  const name = patchName(selected.row) || `#${Number(selectedIndex) + 1}`;
+  const coordinate = patchCoordinate(name);
+  const lab = selected.lab;
+  return `
+    <div class="patch-inspector">
+      <div class="patch-inspector-title">
+        <strong>当前色块 ${escapeHtml(name)}</strong>
+        <span>${coordinate ? `x: ${coordinate.column} / y: ${coordinate.rowIndex}` : `#${Number(selectedIndex) + 1}`}</span>
+      </div>
+      <dl class="patch-inspector-grid">
+        <dt>CMYK</dt>
+        <dd>${fmt(selected.cmyk.c)} / ${fmt(selected.cmyk.m)} / ${fmt(selected.cmyk.y)} / ${fmt(selected.cmyk.k)}</dd>
+        <dt>Lab</dt>
+        <dd>${lab ? `${fmt(lab.l)} / ${fmt(lab.a)} / ${fmt(lab.b)}` : "无"}</dd>
+        <dt>分类</dt>
+        <dd>${escapeHtml(patchKindLabel(selected.cmyk))}</dd>
+        <dt>导表</dt>
+        <dd>${escapeHtml(layout.caption)}</dd>
+      </dl>
+    </div>
+  `;
+}
+
+function patchGuideSummary(patches, layout) {
+  const counts = patches.reduce((acc, { cmyk }) => {
+    const label = patchKindLabel(cmyk);
+    acc[label] = (acc[label] || 0) + 1;
+    return acc;
+  }, {});
+  const keyOrder = ["纸白", "C 实地", "M 实地", "Y 实地", "K 实地", "K-only NPDC", "CMY 灰平衡", "叠印", "普通色块"];
+  const badges = keyOrder
+    .filter((label) => counts[label])
+    .map((label) => `<span class="patch-guide-badge">${escapeHtml(label)} ${counts[label]}</span>`)
+    .join("");
+  return `
+    <div class="patch-guide-summary">
+      <p><strong>色彩导表</strong> ${escapeHtml(layout.caption)}</p>
+      <p>${escapeHtml(layout.note || "根据文件内 CMYK + Lab 生成色块图，用于确认当前选中的测量文件是否正确。")}</p>
+      <div class="patch-guide-badges">${badges}</div>
+    </div>
+  `;
 }
 
 function renderPatchPreview(state) {
@@ -196,18 +283,54 @@ function renderPatchPreview(state) {
       </div>
     `;
   }
-  const limit = 420;
+  const limit = 2000;
   const shown = patches.slice(0, limit);
+  const layout = buildPatchLayout(shown);
+  const selectedIndex = state.selectedPatchIndex !== null
+    && state.selectedPatchIndex !== undefined
+    && Number.isFinite(Number(state.selectedPatchIndex))
+    && Number(state.selectedPatchIndex) < shown.length
+    ? Number(state.selectedPatchIndex)
+    : null;
   return `
     <div class="patch-preview-title">
-      <strong>测量文件色块预览</strong>
-      <span>${patches.length} 个色块${patches.length > shown.length ? ` / 显示前 ${shown.length} 个` : ""}</span>
+      <strong>测量文件色块图</strong>
+      <span>${patches.length} 个色块${patches.length > shown.length ? ` / 显示前 ${shown.length} 个` : ""} / ${escapeHtml(layout.name)} / ${escapeHtml(layout.mode === "target-coordinate" ? "按导表坐标显示" : "按文件顺序显示")}</span>
     </div>
-    <div class="patch-preview-grid" aria-label="测量文件色块预览">
-      ${shown.map(({ row, cmyk, lab, color }) => `
-        <span class="patch-swatch${lab ? "" : " cmyk-only"}" style="background: ${escapeAttr(color)}" title="${escapeAttr(patchTitle(row, cmyk, lab))}"></span>
-      `).join("")}
+    <div class="patch-preview-layout">
+      <div class="patch-map-card">
+        <div class="patch-preview-grid ${layout.mode === "target-coordinate" ? "target-layout" : ""}" style="--patch-cols: ${layout.columns}; --patch-size: ${layout.cellSize}px" aria-label="测量文件色块预览">
+          ${layout.cells.map((cell) => {
+            if (!cell?.patch) return "<span class=\"patch-swatch empty\" aria-hidden=\"true\"></span>";
+            const { row, cmyk, lab, color } = cell.patch;
+            const selected = cell.index === selectedIndex;
+            const section = cell.section === "extra" ? " extra" : "";
+            return `<button class="patch-swatch${lab ? "" : " cmyk-only"}${section}${selected ? " selected" : ""}" type="button" data-patch-index="${cell.index}" data-patch-section="${escapeAttr(cell.section || "file")}" aria-pressed="${selected ? "true" : "false"}" style="background: ${escapeAttr(color)}" title="${escapeAttr(`${cell.index + 1}. ${patchTitle(row, cmyk, lab)} / ${patchKindLabel(cmyk)}`)}" aria-label="${escapeAttr(`查看色块 ${patchName(row) || cell.index + 1}`)}"></button>`;
+          }).join("")}
+        </div>
+      </div>
+      <div class="patch-guide-side">
+        ${patchGuideSummary(shown, layout)}
+        ${patchInspector(shown, selectedIndex, layout)}
+      </div>
     </div>
+    <details class="patch-guide-details">
+      <summary>展开对应色彩导表明细</summary>
+      <div class="patch-guide-table-wrap" aria-label="对应色彩导表">
+        <table class="patch-guide-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>色块</th>
+              <th>CMYK</th>
+              <th>Lab</th>
+              <th>分类/用途</th>
+            </tr>
+          </thead>
+          <tbody>${patchGuideRows(shown)}</tbody>
+        </table>
+      </div>
+    </details>
   `;
 }
 

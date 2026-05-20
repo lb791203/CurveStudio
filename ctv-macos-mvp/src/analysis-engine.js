@@ -1,7 +1,7 @@
 import { cmykFromManualRow, cmykKey, labFromRow } from "./standards.js";
 import { average, groupByChannel, number } from "./shared.js";
 import { labFromSpectralRow } from "./spectral-color.js";
-import { buildNpdcVerification, summarizeNpdc, buildGrayVerification, summarizeGrayBalance, summarizeWeightedDeltaL, buildColorspaceVerification, classifyColorspacePatches } from "./g7-targets.js?v=20260520-g7-weighted";
+import { buildNpdcVerification, summarizeNpdc, buildGrayVerification, summarizeGrayBalance, summarizeWeightedDeltaL, buildColorspaceVerification, classifyColorspacePatches } from "./g7-targets.js?v=20260520-patchmap";
 
 const MID_TONES = new Set([40, 45, 50, 55, 60]);
 

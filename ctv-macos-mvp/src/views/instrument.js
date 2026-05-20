@@ -1,7 +1,7 @@
-import { buildInstrumentVerificationRows, summarizeInstrumentVerification } from "../instrument-verification.js?v=20260520-g7-weighted";
+import { buildInstrumentVerificationRows, summarizeInstrumentVerification } from "../instrument-verification.js?v=20260520-patchmap";
 import { summarizeDeviceState } from "../device-adapter.js";
-import { escapeHtml } from "../shared.js?v=20260520-g7-weighted";
-import { num, statusClass, signed } from "./helpers.js?v=20260520-g7-weighted";
+import { escapeHtml } from "../shared.js?v=20260520-patchmap";
+import { num, statusClass, signed } from "./helpers.js?v=20260520-patchmap";
 
 export function renderInstrument(state, els) {
   renderDeviceAdapter(state, els);

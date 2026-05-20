@@ -1,12 +1,12 @@
-import { targetSeries, toExportRows } from "../curve-engine.js?v=20260520-g7-weighted";
-import { summarizeLabVerification } from "../analysis-engine.js?v=20260520-g7-weighted";
-import { buildCurveAcceptance } from "../curve-acceptance.js?v=20260520-g7-weighted";
-import { renderCurveChart, renderG7Charts, renderLabChromaticityChart, renderMeasurementChart } from "../chart-renderer.js?v=20260520-g7-weighted";
-import { curveRowKey } from "../curve-overrides.js?v=20260520-g7-weighted";
-import { escapeAttr, escapeHtml } from "../shared.js?v=20260520-g7-weighted";
-import { deltaFormulaLabel, methodLabel } from "../ui-labels.js?v=20260520-g7-weighted";
-import { fmt, num, signed, kpiCard, statusClass, labText, renderCurveAcceptanceSummary } from "./helpers.js?v=20260520-g7-weighted";
-import { visibleWarnings } from "./data.js?v=20260520-g7-weighted";
+import { targetSeries, toExportRows } from "../curve-engine.js?v=20260520-patchmap";
+import { summarizeLabVerification } from "../analysis-engine.js?v=20260520-patchmap";
+import { buildCurveAcceptance } from "../curve-acceptance.js?v=20260520-patchmap";
+import { renderCurveChart, renderG7Charts, renderLabChromaticityChart, renderMeasurementChart } from "../chart-renderer.js?v=20260520-patchmap";
+import { curveRowKey } from "../curve-overrides.js?v=20260520-patchmap";
+import { escapeAttr, escapeHtml } from "../shared.js?v=20260520-patchmap";
+import { deltaFormulaLabel, methodLabel } from "../ui-labels.js?v=20260520-patchmap";
+import { fmt, num, signed, kpiCard, statusClass, labText, renderCurveAcceptanceSummary } from "./helpers.js?v=20260520-patchmap";
+import { visibleWarnings } from "./data.js?v=20260520-patchmap";
 
 export function renderAnalyze(state, els) {
   const diagnosis = state.diagnosis || { level: "empty", title: "未诊断", ratio: 50, messages: [] };
@@ -203,24 +203,49 @@ export function renderG7(state, els) {
     patchClasses: { p2pTotal: 0, paper: 0, cmykSolids: 0, kOnly: 0, cmyNeutralGray: 0 },
     completenessRows: [],
   };
-  els.g7Cards.innerHTML = [
-    kpiCard("G7 状态", g7.status, g7.status === "Pass" ? "pass" : g7.status === "Fail" ? "danger" : g7.status === "Disabled" ? "neutral" : "warning"),
-    kpiCard("K-only 点数", g7.kOnlyCount, g7.kOnlyCount >= 5 ? "pass" : "warning"),
-    kpiCard("Lab 可比色块", g7.labPatchCount, g7.labPatchCount ? "pass" : "warning"),
-    kpiCard("Gray 色块", g7.grayPatchCount, g7.grayPatchCount ? "pass" : "warning"),
-    kpiCard("P2P/灰候选", g7.grayCandidateCount || 0, g7.grayCandidateCount ? "pass" : "warning"),
-    kpiCard("纸白/实地", `${g7.patchClasses?.paper || 0}/${g7.patchClasses?.cmykSolids || 0}`, (g7.patchClasses?.paper && g7.patchClasses?.cmykSolids >= 4) ? "pass" : "warning"),
-    kpiCard(`平均 ${deltaFormulaLabel(els.deltaFormulaSelect.value)}`, num(g7.avgDeltaE), "neutral"),
-    kpiCard(`最大 ${deltaFormulaLabel(els.deltaFormulaSelect.value)}`, num(g7.maxDeltaE), "neutral"),
-    kpiCard("NPDC 平均 wΔL*", num(g7.weightedAverage), "neutral"),
-    kpiCard("NPDC 最大 wΔL*", num(g7.maxNpdcDelta), Number(g7.maxNpdcDelta) > Number(g7.tolerances?.npdcMax || 3) ? "warning" : "neutral"),
-    kpiCard("灰平衡平均 wΔCh", num(g7.weightedGrayAverage), "neutral"),
-    kpiCard("灰平衡最大 wΔCh", num(g7.weightedGrayMax), Number(g7.weightedGrayMax) > Number(g7.tolerances?.grayMax || 3) ? "warning" : "neutral"),
-    `<div class="kpi-card span-card"><p><strong>G7 结论</strong> <span class="status ${statusClass(g7.conclusion?.level || g7.status)}">${escapeHtml(g7.conclusion?.title || g7.status)}</span></p><p>${escapeHtml(g7.conclusion?.summary || "")}</p>${(g7.conclusion?.recommendations || []).map((item) => `<p>${escapeHtml(item)}</p>`).join("")}</div>`,
-    `<div class="kpi-card span-card"><p><strong>G7 数据完整性</strong></p>${(g7.completenessRows || []).map((row) => `<p>${row.status === "Pass" ? "Pass" : "Missing"} ${escapeHtml(row.item)}: ${row.count} / ${escapeHtml(row.required)}</p>`).join("")}</div>`,
-    `<div class="kpi-card span-card"><p><strong>G7 验证项目</strong></p>${(g7.verificationRows || []).map((row) => `<p><span class="status ${statusClass(row.status)}">${escapeHtml(row.status)}</span> ${escapeHtml(row.item)}: ${num(row.value)} / ${escapeHtml(row.tolerance)}${row.message ? ` / ${escapeHtml(row.message)}` : ""}</p>`).join("")}</div>`,
-    `<div class="kpi-card span-card">${g7.missing.length ? g7.missing.map((item) => `<p>${escapeHtml(item)}</p>`).join("") : "<p>数据完整性满足第一阶段 G7 预检。</p>"}</div>`,
-  ].join("");
+  const hasNpdcRows = Boolean(g7.npdcRows?.length || g7.npdcSummary?.count || g7.npdcVerification?.some((row) => Number.isFinite(row.deltaL)));
+  const hasGrayRows = Boolean(g7.grayBalanceRows?.length || g7.grayVerification?.length || g7.graySummary?.count);
+  const hasCharts = Boolean(g7.grayNpdcSummary?.count || g7.npdcSummary?.count || g7.graySummary?.count || g7.weightedDeltaLSummary?.count);
+  const hasQuickTables = Boolean(g7.npdcRows?.length || g7.grayBalanceRows?.length);
+  const hasCertification = Boolean(g7.npdcVerification?.some((row) => Number.isFinite(row.deltaL)) || g7.grayVerification?.length);
+  const hasColorspace = Boolean(g7.colorspaceRows?.some((row) => Number.isFinite(row.deltaE)));
+  const hasG7Detail = Boolean(hasCharts || hasQuickTables || hasCertification);
+  const sectionAvailability = {
+    overview: true,
+    charts: hasCharts,
+    details: Boolean(hasQuickTables || hasCertification || hasColorspace),
+    compensation: Boolean(state.g7Compensation || hasNpdcRows || hasGrayRows),
+  };
+  if (!hasG7Detail) {
+    const missingItems = [...new Set(g7.missing?.length ? g7.missing : ["K-only NPDC 阶调", "CMY gray 灰平衡 Lab", "纸白与 CMYK 实地 Lab"])];
+    els.g7Cards.innerHTML = `
+      <div class="kpi-card span-card g7-empty-card">
+        <p><strong>G7 数据不足</strong> <span class="status warning">不能作为正式 G7 验收</span></p>
+        <p>当前缺少 G7 所需的 K-only NPDC、CMY gray 灰平衡或可比 Lab 数据。</p>
+        <p><strong>需要补齐</strong> ${missingItems.map(escapeHtml).join(" / ")}</p>
+        <p>导入 P2P/TC1617 测量文件，或在手动表录入完整 G7 灰平衡数据后再运行 G7 校验。</p>
+      </div>
+    `;
+  } else {
+    els.g7Cards.innerHTML = [
+      kpiCard("G7 状态", g7.status, g7.status === "Pass" ? "pass" : g7.status === "Fail" ? "danger" : g7.status === "Disabled" ? "neutral" : "warning"),
+      kpiCard("K-only 点数", g7.kOnlyCount, g7.kOnlyCount >= 5 ? "pass" : "warning"),
+      kpiCard("Lab 可比色块", g7.labPatchCount, g7.labPatchCount ? "pass" : "warning"),
+      kpiCard("Gray 色块", g7.grayPatchCount, g7.grayPatchCount ? "pass" : "warning"),
+      kpiCard("P2P/灰候选", g7.grayCandidateCount || 0, g7.grayCandidateCount ? "pass" : "warning"),
+      kpiCard("纸白/实地", `${g7.patchClasses?.paper || 0}/${g7.patchClasses?.cmykSolids || 0}`, (g7.patchClasses?.paper && g7.patchClasses?.cmykSolids >= 4) ? "pass" : "warning"),
+      kpiCard(`平均 ${deltaFormulaLabel(els.deltaFormulaSelect.value)}`, num(g7.avgDeltaE), "neutral"),
+      kpiCard(`最大 ${deltaFormulaLabel(els.deltaFormulaSelect.value)}`, num(g7.maxDeltaE), "neutral"),
+      kpiCard("NPDC 平均 wΔL*", num(g7.weightedAverage), "neutral"),
+      kpiCard("NPDC 最大 wΔL*", num(g7.maxNpdcDelta), Number(g7.maxNpdcDelta) > Number(g7.tolerances?.npdcMax || 3) ? "warning" : "neutral"),
+      kpiCard("灰平衡平均 wΔCh", num(g7.weightedGrayAverage), "neutral"),
+      kpiCard("灰平衡最大 wΔCh", num(g7.weightedGrayMax), Number(g7.weightedGrayMax) > Number(g7.tolerances?.grayMax || 3) ? "warning" : "neutral"),
+      `<div class="kpi-card span-card"><p><strong>G7 结论</strong> <span class="status ${statusClass(g7.conclusion?.level || g7.status)}">${escapeHtml(g7.conclusion?.title || g7.status)}</span></p><p>${escapeHtml(g7.conclusion?.summary || "")}</p>${(g7.conclusion?.recommendations || []).map((item) => `<p>${escapeHtml(item)}</p>`).join("")}</div>`,
+      `<div class="kpi-card span-card"><p><strong>G7 数据完整性</strong></p>${(g7.completenessRows || []).map((row) => `<p>${row.status === "Pass" ? "Pass" : "Missing"} ${escapeHtml(row.item)}: ${row.count} / ${escapeHtml(row.required)}</p>`).join("")}</div>`,
+      `<div class="kpi-card span-card"><p><strong>G7 验证项目</strong></p>${(g7.verificationRows || []).map((row) => `<p><span class="status ${statusClass(row.status)}">${escapeHtml(row.status)}</span> ${escapeHtml(row.item)}: ${num(row.value)} / ${escapeHtml(row.tolerance)}${row.message ? ` / ${escapeHtml(row.message)}` : ""}</p>`).join("")}</div>`,
+      `<div class="kpi-card span-card">${g7.missing.length ? `<p><strong>主要问题</strong></p>${g7.missing.map((item) => `<p>${escapeHtml(item)}</p>`).join("")}` : "<p>数据完整性满足第一阶段 G7 预检。</p>"}</div>`,
+    ].join("");
+  }
   if (els.g7CmySummary) {
     els.g7CmySummary.innerHTML = g7.grayNpdcSummary?.count
       ? metricStrip([
@@ -331,6 +356,37 @@ export function renderG7(state, els) {
     cmyNpdcChart: els.g7CmyNpdcChart,
     weightedChart: els.g7WeightedChart,
   }, g7, targetSeries("g7"));
+  applyG7Pagination(state, els, {
+    ...sectionAvailability,
+    hasQuickTables,
+    hasCertification,
+    hasColorspace,
+  });
+}
+
+function setHidden(element, hidden) {
+  if (element) element.hidden = Boolean(hidden);
+}
+
+function applyG7Pagination(state, els, availability) {
+  const requested = state.activeG7Panel || "overview";
+  const activePanel = availability[requested] ? requested : "overview";
+  state.activeG7Panel = activePanel;
+
+  els.g7PanelButtons?.forEach((button) => {
+    const panel = button.dataset.g7PanelButton || "overview";
+    const enabled = Boolean(availability[panel]);
+    button.disabled = !enabled;
+    button.classList.toggle("active", panel === activePanel);
+  });
+
+  setHidden(els.g7Cards, activePanel !== "overview");
+  setHidden(els.g7ChartGrid, activePanel !== "charts" || !availability.charts);
+  setHidden(els.g7QuickTablesSection, activePanel !== "details" || !availability.hasQuickTables);
+  setHidden(els.g7CertificationSummarySection, activePanel !== "details" || !availability.hasCertification);
+  setHidden(els.g7CertificationTablesSection, activePanel !== "details" || !availability.hasCertification);
+  setHidden(els.g7ColorspaceSection, activePanel !== "details" || !availability.hasColorspace);
+  setHidden(els.g7CompensationSection, activePanel !== "compensation" || !availability.compensation);
 }
 
 function renderG7Compensation(compensation, els) {
