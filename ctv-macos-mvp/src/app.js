@@ -7,14 +7,14 @@ import {
   toCsv,
   toHarmonyCsv,
   upsertTarget,
-} from "./curve-engine.js?v=20260520-g7-weighted";
-import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260520-g7-weighted";
+} from "./curve-engine.js?v=20260520-patchmap2";
+import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260520-patchmap2";
 import { applyCurveOverrides, curveRowKey, pruneCurveOverrides } from "./curve-overrides.js";
-import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260520-g7-weighted";
-import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js";
-import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260520-g7-weighted";
-import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260520-g7-weighted";
-import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260520-statusbar-context";
+import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260520-patchmap2";
+import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260520-patchmap2";
+import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260520-patchmap2";
+import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260520-patchmap2";
+import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260520-patchmap2";
 import { buildG7Compensation } from "./g7-compensation.js";
 import { DEVICE_ADAPTERS, buildMeasurementQueue, calibrateDeviceState, changeDeviceAdapterState, connectDeviceState, disconnectDeviceState, readDevicePatchState } from "./device-adapter.js";
 import { inspectImport } from "./import-inspector.js";
@@ -37,7 +37,7 @@ import {
   updateManualRowFromEvent,
 } from "./manual-table.js";
 import { clearStoredRuns, loadStoredRuns, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js";
-import { buildRunMetrics } from "./run-compare.js?v=20260520-g7-weighted";
+import { buildRunMetrics } from "./run-compare.js?v=20260520-patchmap2";
 import { STANDARD_LIBRARY, buildPatchMap, standardById, targetOptions } from "./standards.js";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 
@@ -138,6 +138,13 @@ const els = {
   manualHealthSummary: document.querySelector("#manualHealthSummary"),
   importAuditSummary: document.querySelector("#importAuditSummary"),
   g7Cards: document.querySelector("#g7Cards"),
+  g7PanelButtons: document.querySelectorAll("[data-g7-panel-button]"),
+  g7ChartGrid: document.querySelector("#g7ChartGrid"),
+  g7QuickTablesSection: document.querySelector("#g7QuickTablesSection"),
+  g7CompensationSection: document.querySelector("#g7CompensationSection"),
+  g7CertificationSummarySection: document.querySelector("#g7CertificationSummarySection"),
+  g7CertificationTablesSection: document.querySelector("#g7CertificationTablesSection"),
+  g7ColorspaceSection: document.querySelector("#g7ColorspaceSection"),
   standardSummary: document.querySelector("#standardSummary"),
   measurementSummary: document.querySelector("#measurementSummary"),
   measurementPatchPreview: document.querySelector("#measurementPatchPreview"),
@@ -193,12 +200,14 @@ const state = {
   safetyIssues: [],
   g7: null,
   g7Compensation: null,
+  activeG7Panel: "overview",
   curveOverrides: {},
   runs: [],
   ratioAuto: true,
   manualDirty: false,
   storageWarning: "",
   activeCurveChannel: "all",
+  selectedPatchIndex: null,
   selectedJobKey: "",
   device: {
     adapterId: "file",
@@ -263,12 +272,14 @@ function attachEvents() {
   els.applyCustomTargetButton.addEventListener("click", applyCustomTarget);
   els.runG7Button.addEventListener("click", () => {
     state.g7 = currentG7Preview();
+    state.activeG7Panel = "overview";
     renderG7();
     switchView("g7");
   });
   els.generateG7CompensationButton?.addEventListener("click", () => {
     state.g7 = currentG7Preview();
     state.g7Compensation = currentG7Compensation();
+    state.activeG7Panel = "compensation";
     renderG7();
     renderReport();
     switchView("g7");
@@ -297,6 +308,7 @@ function attachEvents() {
   els.resultBody.addEventListener("input", updateCurveOverride);
   els.jobRunList.addEventListener("click", restoreRunFromList);
   els.runBody.addEventListener("click", restoreRunFromList);
+  els.measurementPatchPreview?.addEventListener("click", selectMeasurementPatch);
 
   document.querySelectorAll(".channel-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -304,6 +316,12 @@ function attachEvents() {
       tab.classList.add("active");
       state.activeCurveChannel = tab.dataset.channel || "all";
       _renderCurve(state, els);
+    });
+  });
+  els.g7PanelButtons?.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.activeG7Panel = button.dataset.g7PanelButton || "overview";
+      renderG7();
     });
   });
   els.standardSelect.addEventListener("change", () => loadStandard(els.standardSelect.value));
@@ -412,6 +430,7 @@ function parseAndCalculate(options = {}) {
   state.manualRows = [];
   state.manualDirty = false;
   state.curveOverrides = {};
+  state.selectedPatchIndex = null;
   state.ratioAuto = true;
   calculate();
 }
@@ -460,6 +479,7 @@ async function loadManualPreset(key) {
   state.manualRows = kbaPresetRows(preset);
   state.manualDirty = false;
   state.curveOverrides = {};
+  state.selectedPatchIndex = null;
   els.jobPressInput.value = preset.press;
   els.modeSelect.value = "tvi";
   els.targetSelect.value = state.standard.target || "isoB";
@@ -548,6 +568,7 @@ function clearManualRows() {
   state.results = [];
   state.manualDirty = false;
   state.curveOverrides = {};
+  state.selectedPatchIndex = null;
   els.rawInput.value = "";
   calculate({ preserveRatio: true });
 }
@@ -590,8 +611,16 @@ function applyManualRows() {
   state.measurements = state.importInfo.measurements;
   state.manualDirty = false;
   state.curveOverrides = {};
+  state.selectedPatchIndex = null;
   els.rawInput.value = manualRowsToCsv(state.manualRows.map(normalizeManualRow));
   calculate();
+}
+
+function selectMeasurementPatch(event) {
+  const target = event.target.closest("[data-patch-index]");
+  if (!target || !els.measurementPatchPreview.contains(target)) return;
+  state.selectedPatchIndex = Number(target.dataset.patchIndex);
+  renderMeasurement();
 }
 
 function calculate(options = {}) {
