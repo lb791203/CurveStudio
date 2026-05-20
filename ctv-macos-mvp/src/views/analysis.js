@@ -393,25 +393,33 @@ function renderG7Compensation(compensation, els) {
   if (!els.g7CompensationSummary || !els.g7CompensationBody) return;
   const preview = compensation || {
     status: "Blocked",
-    message: "运行 G7 校验后，可生成 K NPDC 与 CMY 灰平衡补偿建议预览。",
+    message: "运行 G7 校验并先生成 TVI/CTV 曲线后，可查看生产用 G7 修正参考。",
     rows: [],
     warnings: [],
   };
   const level = preview.status === "Preview" ? "warning" : preview.status === "Disabled" ? "neutral" : "fail";
+  const ratio = Number.isFinite(preview.ratio) ? preview.ratio : NaN;
+  const ratioText = Number.isFinite(ratio) ? `${num(ratio * 100)}%` : "-";
+  const limitText = Number.isFinite(preview.limit) ? `${num(preview.limit)}%` : "-";
   els.g7CompensationSummary.innerHTML = `
     <p><strong>状态</strong> <span class="status ${statusClass(level)}">${escapeHtml(preview.status)}</span> ${escapeHtml(preview.message || "")}</p>
+    ${preview.status === "Preview" ? `
+      <p><strong>生产原则</strong> 正式 C/M/Y/K 输出沿用 TVI/CTV 基础曲线；G7 不再生成 CMY 共同输出。当前单点最大修正 ${limitText}，欠补偿比例 ${ratioText} 只用于 K NPDC 参考计算。</p>
+      <p><strong>灰平衡</strong> CMY gray 只作为偏青/偏品/偏黄/偏蓝诊断；后续需要基于单通道敏感度再拆分 C/M/Y 修正。</p>
+    ` : ""}
     ${(preview.warnings || []).map((item) => `<p>${escapeHtml(item)}</p>`).join("")}
   `;
   els.g7CompensationBody.innerHTML = preview.rows?.length
     ? preview.rows.map((row) => `
       <tr>
-        <td><span class="channel ${row.channel === "K" ? "K" : "CMY"}">${escapeHtml(row.channel)}</span><div class="cell-note">${escapeHtml(row.source)}</div></td>
+        <td><span class="channel ${escapeAttr(row.channel)}">${escapeHtml(row.channel)}</span><div class="cell-note">${escapeHtml(row.source)}</div></td>
         <td>${num(row.tone)}%</td>
-        <td><strong>${num(row.outputTone)}%</strong><div class="cell-note">理论 ${num(row.theoreticalOutput)}%</div></td>
-        <td class="${row.action === "增加" ? "negative" : row.action === "减少" ? "positive" : ""}">${escapeHtml(row.action)} ${num(Math.abs(row.adjustment))}%${row.limited ? "<div class=\"cell-note\">已保护</div>" : ""}</td>
-        <td>${signed(row.deltaL)}</td>
-        <td>${num(row.weightedDeltaL)}</td>
-        <td>${num(row.measuredNpdc)} / ${num(row.targetNpdc)}</td>
+        <td><strong>${num(row.baseOutputTone)}%</strong><div class="cell-note">${escapeHtml(row.metricName || "TVI/CTV")} / ${escapeHtml(row.pointSource === "interpolated" ? "插值" : "实测")}</div></td>
+        <td>${Number.isFinite(row.g7ReferenceOutput) ? `${num(row.g7ReferenceOutput)}%<div class="cell-note">${signed(row.g7ReferenceAdjustment)}%${row.directionConflict ? " / 方向冲突" : ""}</div>` : "诊断"}
+        </td>
+        <td><strong>${num(row.outputTone)}%</strong></td>
+        <td class="${row.action === "增加" ? "negative" : row.action === "减少" ? "positive" : ""}">${escapeHtml(row.action)} ${num(Math.abs(row.adjustment))}%</td>
+        <td>${escapeHtml(row.channel === "K" ? "K NPDC 参考" : "CMY 灰平衡诊断")}</td>
         <td>${escapeHtml(row.hint)}</td>
       </tr>
     `).join("")
