@@ -1,6 +1,6 @@
 import { groupByChannel, number } from "./shared.js";
 import { formatManualActionZh } from "./formatters.js";
-import { densityFromSpectralRow, labFromSpectralRow, labFromXyz, xyzFromSpectralRow } from "./spectral-color.js?v=20260520-g7-weighted";
+import { densityFromSpectralRow, labFromSpectralRow, labFromXyz, xyzFromSpectralRow } from "./spectral-color.js?v=20260520-patchmap";
 
 const CHANNELS = ["C", "M", "Y", "K"];
 const DEFAULT_OUTPUT_GRID = [0, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 100];

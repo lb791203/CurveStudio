@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CTV Curve MVP</title>
-    <link rel="stylesheet" href="./src/styles.css?v=20260520-statusbar-context" />
+    <link rel="stylesheet" href="./src/styles.css?v=20260520-patchmap2" />
   </head>
   <body>
     <main class="app-shell">
@@ -516,8 +516,14 @@
                 <button id="generateG7CompensationButton" class="secondary-action" type="button">生成 G7 补偿曲线</button>
               </div>
             </div>
-            <div class="kpi-grid" id="g7Cards"></div>
-            <section class="g7-card-grid">
+            <div class="g7-page-tabs" aria-label="G7 页面分区">
+              <button class="g7-page-tab active" type="button" data-g7-panel-button="overview">概览</button>
+              <button class="g7-page-tab" type="button" data-g7-panel-button="charts">图表</button>
+              <button class="g7-page-tab" type="button" data-g7-panel-button="details">明细</button>
+              <button class="g7-page-tab" type="button" data-g7-panel-button="compensation">补偿</button>
+            </div>
+            <div class="kpi-grid" id="g7Cards" data-g7-panel="overview"></div>
+            <section class="g7-card-grid" id="g7ChartGrid" data-g7-panel="charts">
               <article class="chart-panel g7-chart-card">
                 <div class="chart-title">
                   <h2>CMY NPDC</h2>
@@ -547,7 +553,7 @@
                 <svg id="g7WeightedChart" viewBox="0 0 720 420" role="img" aria-label="G7 weighted delta L chart"></svg>
               </article>
             </section>
-            <section class="split-grid">
+            <section class="split-grid" id="g7QuickTablesSection" data-g7-panel="details">
               <div class="table-wrap compact">
                 <table>
                   <thead>
@@ -578,7 +584,7 @@
               </div>
             </section>
 
-            <section class="panel g7-compensation-panel">
+            <section class="panel g7-compensation-panel" id="g7CompensationSection" data-g7-panel="compensation">
               <div class="table-title">
                 <div>
                   <h2>G7 补偿建议预览</h2>
@@ -606,7 +612,7 @@
             </section>
 
             <!-- G7 Certification-level sections -->
-            <section class="chart-grid">
+            <section class="chart-grid" id="g7CertificationSummarySection" data-g7-panel="details">
               <article class="chart-panel">
                 <div class="chart-title">
                   <h2>NPDC wΔL* 验证</h2>
@@ -620,7 +626,7 @@
                 </div>
               </article>
             </section>
-            <section class="split-grid">
+            <section class="split-grid" id="g7CertificationTablesSection" data-g7-panel="details">
               <div class="table-wrap compact">
                 <table>
                   <thead>
@@ -648,7 +654,7 @@
                 </table>
               </div>
             </section>
-            <section class="panel">
+            <section class="panel" id="g7ColorspaceSection" data-g7-panel="details">
               <div class="table-title"><h2>G7 色彩空间合规 (认证级)</h2></div>
               <div class="table-wrap">
                 <table>
@@ -851,6 +857,6 @@
       </section>
     </div>
 
-    <script type="module" src="./src/app.js?v=20260520-statusbar-context"></script>
+    <script type="module" src="./src/app.js?v=20260520-patchmap2"></script>
   </body>
 </html>

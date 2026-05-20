@@ -108,8 +108,70 @@ test("renderMeasurement renders patch preview from imported raw rows", () => {
 
   assert.match(localEls.measurementSummary.innerHTML, /来源: CGATS/);
   assert.match(localEls.measurementPatchPreview.innerHTML, /2 个色块/);
+  assert.match(localEls.measurementPatchPreview.innerHTML, /对应色彩导表/);
+  assert.match(localEls.measurementPatchPreview.innerHTML, /分类\/用途/);
   assert.equal((localEls.measurementPatchPreview.innerHTML.match(/patch-swatch/g) || []).length, 2);
   assert.match(localEls.measurementPatchPreview.innerHTML, /C50/);
+});
+
+test("renderMeasurement lays P2P coordinate patches as a compact target guide", () => {
+  const localEls = els();
+  const rawRows = [];
+  for (let row = 0; row < 25; row += 1) {
+    const rowName = String.fromCharCode(65 + row);
+    for (let column = 1; column <= 12; column += 1) {
+      rawRows.push({
+        sample_name: `${rowName}${column}`,
+        cmyk_c: (column % 4) * 25,
+        cmyk_m: (row % 5) * 20,
+        cmyk_y: (column % 3) * 35,
+        cmyk_k: row === 0 ? 0 : Math.min(100, row * 4),
+        lab_l: 95 - row,
+        lab_a: column - 6,
+        lab_b: row - 12,
+      });
+    }
+  }
+
+  renderMeasurement(state({
+    importInfo: {
+      sourceFormat: "CGATS/IT8",
+      warnings: [],
+      metadata: {},
+      rawRows,
+    },
+    measurements: [{ channel: "K", tone: 50 }],
+  }), localEls);
+
+  assert.match(localEls.measurementPatchPreview.innerHTML, /300 个色块 \/ 12 列 x 25 行/);
+  assert.match(localEls.measurementPatchPreview.innerHTML, /按导表坐标显示/);
+  assert.match(localEls.measurementPatchPreview.innerHTML, /--patch-cols: 12/);
+  assert.match(localEls.measurementPatchPreview.innerHTML, /点击色块查看数值/);
+  assert.equal((localEls.measurementPatchPreview.innerHTML.match(/data-patch-index=/g) || []).length, 300);
+  assert.doesNotMatch(localEls.measurementPatchPreview.innerHTML, /open>/);
+});
+
+test("renderMeasurement marks selected patch and shows inspector values", () => {
+  const localEls = els();
+  renderMeasurement(state({
+    importInfo: {
+      sourceFormat: "CGATS",
+      warnings: [],
+      metadata: {},
+      rawRows: [
+        { sample_name: "A1", cmyk_c: 0, cmyk_m: 0, cmyk_y: 0, cmyk_k: 0, lab_l: 95, lab_a: 0, lab_b: -2 },
+        { sample_name: "B1", cmyk_c: 50, cmyk_m: 25, cmyk_y: 0, cmyk_k: 0, lab_l: 70, lab_a: -25, lab_b: -35 },
+      ],
+    },
+    selectedPatchIndex: 1,
+    measurements: [{ channel: "C", tone: 50 }],
+  }), localEls);
+
+  assert.match(localEls.measurementPatchPreview.innerHTML, /class="patch-swatch[^"]* selected"/);
+  assert.match(localEls.measurementPatchPreview.innerHTML, /aria-pressed="true"/);
+  assert.match(localEls.measurementPatchPreview.innerHTML, /当前色块 B1/);
+  assert.match(localEls.measurementPatchPreview.innerHTML, /50.00 \/ 25.00 \/ 0.00 \/ 0.00/);
+  assert.match(localEls.measurementPatchPreview.innerHTML, /70.00 \/ -25.00 \/ -35.00/);
 });
 
 test("renderShell keeps workflow context in the bottom status bar", () => {
