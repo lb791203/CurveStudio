@@ -1,8 +1,8 @@
 import { channelsPresent } from "../curve-engine.js";
-import { summarizeLabVerification } from "../analysis-engine.js?v=20260519-instrument-verify";
-import { buildSuggestedArchivePath, summarizeCurveSafety } from "../exporter.js?v=20260519-instrument-verify";
-import { compareRuns, formatMetricChange } from "../run-compare.js?v=20260519-instrument-verify";
-import { escapeHtml } from "../shared.js";
+import { summarizeLabVerification } from "../analysis-engine.js?v=20260520-g7-weighted";
+import { buildSuggestedArchivePath, summarizeCurveSafety } from "../exporter.js?v=20260520-g7-weighted";
+import { compareRuns, formatMetricChange } from "../run-compare.js?v=20260520-g7-weighted";
+import { escapeAttr, escapeHtml } from "../shared.js";
 import { algorithmDescription, deltaFormulaLabel } from "../ui-labels.js";
 import { num, statusClass } from "./helpers.js";
 import { targetName, visibleWarnings } from "./data.js";
@@ -15,41 +15,74 @@ export function renderShell(state, els) {
   const hasMeasurements = state.measurements.length > 0;
   const hasResults = state.results.length > 0;
   const hasFreshResults = hasResults && !state.manualDirty;
-  els.jobTitle.textContent = state.measurements.length ? `${els.jobPressInput.value || "当前"} 测量任务` : "未加载测量数据";
-  els.jobMeta.textContent = state.measurements.length
+  if (els.workflowContextToolbar) {
+    els.workflowContextToolbar.hidden = true;
+  }
+  const jobTitle = state.measurements.length ? `${els.jobPressInput.value || "当前"} 测量任务` : "未加载测量数据";
+  const jobMeta = state.measurements.length
     ? `${state.importInfo?.sourceFormat || "Data"} / ${state.measurements.length} 个单色阶调点 / ${usableCount} 个可计算点 / ${channels.join(" ")} 通道 / ${state.standard.name}`
     : `${state.standard.name} / 等待导入或手动输入`;
-  els.diagnosisBadge.textContent = state.diagnosis?.title || "等待诊断";
-  els.diagnosisBadge.className = `status-pill ${state.diagnosis?.level || ""}`;
+  const diagnosisTitle = state.diagnosis?.title || (state.measurements.length ? "等待诊断" : "未加载测量数据");
+  if (els.jobTitle) els.jobTitle.textContent = jobTitle;
+  if (els.jobMeta) els.jobMeta.textContent = jobMeta;
+  if (els.diagnosisBadge) {
+    els.diagnosisBadge.textContent = diagnosisTitle;
+    els.diagnosisBadge.className = `status-pill ${state.diagnosis?.level || ""}`;
+  }
   const disabled = !hasFreshResults;
   [
     els.saveRunButton, els.exportCsvButton, els.exportHarmonyButton,
     els.exportPrinergyButton, els.exportSimpleRipButton, els.exportCgatsButton,
     els.exportG7CsvButton, els.exportG7JsonButton, els.exportJsonButton,
   ].forEach((el) => { if (el) el.disabled = disabled; });
+  if (els.exportJobArchiveButton) els.exportJobArchiveButton.disabled = !state.runs.length;
+  if (els.exportJobLibraryButton) els.exportJobLibraryButton.disabled = !state.runs.length;
   if (els.runG7Button) els.runG7Button.disabled = !hasMeasurements;
+  if (els.generateG7CompensationButton) els.generateG7CompensationButton.disabled = !hasMeasurements;
   if (els.calculateButton) els.calculateButton.disabled = !hasMeasurements || state.manualDirty;
   if (els.applyManualButton) els.applyManualButton.disabled = !state.manualRows.length;
   if (els.clearManualButton) els.clearManualButton.disabled = !state.manualRows.length;
+  if (els.desktopOpenFileButton) {
+    els.desktopOpenFileButton.disabled = !Boolean(window.__TAURI__?.dialog?.open && window.__TAURI__?.core?.invoke);
+    els.desktopOpenFileButton.title = els.desktopOpenFileButton.disabled
+      ? "浏览器预览请使用上方文件选择框；桌面 App 会启用原生打开对话框。"
+      : "使用 macOS/Windows 原生文件对话框打开测量或项目档案。";
+  }
+
+  if (els.statusBar) {
+    const parts = [];
+    parts.push(escapeHtml(jobMeta));
+    parts.push(els.modeSelect ? escapeHtml(`模式:${els.modeSelect.value.toUpperCase()}`) : "");
+    if (els.targetSelect) parts.push(escapeHtml(`目标:${targetName(els.targetSelect.value)}`));
+    if (state.measurements.length) parts.push(escapeHtml(`${state.measurements.length}测点`));
+    if (state.results.length) parts.push(escapeHtml(`${state.results.length}曲线点`));
+    const condition = state.importInfo?.metadata?.measurement_condition;
+    if (condition) parts.push(escapeHtml(condition));
+    if (els.ratioInput) parts.push(escapeHtml(`欠补偿${els.ratioInput.value}%`));
+    const press = els.jobPressInput?.value;
+    if (press) parts.push(escapeHtml(press));
+    parts.push(`<span class="status-bar-diagnosis ${state.diagnosis?.level || ""}">${escapeHtml(diagnosisTitle)}</span>`);
+    els.statusBar.innerHTML = parts.filter(Boolean).join('<span class="bar-sep">|</span>');
+  }
 }
 
 export function renderControlValues(els) {
   if (els.smoothValue) els.smoothValue.textContent = els.smoothInput.value;
 }
 
-function runCompareText(state) {
-  if (state.runs.length < 2) return "<strong>Run 比较</strong><p>保存至少两次 Run 后显示补偿前后变化。</p>";
-  const compare = compareRuns(state.runs[0], state.runs[1]);
+function runCompareText(state, runs = state.runs) {
+  if (runs.length < 2) return "<strong>Run 比较</strong><p>保存至少两次 Run 后显示补偿前后变化。</p>";
+  const compare = compareRuns(runs[0], runs[1]);
   if (!compare) return "<strong>Run 比较</strong><p>缺少可比较的 Run 指标。</p>";
   return `
     <strong>Run 比较</strong>
     <p>最新: ${escapeHtml(compare.latest.createdAt || "")} / 上一次: ${escapeHtml(compare.previous.createdAt || "")}</p>
     <p>平均 TVI 偏差: <span class="${changeClass(compare.avgTviDelta)}">${formatMetricChange(compare.avgTviDelta, "%")}</span></p>
     <p>最大 ΔE: <span class="${changeClass(compare.maxDeltaE)}">${formatMetricChange(compare.maxDeltaE)}</span></p>
-    <p>G7: <span class="${changeClass(compare.g7StatusChange)}">${escapeHtml(compare.g7StatusText)}</span> / Weighted Avg: <span class="${changeClass(compare.g7WeightedAverage)}">${formatMetricChange(compare.g7WeightedAverage)}</span></p>
+    <p>G7: <span class="${changeClass(compare.g7StatusChange)}">${escapeHtml(compare.g7StatusText)}</span> / NPDC wΔL*: <span class="${changeClass(compare.g7WeightedAverage)}">${formatMetricChange(compare.g7WeightedAverage)}</span></p>
     <p>G7 结论: ${escapeHtml(compare.g7ConclusionText)}</p>
     <p>G7 主要问题: ${escapeHtml(compare.g7PriorityText)}</p>
-    <p>NPDC 最大 ΔTone: <span class="${changeClass(compare.g7MaxNpdcDelta)}">${formatMetricChange(compare.g7MaxNpdcDelta, "%")}</span> / Gray Ch 最大: <span class="${changeClass(compare.g7MaxGrayCh)}">${formatMetricChange(compare.g7MaxGrayCh)}</span></p>
+    <p>NPDC 最大 wΔL*: <span class="${changeClass(compare.g7MaxNpdcDelta)}">${formatMetricChange(compare.g7MaxNpdcDelta)}</span> / Gray 最大 wΔCh: <span class="${changeClass(compare.g7MaxGrayCh)}">${formatMetricChange(compare.g7MaxGrayCh)}</span></p>
     <p>曲线质量: ${escapeHtml(compare.curveQualityText)} / 警告 <span class="${changeClass(compare.curveWarnings)}">${formatMetricChange(compare.curveWarnings)}</span> / 严重 <span class="${changeClass(compare.curveDangers)}">${formatMetricChange(compare.curveDangers)}</span></p>
     <div class="run-compare-grid">
       ${compare.channelRows.map((row) => `
@@ -60,10 +93,46 @@ function runCompareText(state) {
 }
 
 export function renderRuns(state, els) {
-  els.runBody.innerHTML = state.runs.length
-    ? state.runs.map((run) => `
+  const runItems = (state.runs || []).map((run, index) => ({ run, index }));
+  const selectedJobKey = state.selectedJobKey || "";
+  const visibleItems = selectedJobKey
+    ? runItems.filter((item) => runJobKey(item.run, item.index) === selectedJobKey)
+    : runItems;
+  const visibleRuns = visibleItems.map((item) => item.run);
+  const selectedJobName = visibleItems[0]?.run?.jobName || visibleItems[0]?.run?.jobId || selectedJobKey;
+  if (els.jobRunList) {
+    const jobs = groupJobRuns(state.runs || []);
+    els.jobRunList.innerHTML = jobs.length
+      ? [
+        selectedJobKey ? `
+          <div class="job-filter-bar">
+            <span>当前只显示作业：<strong>${escapeHtml(selectedJobName)}</strong></span>
+            <button class="secondary-mini" type="button" data-job-clear-filter>显示全部作业</button>
+          </div>
+        ` : "",
+        ...jobs.map((job) => `
+        <article class="job-run-card${selectedJobKey === job.key ? " active" : ""}">
+          <button class="job-run-open" type="button" data-run-open-index="${job.latestIndex}" aria-label="打开 ${escapeAttr(job.name)}">
+            <strong>${escapeHtml(job.name)}</strong>
+            <span>${job.runs.length} 次 Run / 最新 ${escapeHtml(job.latest.createdAt || "")}</span>
+            <span>${job.latest.measurements || job.latest.archive?.measurements?.length || 0} 测点 / ${job.latest.results || job.latest.archive?.results?.length || 0} 曲线点</span>
+            <span><span class="status ${statusClass(job.latest.g7Status || job.latest.metrics?.g7Status)}">${escapeHtml(job.latest.g7Status || job.latest.metrics?.g7Status || "未运行")}</span> <span class="status ${job.latest.curveQualityStatus === "Ready" ? "pass" : job.latest.curveQualityStatus === "Blocked" ? "fail" : "warning"}">${escapeHtml(job.latest.curveQualityStatus || job.latest.metrics?.curveQualityStatus || "Curve")}</span></span>
+          </button>
+          <div class="run-card-actions">
+            <button class="secondary-mini" type="button" data-job-select-key="${escapeAttr(job.key)}">查看Run</button>
+            <button class="secondary-mini" type="button" data-job-export-key="${escapeAttr(job.key)}">导出作业</button>
+            <button class="secondary-mini" type="button" data-job-rename-key="${escapeAttr(job.key)}">重命名作业</button>
+            <button class="danger-mini" type="button" data-job-delete-key="${escapeAttr(job.key)}">删除作业</button>
+          </div>
+        </article>
+      `),
+      ].join("")
+      : "<p class=\"empty-run-list\">保存 Run 后，这里会形成作业列表；每个作业下面可以保留多次 Run。</p>";
+  }
+  els.runBody.innerHTML = visibleItems.length
+    ? visibleItems.map(({ run, index }) => `
       <tr>
-        <td>${run.createdAt}</td>
+        <td><button class="text-button" type="button" data-run-open-index="${index}">${escapeHtml(run.createdAt || "")}</button><div class="cell-note">${escapeHtml(runName(run, index))}</div></td>
         <td>${escapeHtml(run.standard)}</td>
         <td>${run.measurements}</td>
         <td>${run.results}</td>
@@ -74,10 +143,42 @@ export function renderRuns(state, els) {
         <td>${escapeHtml(run.storagePath || "")}</td>
         <td>${escapeHtml(run.g7Status || "")}${run.g7ConclusionTitle ? `<br><small>${escapeHtml(run.g7ConclusionTitle)}</small>` : ""}</td>
         <td>${escapeHtml(run.curveQualityStatus || run.metrics?.curveQualityStatus || "")}</td>
+        <td class="run-row-actions">
+          <button class="secondary-mini" type="button" data-run-rename-index="${index}">重命名</button>
+          <button class="danger-mini" type="button" data-run-delete-index="${index}">删除</button>
+        </td>
       </tr>
     `).join("")
-    : "<tr><td colspan=\"11\">还没有保存 Run。</td></tr>";
-  els.runCompareSummary.innerHTML = runCompareText(state);
+    : `<tr><td colspan="12">${selectedJobKey ? "这个作业还没有保存 Run。" : "还没有保存 Run。"}</td></tr>`;
+  els.runCompareSummary.innerHTML = runCompareText(state, visibleRuns);
+}
+
+function runName(run, index) {
+  return run.name || run.jobId || run.runId || `Run ${index + 1}`;
+}
+
+function groupJobRuns(runs) {
+  const groups = new Map();
+  (runs || []).forEach((run, index) => {
+    const key = runJobKey(run, index);
+    const group = groups.get(key) || { key, name: runJobName(run, key), runs: [], indexes: [] };
+    group.runs.push(run);
+    group.indexes.push(index);
+    groups.set(key, group);
+  });
+  return [...groups.values()].map((group) => ({
+    ...group,
+    latest: group.runs[0],
+    latestIndex: group.indexes[0],
+  }));
+}
+
+function runJobKey(run, index) {
+  return run.jobKey || run.jobId || run.archive?.jobId || run.storagePath?.split("/")?.[1] || `job-${index}`;
+}
+
+function runJobName(run, key) {
+  return run.jobName || run.jobId || key;
 }
 
 function changeClass(change) {
@@ -88,6 +189,8 @@ function changeClass(change) {
 export function renderExport(state, els) {
   const warnings = visibleWarnings(state, els);
   const quality = summarizeCurveSafety(state.safetyIssues || []);
+  const jobs = groupJobRuns(state.runs || []);
+  const selectedJob = jobs.find((job) => job.key === state.selectedJobKey) || jobs[0];
   const suggestedPath = buildSuggestedArchivePath({
     customer: els.jobCustomerInput.value,
     press: els.jobPressInput.value,
@@ -101,10 +204,12 @@ export function renderExport(state, els) {
     <p>ΔE 公式: ${deltaFormulaLabel(els.deltaFormulaSelect.value)}</p>
     <p>欠补偿比例: ${els.ratioInput.value}%</p>
     <p>曲线质量: ${quality.status} / 警告 ${quality.warnings} / 严重 ${quality.dangers}</p>
-    <p>G7: ${escapeHtml(state.g7?.status || "未运行")} / Weighted Avg ${num(state.g7?.weightedAverage)} / Gray Ch 最大 ${num(state.g7?.maxGrayCh)}</p>
+    <p>G7: ${escapeHtml(state.g7?.status || "未运行")} / NPDC wΔL* ${num(state.g7?.weightedAverage)} / Gray wΔCh 最大 ${num(state.g7?.maxGrayCh)}</p>
     <p>测量条件: ${state.importInfo?.metadata?.measurement_condition || "未指定"}</p>
     <p>曲线点: ${state.results.length}</p>
     <p>建议项目路径: ${escapeHtml(suggestedPath)}</p>
+    <p>Job 档案: ${jobs.length ? `${jobs.length} 个作业 / ${state.runs.length} 次 Run；当前导出 ${escapeHtml(selectedJob?.name || "最新作业")}` : "还没有保存 Run，暂不能导出 Job 档案。"}</p>
+    <p>JSON 导入: 文件选择框可识别单次项目档案、单个 Job 档案和全部 Job 历史。</p>
     <p>提醒: ${warnings.length ? escapeHtml(warnings.join(" / ")) : "无"}</p>
   `;
 }
@@ -118,6 +223,7 @@ export function renderReport(state, els) {
   const tvi = tviDeltaSummary(state.results || []);
   const compare = state.runs.length >= 2 ? compareRuns(state.runs[0], state.runs[1]) : null;
   const generatedAt = new Date().toLocaleString();
+  const jobs = groupJobRuns(state.runs || []);
 
   if (els.printReportButton) els.printReportButton.disabled = !state.results.length;
 
@@ -134,6 +240,7 @@ export function renderReport(state, els) {
       <strong>报告上下文</strong>
       <p>纸张: ${escapeHtml(els.jobPaperInput.value || "未填")} / 设备: ${escapeHtml(els.jobDeviceInput.value || "未填")} / 操作员: ${escapeHtml(els.jobOperatorInput.value || "未填")}</p>
       <p>诊断: ${escapeHtml(state.diagnosis?.title || "等待诊断")} / 测量条件: ${escapeHtml(state.importInfo?.metadata?.measurement_condition || "未指定")} / 生成时间: ${escapeHtml(generatedAt)}</p>
+      <p>作业库: ${jobs.length ? `${jobs.length} 个作业 / ${state.runs.length} 次 Run；可在 Export 导出 Job 档案` : "还没有保存 Run。"}</p>
       <p>提醒: ${warnings.length ? escapeHtml(warnings.join(" / ")) : "无"}</p>
       ${els.jobNoteInput.value ? `<p>备注: ${escapeHtml(els.jobNoteInput.value)}</p>` : ""}
     </div>
@@ -142,7 +249,7 @@ export function renderReport(state, els) {
   els.reportG7Conclusion.innerHTML = `
     <p><span class="status ${statusClass(conclusion.level || g7.status)}">${escapeHtml(conclusion.title || "G7 未运行")}</span></p>
     <p>${escapeHtml(conclusion.summary || "运行 G7 验证后，这里会显示 NPDC、灰平衡和 ΔE 的结论。")}</p>
-    <p>Weighted Avg: ${num(g7.weightedAverage)} / Max ΔE: ${num(g7.maxDeltaE)} / Max NPDC ΔTone: ${num(g7.maxNpdcDelta)} / Max Gray Ch: ${num(g7.maxGrayCh)}</p>
+    <p>NPDC wΔL*: ${num(g7.weightedAverage)} / Max ${num(g7.maxNpdcDelta)} / Gray wΔCh Max: ${num(g7.maxGrayCh)} / Max ΔE: ${num(g7.maxDeltaE)}</p>
     ${reportList("主要问题", conclusion.priorityItems)}
     ${reportList("建议动作", conclusion.recommendations)}
   `;
@@ -163,11 +270,17 @@ export function renderReport(state, els) {
 
   els.reportRunCompare.innerHTML = compare
     ? reportRunCompareText(compare)
-    : "<strong>Run 对比</strong><p>保存至少两次 Run 后，这里会显示补偿前后 TVI、ΔE、G7 和曲线质量变化。</p>";
+    : "<p>保存至少两次 Run 后，这里会显示补偿前后 TVI、ΔE、G7 和曲线质量变化。</p>";
 }
 
 export function renderSettings(state, els) {
   const isTauri = Boolean(window.__TAURI_INTERNALS__);
+  if (els.settingsModeSelect) els.settingsModeSelect.value = els.modeSelect.value;
+  if (els.settingsTargetSelect) els.settingsTargetSelect.value = els.targetSelect.value;
+  if (els.settingsSmoothInput) els.settingsSmoothInput.value = els.smoothInput.value;
+  if (els.settingsLimitInput) els.settingsLimitInput.value = els.limitInput.value;
+  if (els.settingsRatioInput) els.settingsRatioInput.value = els.ratioInput.value;
+  if (els.settingsDensityFilterSelect) els.settingsDensityFilterSelect.value = "status_t";
   els.desktopSummary.innerHTML = `
     <p>目标路线：Web MVP -> Tauri macOS .app -> 同项目编译 Windows。</p>
     <p>项目档案结构：jobs/客户-机器-日期/runs/时间.json。</p>
@@ -195,7 +308,6 @@ function reportList(title, items = []) {
 
 function reportRunCompareText(compare) {
   return `
-    <strong>Run 对比</strong>
     <p>最新: ${escapeHtml(compare.latest.createdAt || "")} / 上一次: ${escapeHtml(compare.previous.createdAt || "")}</p>
     <p>平均 TVI 偏差: <span class="${changeClass(compare.avgTviDelta)}">${formatMetricChange(compare.avgTviDelta, "%")}</span></p>
     <p>最大 ΔE: <span class="${changeClass(compare.maxDeltaE)}">${formatMetricChange(compare.maxDeltaE)}</span></p>

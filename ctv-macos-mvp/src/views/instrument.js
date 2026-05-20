@@ -1,8 +1,10 @@
-import { buildInstrumentVerificationRows, summarizeInstrumentVerification } from "../instrument-verification.js?v=20260519-instrument-verify";
-import { escapeHtml } from "../shared.js?v=20260519-instrument-verify";
-import { num, statusClass, signed } from "./helpers.js?v=20260519-instrument-verify";
+import { buildInstrumentVerificationRows, summarizeInstrumentVerification } from "../instrument-verification.js?v=20260520-g7-weighted";
+import { summarizeDeviceState } from "../device-adapter.js";
+import { escapeHtml } from "../shared.js?v=20260520-g7-weighted";
+import { num, statusClass, signed } from "./helpers.js?v=20260520-g7-weighted";
 
 export function renderInstrument(state, els) {
+  renderDeviceAdapter(state, els);
   const rows = buildInstrumentVerificationRows(state.measurements || []);
   const summary = summarizeInstrumentVerification(rows);
   const sourceFormats = [...new Set((state.measurements || []).map((row) => row.sourceFormat || row.source || "").filter(Boolean))];
@@ -31,4 +33,35 @@ export function renderInstrument(state, els) {
       </tr>
     `).join("")
     : "<tr><td colspan=\"10\">导入 X-Rite / Techkon 的 CGATS、IT8 或 CSV 测量文件后显示交叉验证。</td></tr>";
+}
+
+function renderDeviceAdapter(state, els) {
+  if (!els.deviceAdapterSummary) return;
+  const device = summarizeDeviceState(state.device || {}, state.manualRows || []);
+  if (els.deviceAdapterSelect) els.deviceAdapterSelect.value = device.adapter.id;
+  if (els.deviceConnectButton) els.deviceConnectButton.disabled = !device.canConnect || device.connected;
+  if (els.deviceDisconnectButton) els.deviceDisconnectButton.disabled = !device.connected;
+  if (els.deviceCalibrateButton) els.deviceCalibrateButton.disabled = !device.canCalibrate;
+  if (els.deviceReadPatchButton) els.deviceReadPatchButton.disabled = !device.canReadPatch;
+
+  els.deviceAdapterSummary.innerHTML = `
+    <strong>${escapeHtml(device.adapter.name)}</strong>
+    <p><span class="status ${device.adapter.status === "Ready" ? "pass" : "warning"}">${escapeHtml(device.adapter.status)}</span> ${escapeHtml(device.message)}</p>
+    <p>连接: ${device.connected ? "已连接" : "未连接"} / 白板校准: ${device.calibrated ? "已完成" : "未完成"} / 队列: ${device.measured}/${device.total}</p>
+    <p>能力: ${device.adapter.capabilities.map(escapeHtml).join(" / ")}</p>
+    <p>已写入手动表的仪器测量点: ${device.manualInstrumentRows}</p>
+  `;
+
+  els.deviceQueueBody.innerHTML = device.queue.map((item, index) => {
+    const status = index < device.measured ? "已读取" : index === device.measured ? "当前" : "等待";
+    const level = index < device.measured ? "pass" : index === device.measured ? "warning" : "neutral";
+    return `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(item.label)}</td>
+        <td>${escapeHtml(item.patchType)} / ${escapeHtml(item.channel)}${item.tone !== "" ? ` / ${num(Number(item.tone))}%` : ""}</td>
+        <td><span class="status ${level}">${status}</span></td>
+      </tr>
+    `;
+  }).join("");
 }

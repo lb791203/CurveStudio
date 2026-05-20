@@ -17,6 +17,10 @@ export function saveRunsAndLastProject(runs, archive) {
   return saveStorageJson(LAST_PROJECT_KEY, archive, "最近项目");
 }
 
+export function saveStoredRuns(runs) {
+  return saveStorageJson(RUNS_KEY, runs, "Run 历史");
+}
+
 export function clearStoredRuns() {
   localStorage.removeItem(RUNS_KEY);
 }

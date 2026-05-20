@@ -8,6 +8,7 @@ Use these files as local development fixtures. Do not redistribute them with a c
 
 - `/Applications/BabelColor PatchTool/characterization_data`
 - `/Users/liangbo/Documents/工作资料库/03_通用资料/01_印刷专业技术知识库/G7 Expert/G7 2021/G7 Expert Training Kit Jan 2021`
+- `/Users/liangbo/Downloads/02_压缩包/昇辉KB162`
 
 ## Folder Map
 
@@ -32,6 +33,12 @@ Use these files as local development fixtures. Do not redistribute them with a c
 - `measurements/g7-training/`
   - G7 training measurement files, including M0/M1/M2 variants.
   - Useful for testing measurement-condition handling and G7 validation.
+- `measurements/kba162-shenghui/`
+  - Curve5 P2P51 field scans from the KBA162 print run.
+  - Useful for real i1Pro/Curve workflow validation, CTV calculation, and G7 preview checks.
+- `harmony/kba162-shenghui/`
+  - Harmony `.hmy` curve exported from the same KBA162 field workflow.
+  - Useful for later comparison between generated compensation curves and operator-applied Harmony curves.
 - `measurements/it8-random/`
   - IT8.7-4 random sample measurement files in M0/M1/M2.
   - Useful for measurement importer stress tests.

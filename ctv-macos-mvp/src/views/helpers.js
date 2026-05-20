@@ -24,6 +24,7 @@ export function statusClass(status) {
   if (status === "Warning" || status === "warning") return "warning";
   if (status === "Fail" || status === "fail" || status === "danger") return "fail";
   if (status === "Missing" || status === "Data Incomplete" || String(status || "").startsWith("Missing ")) return "warning";
+  if (status === "Disabled" || status === "neutral") return "neutral";
   return "neutral";
 }
 
@@ -32,6 +33,17 @@ export function labText(lab) {
 }
 
 export function renderImportAudit(audit) {
+  if (audit.kind === "empty" || (audit.title === "未导入数据" && !audit.rawRowCount && !audit.measurementCount && !audit.usableCount)) {
+    return `
+      <strong>导入数据检查</strong>
+      <p><span class="status ${audit.level}">${escapeHtml(audit.title)}</span></p>
+      <div class="empty-state compact-empty">
+        <strong>等待测量数据</strong>
+        <span>请选择测量文件、载入示例，或在手动表录入现场数据。</span>
+      </div>
+      <p>缺少 Lab 时不能做 ΔE/SCCA/G7；缺少密度或实测网点时不能计算 TVI 曲线。</p>
+    `;
+  }
   const fieldText = audit.fields.length
     ? audit.fields.slice(0, 10).map(escapeHtml).join(", ") + (audit.fields.length > 10 ? "..." : "")
     : "无字段表头";

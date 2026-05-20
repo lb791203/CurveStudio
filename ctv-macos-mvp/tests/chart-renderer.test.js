@@ -52,8 +52,21 @@ test("renderMeasurementChart includes target and measured point titles", () => {
     targetTvi: 14,
   }], [{ tone: 50, value: 14 }], "tvi");
 
-  assert.match(svg.innerHTML, /Target 50%: 14%/);
-  assert.match(svg.innerHTML, /K 50% TVI: 18%, target 14%/);
+  assert.match(svg.innerHTML, /目标 TVI 50%: 14%/);
+  assert.match(svg.innerHTML, /K 50% TVI: [+]18\.0%, target 14%/);
+});
+
+test("renderMeasurementChart scales CTV deviations tightly around tolerance", () => {
+  const svg = { innerHTML: "" };
+
+  renderMeasurementChart(svg, [
+    { channel: "C", tone: 50, measuredTvi: 8.8, targetTvi: 0 },
+    { channel: "M", tone: 50, measuredTvi: -2.1, targetTvi: 0 },
+  ], [{ tone: 0, value: 0 }, { tone: 50, value: 0 }, { tone: 100, value: 0 }], "ctv");
+
+  assert.match(svg.innerHTML, /CTV 偏差 %/);
+  assert.match(svg.innerHTML, /目标偏差 50%: 0%/);
+  assert.doesNotMatch(svg.innerHTML, />35</);
 });
 
 test("renderG7Charts labels positive and negative gray tolerances distinctly", () => {

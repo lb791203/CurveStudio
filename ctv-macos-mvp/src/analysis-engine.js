@@ -1,7 +1,7 @@
 import { cmykFromManualRow, cmykKey, labFromRow } from "./standards.js";
 import { average, groupByChannel, number } from "./shared.js";
 import { labFromSpectralRow } from "./spectral-color.js";
-import { buildNpdcVerification, summarizeNpdc, buildGrayVerification, summarizeGrayBalance, buildColorspaceVerification, classifyColorspacePatches } from "./g7-targets.js";
+import { buildNpdcVerification, summarizeNpdc, buildGrayVerification, summarizeGrayBalance, summarizeWeightedDeltaL, buildColorspaceVerification, classifyColorspacePatches } from "./g7-targets.js?v=20260520-g7-weighted";
 
 const MID_TONES = new Set([40, 45, 50, 55, 60]);
 
@@ -352,7 +352,9 @@ function curveIssue(level, channel, tone, type, message, relatedTones = [tone]) 
 
 export function g7Preview(options = {}) {
   const { measurements = [], results = [], labRows = [], rawRows = [], importKind, metadata } = options;
+  const deltaEFn = options.deltaEFn || deltaEFunction(options.deltaEFormula);
   const tolerances = {
+    enabled: true,
     npdcAverage: 1.5,
     npdcMax: 3,
     grayAverage: 1.5,
@@ -361,6 +363,9 @@ export function g7Preview(options = {}) {
     deltaEMax: 8,
     ...(options.tolerances || {}),
   };
+  if (tolerances.enabled === false) {
+    return disabledG7Preview(tolerances);
+  }
   if (importKind === "reference" || metadataLooksReference(metadata)) {
     return emptyG7Preview("当前导入的是标准/目标参考文件，不是真实测量文件，G7 不能生成有效预览。");
   }
@@ -369,7 +374,10 @@ export function g7Preview(options = {}) {
   const actualKOnly = measurements.filter((row) => row.channel === "K" && row.tone > 0 && row.tone < 100);
   const kOnly = curveRows.filter((row) => row.channel === "K" && row.tone > 0 && row.tone < 100);
   const p2pRows = rawRows.filter(hasCmykTuple);
-  const rawLabPatches = rawLabPatchRows(rawRows);
+  const rawLabPatches = rawLabPatchRows(rawRows, {
+    standardPatchMap: options.standardPatchMap,
+    deltaEFn,
+  });
   const g7LabRows = [...labRows, ...rawLabPatches];
   const labReady = g7LabRows.filter((row) => Number.isFinite(row.deltaE));
   const grayRows = g7LabRows.filter((row) => isGrayLabRow(row));
@@ -396,12 +404,22 @@ export function g7Preview(options = {}) {
   })).sort((a, b) => a.tone - b.tone);
   const grayBalanceRows = grayRows.map((row) => ({
     label: row.label,
+    tone: neutralGrayTone(row),
+    cmyk: row.cmyk,
     a: row.lab.a,
     b: row.lab.b,
     chroma: Math.sqrt(row.lab.a ** 2 + row.lab.b ** 2),
     deltaE: row.deltaE,
-  }));
-  const weightedAverage = weightedAverageDelta(labReady);
+  })).sort((a, b) => a.tone - b.tone || a.label.localeCompare(b.label));
+  const paperL = measuredPaperLab(g7LabRows)?.l;
+  const npdcVerification = buildNpdcVerification(actualKOnly, { paperL });
+  const grayVerification = buildGrayVerification(grayRows, { paperL });
+  const npdcSummary = summarizeNpdc(npdcVerification, tolerances);
+  const graySummary = summarizeGrayBalance(grayVerification, tolerances);
+  const grayNpdcSummary = summarizeWeightedDeltaL(grayVerification, tolerances);
+  const weightedDeltaLSummary = summarizeWeightedDeltaL([...npdcVerification, ...grayVerification], tolerances);
+  const weightedDeltaE = weightedAverageDelta(labReady);
+  const weightedAverage = weightedDeltaLSummary.weightedAverage;
   const maxGrayCh = maxFinite(grayBalanceRows.map((row) => row.chroma));
   const avgNpdcDelta = average(npdcRows.map((row) => Math.abs(row.deltaTone)));
   const maxNpdcDelta = maxFinite(npdcRows.map((row) => Math.abs(row.deltaTone)));
@@ -429,9 +447,9 @@ export function g7Preview(options = {}) {
     missing,
     avgNpdcDelta,
     maxNpdcDelta,
-    avgGrayCh,
-    maxGrayCh,
-    weightedAverage,
+    weightedDeltaLSummary,
+    graySummary,
+    weightedDeltaE,
     maxDeltaE,
     tolerances,
   });
@@ -447,11 +465,19 @@ export function g7Preview(options = {}) {
     grayPatchCount: grayCount,
     avgDeltaE,
     maxDeltaE,
-    avgGrayCh,
-    maxGrayCh,
+    avgGrayCh: graySummary.weightedAverage,
+    maxGrayCh: graySummary.weightedMax,
+    legacyAvgGrayCh: avgGrayCh,
+    legacyMaxGrayCh: maxGrayCh,
     avgNpdcDelta,
-    maxNpdcDelta,
+    maxNpdcDelta: weightedDeltaLSummary.weightedMax,
+    legacyMaxNpdcDeltaTone: maxNpdcDelta,
     weightedAverage,
+    weightedDeltaE,
+    weightedDeltaLSummary,
+    grayNpdcSummary,
+    weightedGrayAverage: graySummary.weightedAverage,
+    weightedGrayMax: graySummary.weightedMax,
     npdcRows,
     grayBalanceRows,
     grayCandidateCount,
@@ -460,11 +486,11 @@ export function g7Preview(options = {}) {
     completenessRows,
     verificationRows,
     tolerances,
-    npdcVerification: buildNpdcVerification(actualKOnly),
-    npdcSummary: summarizeNpdc(buildNpdcVerification(actualKOnly)),
-    grayVerification: buildGrayVerification(grayRows),
-    graySummary: summarizeGrayBalance(buildGrayVerification(grayRows)),
-    colorspaceRows: buildColorspaceVerification(classifyColorspacePatches([...rawRows, ...g7LabRows.map(function(r) { return Object.assign({}, r, { cmyk_c: r.cmyk && r.cmyk.c, cmyk_m: r.cmyk && r.cmyk.m, cmyk_y: r.cmyk && r.cmyk.y, cmyk_k: r.cmyk && r.cmyk.k }); })]), options.standardPatchMap, options.deltaEFn || deltaE76),
+    npdcVerification,
+    npdcSummary,
+    grayVerification,
+    graySummary,
+    colorspaceRows: buildColorspaceVerification(classifyColorspacePatches([...rawRows, ...g7LabRows.map(function(r) { return Object.assign({}, r, { cmyk_c: r.cmyk && r.cmyk.c, cmyk_m: r.cmyk && r.cmyk.m, cmyk_y: r.cmyk && r.cmyk.y, cmyk_k: r.cmyk && r.cmyk.k }); })]), options.standardPatchMap, deltaEFn),
   };
 }
 
@@ -486,6 +512,11 @@ function emptyG7Preview(message) {
     avgNpdcDelta: NaN,
     maxNpdcDelta: NaN,
     weightedAverage: NaN,
+    weightedDeltaE: NaN,
+    weightedDeltaLSummary: { count: 0, weightedAverage: NaN, weightedMax: NaN, status: "Missing" },
+    grayNpdcSummary: { count: 0, weightedAverage: NaN, weightedMax: NaN, status: "Missing" },
+    weightedGrayAverage: NaN,
+    weightedGrayMax: NaN,
     npdcRows: [],
     grayBalanceRows: [],
     grayCandidateCount: 0,
@@ -494,9 +525,9 @@ function emptyG7Preview(message) {
     verificationRows,
     tolerances: {},
     npdcVerification: [],
-    npdcSummary: { count: 0, avgDeltaL: NaN, maxDeltaL: NaN, status: "Missing" },
+    npdcSummary: { count: 0, avgDeltaL: NaN, maxDeltaL: NaN, weightedAverage: NaN, weightedMax: NaN, status: "Missing" },
     grayVerification: [],
-    graySummary: { count: 0, avgChroma: NaN, maxChroma: NaN, status: "Missing" },
+    graySummary: { count: 0, avgChroma: NaN, maxChroma: NaN, weightedAverage: NaN, weightedMax: NaN, status: "Missing" },
     colorspaceRows: [],
     completenessRows: [
       completenessRow("P2P/CGATS 色块", 0, "真实测量文件", false),
@@ -509,18 +540,43 @@ function emptyG7Preview(message) {
   };
 }
 
-function buildG7VerificationRows({ missing, avgNpdcDelta, maxNpdcDelta, avgGrayCh, maxGrayCh, weightedAverage, maxDeltaE, tolerances }) {
+function measuredPaperLab(rows = []) {
+  return rows.find((row) => row.lab && isPaperCmyk(row.cmyk))?.lab;
+}
+
+function disabledG7Preview(tolerances = {}) {
+  const message = "当前标准已关闭 G7 校验；曲线和 Lab 分析仍可继续使用。";
+  const verificationRows = [
+    verificationRow("G7 校验", NaN, "标准设置", "Disabled", message),
+  ];
+  return {
+    ...emptyG7Preview(message),
+    status: "Disabled",
+    conclusion: {
+      level: "neutral",
+      title: "G7 校验已关闭",
+      summary: message,
+      recommendations: ["如需做 G7 验证，请在 Standard 页面启用 G7 校验并设置 wΔL / wΔCh 容差。"],
+      priorityItems: [],
+    },
+    missing: [],
+    verificationRows,
+    tolerances,
+  };
+}
+
+function buildG7VerificationRows({ missing, weightedDeltaLSummary, graySummary, weightedDeltaE, maxDeltaE, tolerances }) {
   if (missing.length) {
     return [
       verificationRow("数据完整性", NaN, "必须完整", "Missing", missing.join(" / ")),
     ];
   }
   return [
-    toleranceRow("NPDC 平均 ΔTone", avgNpdcDelta, tolerances.npdcAverage, tolerances.npdcMax, "%"),
-    toleranceRow("NPDC 最大 ΔTone", maxNpdcDelta, tolerances.npdcMax, tolerances.npdcMax * 2, "%"),
-    toleranceRow("灰平衡平均 Ch", avgGrayCh, tolerances.grayAverage, tolerances.grayMax, ""),
-    toleranceRow("灰平衡最大 Ch", maxGrayCh, tolerances.grayMax, tolerances.grayMax * 2, ""),
-    toleranceRow("Weighted ΔE", weightedAverage, tolerances.deltaEWeighted, tolerances.deltaEWeighted * 1.5, ""),
+    toleranceRow("NPDC wΔL* 平均", weightedDeltaLSummary.weightedAverage, tolerances.npdcAverage, tolerances.npdcMax, ""),
+    toleranceRow("NPDC wΔL* 最大", weightedDeltaLSummary.weightedMax, tolerances.npdcMax, tolerances.npdcMax * 2, ""),
+    toleranceRow("灰平衡 wΔCh 平均", graySummary.weightedAverage, tolerances.grayAverage, tolerances.grayMax, ""),
+    toleranceRow("灰平衡 wΔCh 最大", graySummary.weightedMax, tolerances.grayMax, tolerances.grayMax * 2, ""),
+    toleranceRow("Lab 加权 ΔE", weightedDeltaE, tolerances.deltaEWeighted, tolerances.deltaEWeighted * 1.5, ""),
     toleranceRow("最大 ΔE", maxDeltaE, tolerances.deltaEMax, tolerances.deltaEMax, ""),
   ];
 }
@@ -608,7 +664,7 @@ function g7RecommendationForRow(row) {
   const item = String(row.item || "");
   if (item.includes("NPDC")) return "NPDC 阶调偏差异常时，优先检查 K 阶调曲线、密度稳定性和测量色条方向。";
   if (item.includes("灰平衡")) return "灰平衡 Ch 超限时，优先检查 CMY 中性灰、纸白/SCCA、实地密度和三色叠印稳定性。";
-  if (item.includes("Weighted")) return "Weighted ΔE 偏高时，检查关键灰阶和中间调色块，确认标准选择与测量条件一致。";
+  if (item.includes("加权 ΔE")) return "Lab 加权 ΔE 偏高时，检查关键灰阶和中间调色块，确认标准选择与测量条件一致。";
   if (item.includes("最大 ΔE")) return "最大 ΔE 超限时，定位最大偏差色块，先排除单点测量错误、脏版、墨量或纸张批次问题。";
   return "";
 }
@@ -746,6 +802,13 @@ function selectedDeltaE(formula, values) {
   return values[formula] ?? values.de76;
 }
 
+function deltaEFunction(formula) {
+  if (formula === "de94") return deltaE94;
+  if (formula === "de2000") return deltaE2000;
+  if (formula === "cmc") return deltaECMC;
+  return deltaE76;
+}
+
 function measurementCmyk(row) {
   return {
     c: row.channel === "C" ? row.tone : 0,
@@ -815,18 +878,21 @@ function isGrayLabRow(row) {
     || isLikelyG7GrayCmyk(row.cmyk);
 }
 
-function rawLabPatchRows(rows = []) {
+function rawLabPatchRows(rows = [], options = {}) {
   return rows
     .map((row) => {
       const cmyk = rawCmyk(row);
       const lab = labFromRow(row) || labFromSpectralRow(row);
       if (!cmyk || !lab) return null;
+      const referenceLab = options.standardPatchMap?.get(cmykKey(cmyk))?.lab;
+      const deltaE = referenceLab && options.deltaEFn ? options.deltaEFn(lab, referenceLab) : NaN;
       return {
         label: rawPatchLabel(row, cmyk),
         cmyk,
         lab,
+        referenceLab,
         source: "Raw Lab",
-        deltaE: NaN,
+        deltaE,
       };
     })
     .filter(Boolean);
@@ -909,6 +975,13 @@ function isLikelyG7GrayCmyk(cmyk) {
   const myClose = Math.abs(m - y) <= 2.5;
   const cLower = c <= m + 2.5 && c <= y + 2.5;
   return myClose && cLower;
+}
+
+function neutralGrayTone(row) {
+  if (Number.isFinite(row.tone)) return row.tone;
+  const cmyk = row.cmyk;
+  if (!cmyk) return NaN;
+  return Math.max(number(cmyk.c), number(cmyk.m), number(cmyk.y));
 }
 
 function manualLabel(row, cmyk) {

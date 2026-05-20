@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { classifyP2PPatch, g7NpdcLTarget, buildNpdcVerification, summarizeNpdc,
   buildGrayVerification, summarizeGrayBalance, buildColorspaceVerification,
-  classifyColorspacePatches } from "../src/g7-targets.js";
+  classifyColorspacePatches, g7ToneWeight, neutralPrintDensityFromL, summarizeWeightedDeltaL } from "../src/g7-targets.js";
 import { deltaE76 } from "../src/analysis-engine.js";
 
 // ─── P2P Patch Classification ───
@@ -75,6 +75,20 @@ test("buildNpdcVerification computes deltaL from lab data", () => {
   assert.ok(Number.isFinite(result[0].targetL));
 });
 
+test("buildNpdcVerification also exposes NPDC density values", () => {
+  const [row] = buildNpdcVerification([
+    { channel: "K", tone: 50, lab: { l: 30, a: 0, b: 0 } },
+  ], { paperL: 95 });
+  assert.ok(Number.isFinite(row.measuredNpdc));
+  assert.ok(Number.isFinite(row.targetNpdc));
+  assert.ok(row.targetNpdc > 1 && row.targetNpdc < 1.4);
+});
+
+test("neutralPrintDensityFromL converts L* to print density relative to paper", () => {
+  assert.equal(neutralPrintDensityFromL(95, 95), 0);
+  assert.ok(neutralPrintDensityFromL(4.5, 95) > 2);
+});
+
 test("buildNpdcVerification skips rows without lab", () => {
   const rows = [
     { channel: "K", tone: 50 },
@@ -95,6 +109,21 @@ test("summarizeNpdc computes average and max deltaL", () => {
   assert.ok(summary.avgDeltaL < 1);
   assert.equal(summary.maxDeltaL, 2);
   assert.equal(summary.count, 3);
+});
+
+test("G7 tone weighting follows the published 50%-plus dark tone reduction", () => {
+  assert.equal(g7ToneWeight(25), 1);
+  assert.equal(g7ToneWeight(50), 1);
+  assert.equal(g7ToneWeight(100), 0.25);
+});
+
+test("summarizeWeightedDeltaL uses per-patch weighted absolute errors", () => {
+  const summary = summarizeWeightedDeltaL([
+    { tone: 50, weightedDeltaL: 1 },
+    { tone: 100, weightedDeltaL: 2.5 },
+  ], { npdcAverage: 1.5, npdcMax: 3 });
+  assert.equal(summary.status, "Warning");
+  assert.equal(summary.weightedMax, 2.5);
 });
 
 // ─── Gray Balance ───

@@ -7,15 +7,18 @@ import {
   toCsv,
   toHarmonyCsv,
   upsertTarget,
-} from "./curve-engine.js?v=20260519-instrument-verify";
-import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260519-instrument-verify";
+} from "./curve-engine.js?v=20260520-g7-weighted";
+import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260520-g7-weighted";
 import { applyCurveOverrides, curveRowKey, pruneCurveOverrides } from "./curve-overrides.js";
-import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260519-instrument-verify";
+import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260520-g7-weighted";
 import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js";
-import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260519-instrument-verify";
-import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260519-instrument-verify";
-import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260519-instrument-verify";
+import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260520-g7-weighted";
+import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260520-g7-weighted";
+import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260520-statusbar-context";
+import { buildG7Compensation } from "./g7-compensation.js";
+import { DEVICE_ADAPTERS, buildMeasurementQueue, calibrateDeviceState, changeDeviceAdapterState, connectDeviceState, disconnectDeviceState, readDevicePatchState } from "./device-adapter.js";
 import { inspectImport } from "./import-inspector.js";
+import { openTextFileDesktop, saveTextFileDesktop } from "./desktop-io.js";
 import {
   canCalculateCurve,
   defaultManualRow,
@@ -33,13 +36,14 @@ import {
   solidDensityByChannel,
   updateManualRowFromEvent,
 } from "./manual-table.js";
-import { clearStoredRuns, loadStoredRuns, saveRunsAndLastProject } from "./run-store.js";
-import { buildRunMetrics } from "./run-compare.js?v=20260519-instrument-verify";
+import { clearStoredRuns, loadStoredRuns, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js";
+import { buildRunMetrics } from "./run-compare.js?v=20260520-g7-weighted";
 import { STANDARD_LIBRARY, buildPatchMap, standardById, targetOptions } from "./standards.js";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 
 const els = {
   fileInput: document.querySelector("#fileInput"),
+  desktopOpenFileButton: document.querySelector("#desktopOpenFileButton"),
   rawInput: document.querySelector("#rawInput"),
   parseButton: document.querySelector("#parseButton"),
   calculateButton: document.querySelector("#calculateButton"),
@@ -51,6 +55,8 @@ const els = {
   exportG7CsvButton: document.querySelector("#exportG7CsvButton"),
   exportG7JsonButton: document.querySelector("#exportG7JsonButton"),
   exportJsonButton: document.querySelector("#exportJsonButton"),
+  exportJobArchiveButton: document.querySelector("#exportJobArchiveButton"),
+  exportJobLibraryButton: document.querySelector("#exportJobLibraryButton"),
   printReportButton: document.querySelector("#printReportButton"),
   loadSampleButton: document.querySelector("#loadSampleButton"),
   sampleSelect: document.querySelector("#sampleSelect"),
@@ -68,6 +74,7 @@ const els = {
   reloadStandardButton: document.querySelector("#reloadStandardButton"),
   applyCustomTargetButton: document.querySelector("#applyCustomTargetButton"),
   runG7Button: document.querySelector("#runG7Button"),
+  generateG7CompensationButton: document.querySelector("#generateG7CompensationButton"),
   modeSelect: document.querySelector("#modeSelect"),
   targetSelect: document.querySelector("#targetSelect"),
   standardSelect: document.querySelector("#standardSelect"),
@@ -78,19 +85,50 @@ const els = {
   customTvi25Input: document.querySelector("#customTvi25Input"),
   customTvi50Input: document.querySelector("#customTvi50Input"),
   customTvi75Input: document.querySelector("#customTvi75Input"),
+  g7EnabledInput: document.querySelector("#g7EnabledInput"),
+  g7NpdcAverageInput: document.querySelector("#g7NpdcAverageInput"),
+  g7NpdcMaxInput: document.querySelector("#g7NpdcMaxInput"),
+  g7GrayAverageInput: document.querySelector("#g7GrayAverageInput"),
+  g7GrayMaxInput: document.querySelector("#g7GrayMaxInput"),
+  g7GrayInflectionInput: document.querySelector("#g7GrayInflectionInput"),
   sccaInput: document.querySelector("#sccaInput"),
   deltaFormulaSelect: document.querySelector("#deltaFormulaSelect"),
+  settingsModeSelect: document.querySelector("#settingsModeSelect"),
+  settingsTargetSelect: document.querySelector("#settingsTargetSelect"),
+  settingsSmoothInput: document.querySelector("#settingsSmoothInput"),
+  settingsLimitInput: document.querySelector("#settingsLimitInput"),
+  settingsRatioInput: document.querySelector("#settingsRatioInput"),
+  settingsDensityFilterSelect: document.querySelector("#settingsDensityFilterSelect"),
+  applySettingsButton: document.querySelector("#applySettingsButton"),
+  resetSettingsButton: document.querySelector("#resetSettingsButton"),
   manualBody: document.querySelector("#manualBody"),
   measurementChart: document.querySelector("#measurementChart"),
   curveChart: document.querySelector("#curveChart"),
+  labChromaticityChart: document.querySelector("#labChromaticityChart"),
+  g7CmyNpdcChart: document.querySelector("#g7CmyNpdcChart"),
   g7NpdcChart: document.querySelector("#g7NpdcChart"),
   g7GrayChart: document.querySelector("#g7GrayChart"),
+  g7WeightedChart: document.querySelector("#g7WeightedChart"),
   resultBody: document.querySelector("#resultBody"),
   ripEntryBody: document.querySelector("#ripEntryBody"),
   labBody: document.querySelector("#labBody"),
+  verificationChecklistSummary: document.querySelector("#verificationChecklistSummary"),
+  verificationChecklistBody: document.querySelector("#verificationChecklistBody"),
+  jobRunList: document.querySelector("#jobRunList"),
   runBody: document.querySelector("#runBody"),
   g7NpdcBody: document.querySelector("#g7NpdcBody"),
   g7GrayBody: document.querySelector("#g7GrayBody"),
+  g7NpdcVerificationBody: document.querySelector("#g7NpdcVerificationBody"),
+  g7GrayVerificationBody: document.querySelector("#g7GrayVerificationBody"),
+  g7ColorspaceBody: document.querySelector("#g7ColorspaceBody"),
+  g7NpdcSummary: document.querySelector("#g7NpdcSummary"),
+  g7GraySummary: document.querySelector("#g7GraySummary"),
+  g7CmySummary: document.querySelector("#g7CmySummary"),
+  g7KNpdcSummary: document.querySelector("#g7KNpdcSummary"),
+  g7GrayChartSummary: document.querySelector("#g7GrayChartSummary"),
+  g7WeightedSummary: document.querySelector("#g7WeightedSummary"),
+  g7CompensationSummary: document.querySelector("#g7CompensationSummary"),
+  g7CompensationBody: document.querySelector("#g7CompensationBody"),
   targetCurveBody: document.querySelector("#targetCurveBody"),
   standardPatchBody: document.querySelector("#standardPatchBody"),
   diagnosisCards: document.querySelector("#diagnosisCards"),
@@ -102,8 +140,16 @@ const els = {
   g7Cards: document.querySelector("#g7Cards"),
   standardSummary: document.querySelector("#standardSummary"),
   measurementSummary: document.querySelector("#measurementSummary"),
+  measurementPatchPreview: document.querySelector("#measurementPatchPreview"),
   instrumentVerificationSummary: document.querySelector("#instrumentVerificationSummary"),
   instrumentVerificationBody: document.querySelector("#instrumentVerificationBody"),
+  deviceAdapterSelect: document.querySelector("#deviceAdapterSelect"),
+  deviceConnectButton: document.querySelector("#deviceConnectButton"),
+  deviceDisconnectButton: document.querySelector("#deviceDisconnectButton"),
+  deviceCalibrateButton: document.querySelector("#deviceCalibrateButton"),
+  deviceReadPatchButton: document.querySelector("#deviceReadPatchButton"),
+  deviceAdapterSummary: document.querySelector("#deviceAdapterSummary"),
+  deviceQueueBody: document.querySelector("#deviceQueueBody"),
   exportSummary: document.querySelector("#exportSummary"),
   reportSummary: document.querySelector("#reportSummary"),
   reportG7Conclusion: document.querySelector("#reportG7Conclusion"),
@@ -113,6 +159,8 @@ const els = {
   desktopSummary: document.querySelector("#desktopSummary"),
   runCompareSummary: document.querySelector("#runCompareSummary"),
   statusText: document.querySelector("#statusText"),
+  statusBar: document.querySelector("#statusBar"),
+  workflowContextToolbar: document.querySelector("#workflowContextToolbar"),
   jobTitle: document.querySelector("#jobTitle"),
   jobMeta: document.querySelector("#jobMeta"),
   ctvModeWarning: document.querySelector("#ctvModeWarning"),
@@ -122,6 +170,11 @@ const els = {
   jobDeviceInput: document.querySelector("#jobDeviceInput"),
   jobOperatorInput: document.querySelector("#jobOperatorInput"),
   jobNoteInput: document.querySelector("#jobNoteInput"),
+  textPromptDialog: document.querySelector("#textPromptDialog"),
+  textPromptTitle: document.querySelector("#textPromptTitle"),
+  textPromptInput: document.querySelector("#textPromptInput"),
+  textPromptOkButton: document.querySelector("#textPromptOkButton"),
+  textPromptCancelButton: document.querySelector("#textPromptCancelButton"),
 };
 
 const state = {
@@ -139,11 +192,23 @@ const state = {
   labRows: [],
   safetyIssues: [],
   g7: null,
+  g7Compensation: null,
   curveOverrides: {},
   runs: [],
   ratioAuto: true,
   manualDirty: false,
   storageWarning: "",
+  activeCurveChannel: "all",
+  selectedJobKey: "",
+  device: {
+    adapterId: "file",
+    connected: false,
+    calibrated: false,
+    queueProfile: "g7",
+    queue: buildMeasurementQueue("g7"),
+    queueIndex: 0,
+    message: "",
+  },
 };
 
 let kbaPresetCache = null;
@@ -166,17 +231,22 @@ function attachEvents() {
   els.fileInput.addEventListener("change", async (event) => {
     const [file] = event.target.files;
     if (!file) return;
+    const text = await file.text();
+    if (file.name.toLowerCase().endsWith(".json") && await restoreProjectFromText(text)) {
+      event.target.value = "";
+      return;
+    }
     if (!confirmDataOverwrite("导入文件会覆盖当前手动表、导入数据和曲线结果，是否继续？")) {
       event.target.value = "";
       return;
     }
-    const text = await file.text();
-    if (file.name.toLowerCase().endsWith(".json") && await restoreProjectFromText(text)) return;
     els.rawInput.value = text;
     parseAndCalculate({ skipConfirm: true });
+    event.target.value = "";
   });
 
   els.parseButton.addEventListener("click", parseAndCalculate);
+  els.desktopOpenFileButton?.addEventListener("click", openWithDesktopDialog);
   els.calculateButton.addEventListener("click", () => calculate({ preserveRatio: true }));
   els.loadSampleButton.addEventListener("click", loadSelectedSample);
   els.addManualRowButton.addEventListener("click", addManualRow);
@@ -196,6 +266,18 @@ function attachEvents() {
     renderG7();
     switchView("g7");
   });
+  els.generateG7CompensationButton?.addEventListener("click", () => {
+    state.g7 = currentG7Preview();
+    state.g7Compensation = currentG7Compensation();
+    renderG7();
+    renderReport();
+    switchView("g7");
+  });
+  els.deviceAdapterSelect?.addEventListener("change", changeDeviceAdapter);
+  els.deviceConnectButton?.addEventListener("click", connectDevice);
+  els.deviceDisconnectButton?.addEventListener("click", disconnectDevice);
+  els.deviceCalibrateButton?.addEventListener("click", calibrateDevice);
+  els.deviceReadPatchButton?.addEventListener("click", readDevicePatch);
   els.exportCsvButton.addEventListener("click", () => download("ctv-compensation-curve.csv", withExportHeader(toCsv(state.results), exportContext()), "text/csv"));
   els.exportHarmonyButton.addEventListener("click", () => download("harmony-manual-entry.csv", withExportHeader(toHarmonyCsv(state.results), exportContext()), "text/csv"));
   els.exportPrinergyButton.addEventListener("click", () => download("prinergy-input-output.csv", toPrinergyCsv(state.results, exportContext()), "text/csv"));
@@ -204,6 +286,8 @@ function attachEvents() {
   els.exportG7CsvButton.addEventListener("click", () => download("g7-verification-report.csv", toG7VerificationCsv(exportContext()), "text/csv"));
   els.exportG7JsonButton.addEventListener("click", () => download("g7-verification-report.json", JSON.stringify(g7ReportArchive(exportContext()), null, 2), "application/json"));
   els.exportJsonButton.addEventListener("click", () => download("ctv-project-export.json", JSON.stringify(projectArchive(exportContext()), null, 2), "application/json"));
+  els.exportJobArchiveButton?.addEventListener("click", exportSelectedJobArchive);
+  els.exportJobLibraryButton?.addEventListener("click", exportJobLibraryArchive);
   els.printReportButton.addEventListener("click", () => window.print());
   els.manualBody.addEventListener("input", updateManualCell);
   els.manualBody.addEventListener("change", updateManualCell);
@@ -211,9 +295,26 @@ function attachEvents() {
   els.manualBody.addEventListener("paste", pasteManualTable);
   els.resultBody.addEventListener("change", updateCurveOverride);
   els.resultBody.addEventListener("input", updateCurveOverride);
+  els.jobRunList.addEventListener("click", restoreRunFromList);
+  els.runBody.addEventListener("click", restoreRunFromList);
+
+  document.querySelectorAll(".channel-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".channel-tab").forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      state.activeCurveChannel = tab.dataset.channel || "all";
+      _renderCurve(state, els);
+    });
+  });
   els.standardSelect.addEventListener("change", () => loadStandard(els.standardSelect.value));
+  for (const input of g7ToleranceInputs()) {
+    input.addEventListener("change", updateG7TolerancesFromUi);
+    input.addEventListener("input", updateG7TolerancesFromUi);
+  }
   els.sccaInput.addEventListener("change", () => calculate({ preserveRatio: true }));
   els.deltaFormulaSelect.addEventListener("change", () => calculate({ preserveRatio: true }));
+  els.applySettingsButton?.addEventListener("click", applySettingsToCalculation);
+  els.resetSettingsButton?.addEventListener("click", resetSettingsDefaults);
 
   els.modeSelect.addEventListener("change", handleModeChange);
   for (const el of [els.targetSelect, els.smoothInput, els.limitInput]) {
@@ -228,17 +329,23 @@ function attachEvents() {
 
 function populateSelects() {
   els.targetSelect.innerHTML = targetOptions().map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
+  if (els.settingsTargetSelect) els.settingsTargetSelect.innerHTML = targetOptions().map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
   els.standardSelect.innerHTML = STANDARD_LIBRARY.map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
+  if (els.deviceAdapterSelect) els.deviceAdapterSelect.innerHTML = DEVICE_ADAPTERS.map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
 }
 
 function refreshTargetSelect(selected = els.targetSelect.value) {
   els.targetSelect.innerHTML = targetOptions().map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
   els.targetSelect.value = selected;
+  if (els.settingsTargetSelect) {
+    els.settingsTargetSelect.innerHTML = targetOptions().map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
+    els.settingsTargetSelect.value = selected;
+  }
 }
 
 async function loadStandard(id) {
   state.standardId = id;
-  state.standard = standardById(id);
+  state.standard = cloneData(standardById(id));
   state.standardImport = null;
   state.standardPatchMap = new Map();
   state.standardLoading = Boolean(state.standard.referencePath);
@@ -262,6 +369,42 @@ async function loadStandard(id) {
   calculate({ preserveRatio: true });
 }
 
+function g7ToleranceInputs() {
+  return [
+    els.g7EnabledInput,
+    els.g7NpdcAverageInput,
+    els.g7NpdcMaxInput,
+    els.g7GrayAverageInput,
+    els.g7GrayMaxInput,
+    els.g7GrayInflectionInput,
+  ].filter(Boolean);
+}
+
+function updateG7TolerancesFromUi() {
+  state.standard.g7 = {
+    enabled: els.g7EnabledInput?.checked !== false,
+    npdcAverage: inputNumber(els.g7NpdcAverageInput, 1.5),
+    npdcMax: inputNumber(els.g7NpdcMaxInput, 3),
+    grayAverage: inputNumber(els.g7GrayAverageInput, 1.5),
+    grayMax: inputNumber(els.g7GrayMaxInput, 3),
+    grayInflection: els.g7GrayInflectionInput?.value || "",
+  };
+  state.g7 = currentG7Preview();
+  renderStandard();
+  renderG7();
+  renderExport();
+  renderReport();
+}
+
+function inputNumber(input, fallback) {
+  const value = Number(input?.value);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function cloneData(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 function parseAndCalculate(options = {}) {
   if (!options.skipConfirm && !confirmDataOverwrite("解析文本数据会覆盖当前手动表、导入数据和曲线结果，是否继续？")) return;
   state.importInfo = parseImportText(els.rawInput.value);
@@ -283,6 +426,8 @@ async function loadSelectedSample() {
   const samplePaths = {
     sample: "./samples/sample-measurements.csv",
     ctvLab: "./samples/ctv-lab-demo.csv",
+    kba162Curve5Run1: "./reference-data/measurements/kba162-shenghui/kba162-p2p51-curve5-run1.txt",
+    kba162Curve5Run2: "./reference-data/measurements/kba162-shenghui/kba162-p2p51-curve5-run2.txt",
     p2p51: "./reference-data/measurements/g7-training/P2P51_2019-01-24_13h28_M1_3-2.txt",
     tc1617: "./reference-data/measurements/g7-training/G7_T1617_P2_1_M1.txt",
   };
@@ -300,6 +445,12 @@ async function loadSelectedSample() {
     els.targetSelect.value = "g7";
     calculate({ preserveRatio: true });
     switchView("g7");
+  }
+  if (selected === "kba162Curve5Run1" || selected === "kba162Curve5Run2") {
+    els.modeSelect.value = "ctv";
+    els.targetSelect.value = "linear";
+    calculate({ preserveRatio: true });
+    switchView("instrument");
   }
 }
 
@@ -352,6 +503,41 @@ function addManualTemplate(type) {
   renderManualTable();
   renderMeasurement();
   switchView("measurement");
+}
+
+function changeDeviceAdapter() {
+  state.device = changeDeviceAdapterState(state.device, els.deviceAdapterSelect.value);
+  renderInstrument();
+}
+
+function connectDevice() {
+  state.device = connectDeviceState(state.device);
+  renderInstrument();
+}
+
+function disconnectDevice() {
+  state.device = disconnectDeviceState(state.device);
+  renderInstrument();
+}
+
+function calibrateDevice() {
+  state.device = calibrateDeviceState(state.device);
+  renderInstrument();
+}
+
+function readDevicePatch() {
+  const result = readDevicePatchState(state.device);
+  state.device = result.device;
+  const row = result.row;
+  if (!row) {
+    renderInstrument();
+    return;
+  }
+  state.manualRows.push(row);
+  markManualDirty();
+  renderManualTable();
+  renderMeasurement();
+  renderInstrument();
 }
 
 function clearManualRows() {
@@ -435,6 +621,7 @@ function calculate(options = {}) {
   });
   state.safetyIssues = analyzeCurveSafety(state.results);
   state.g7 = currentG7Preview();
+  if (state.g7Compensation) state.g7Compensation = currentG7Compensation();
   render();
 }
 
@@ -469,6 +656,30 @@ function applyCustomTarget() {
   });
   refreshTargetSelect("custom_tvi");
   calculate({ preserveRatio: true });
+}
+
+function applySettingsToCalculation() {
+  if (els.settingsModeSelect) els.modeSelect.value = els.settingsModeSelect.value;
+  if (els.settingsTargetSelect) els.targetSelect.value = els.settingsTargetSelect.value;
+  if (els.modeSelect.value === "ctv") els.targetSelect.value = "linear";
+  if (els.modeSelect.value === "g7") els.targetSelect.value = "g7";
+  if (els.settingsSmoothInput) els.smoothInput.value = clampNumber(Number(els.settingsSmoothInput.value), 0, 4, 2);
+  if (els.settingsLimitInput) els.limitInput.value = clampNumber(Number(els.settingsLimitInput.value), 1, 40, 18);
+  if (els.settingsRatioInput) els.ratioInput.value = clampNumber(Number(els.settingsRatioInput.value), 0, 100, 50);
+  state.ratioAuto = false;
+  renderControlValues();
+  calculate({ preserveRatio: true });
+  renderSettings();
+}
+
+function resetSettingsDefaults() {
+  if (els.settingsModeSelect) els.settingsModeSelect.value = "tvi";
+  if (els.settingsTargetSelect) els.settingsTargetSelect.value = state.standard.target || "iso_tvi_a";
+  if (els.settingsSmoothInput) els.settingsSmoothInput.value = 2;
+  if (els.settingsLimitInput) els.settingsLimitInput.value = 18;
+  if (els.settingsRatioInput) els.settingsRatioInput.value = 50;
+  if (els.deltaFormulaSelect) els.deltaFormulaSelect.value = "de76";
+  applySettingsToCalculation();
 }
 
 function render() {
@@ -591,11 +802,17 @@ function exportContext() {
   };
 }
 
-function download(filename, content, type) {
+async function download(filename, content, type) {
   if (!state.results.length && !filename.includes("project")) return;
   if (state.manualDirty && !filename.includes("project")) {
     window.alert("手动测量表已修改，请先点击「应用测量表」重新生成曲线后再导出。");
     return;
+  }
+  try {
+    const desktop = await saveTextFileDesktop({ filename, contents: content });
+    if (desktop.handled) return;
+  } catch (error) {
+    window.alert(`桌面保存失败，已改用浏览器下载：${error.message || error}`);
   }
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -604,6 +821,57 @@ function download(filename, content, type) {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+async function openWithDesktopDialog() {
+  try {
+    const result = await openTextFileDesktop();
+    if (!result.handled || result.canceled) return;
+    if (String(result.path || "").toLowerCase().endsWith(".json") && await restoreProjectFromText(result.contents)) return;
+    if (!confirmDataOverwrite("导入文件会覆盖当前手动表、导入数据和曲线结果，是否继续？")) return;
+    els.rawInput.value = result.contents;
+    parseAndCalculate({ skipConfirm: true });
+  } catch (error) {
+    window.alert(`桌面打开文件失败：${error.message || error}`);
+  }
+}
+
+function askText(title, initialValue = "") {
+  if (!els.textPromptDialog || !els.textPromptInput || !els.textPromptOkButton || !els.textPromptCancelButton) {
+    return Promise.resolve(window.prompt(title, initialValue));
+  }
+  return new Promise((resolve) => {
+    const cleanup = (value) => {
+      els.textPromptDialog.hidden = true;
+      els.textPromptOkButton.removeEventListener("click", onOk);
+      els.textPromptCancelButton.removeEventListener("click", onCancel);
+      els.textPromptDialog.removeEventListener("click", onBackdrop);
+      els.textPromptInput.removeEventListener("keydown", onKeydown);
+      document.removeEventListener("keydown", onKeydown);
+      resolve(value);
+    };
+    const onOk = () => cleanup(els.textPromptInput.value);
+    const onCancel = () => cleanup("");
+    const onBackdrop = (event) => {
+      if (event.target === els.textPromptDialog) cleanup("");
+    };
+    const onKeydown = (event) => {
+      if (event.key === "Enter") onOk();
+      if (event.key === "Escape") onCancel();
+    };
+    els.textPromptTitle.textContent = title;
+    els.textPromptInput.value = initialValue;
+    els.textPromptDialog.hidden = false;
+    els.textPromptOkButton.addEventListener("click", onOk);
+    els.textPromptCancelButton.addEventListener("click", onCancel);
+    els.textPromptDialog.addEventListener("click", onBackdrop);
+    els.textPromptInput.addEventListener("keydown", onKeydown);
+    document.addEventListener("keydown", onKeydown);
+    setTimeout(() => {
+      els.textPromptInput.focus();
+      els.textPromptInput.select();
+    }, 0);
+  });
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -620,6 +888,7 @@ function switchView(view) {
   state.activeView = view;
   document.querySelectorAll("[data-view]").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
   document.querySelectorAll("[data-view-button]").forEach((item) => item.classList.toggle("active", item.dataset.viewButton === view));
+  if (els.workflowContextToolbar) els.workflowContextToolbar.hidden = true;
 }
 
 function saveRun() {
@@ -636,7 +905,11 @@ function saveRun() {
     g7: state.g7,
     curveQuality: context.curveQuality,
   });
+  const jobName = jobDisplayName(context);
   const run = {
+    name: context.runId,
+    jobKey: context.jobId,
+    jobName,
     createdAt: new Date().toLocaleString(),
     jobId: context.jobId,
     runId: context.runId,
@@ -675,15 +948,164 @@ function saveRun() {
   }
   state.storageWarning = "";
   state.runs = nextRuns;
+  state.selectedJobKey = run.jobKey;
   _renderRuns(state, els);
   _renderReport(state, els);
   switchView("job");
 }
 
 function clearRuns() {
+  if (state.runs.length && !window.confirm("清空全部 Job / Run 历史？如果只想删除一个作业，请用作业卡片上的“删除作业”。")) return;
   state.runs = [];
+  state.selectedJobKey = "";
   state.storageWarning = "";
   clearStoredRuns();
+  _renderRuns(state, els);
+  _renderReport(state, els);
+}
+
+async function restoreRunFromList(event) {
+  const jobClearFilterTarget = event.target?.closest?.("[data-job-clear-filter]");
+  if (jobClearFilterTarget) {
+    state.selectedJobKey = "";
+    _renderRuns(state, els);
+    return;
+  }
+  const jobSelectTarget = event.target?.closest?.("[data-job-select-key]");
+  if (jobSelectTarget) {
+    state.selectedJobKey = jobSelectTarget.dataset.jobSelectKey || "";
+    _renderRuns(state, els);
+    els.runBody?.closest(".table-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  const jobExportTarget = event.target?.closest?.("[data-job-export-key]");
+  if (jobExportTarget) {
+    exportJobArchive(jobExportTarget.dataset.jobExportKey);
+    return;
+  }
+  const jobRenameTarget = event.target?.closest?.("[data-job-rename-key]");
+  if (jobRenameTarget) {
+    await renameJob(jobRenameTarget.dataset.jobRenameKey);
+    return;
+  }
+  const jobDeleteTarget = event.target?.closest?.("[data-job-delete-key]");
+  if (jobDeleteTarget) {
+    deleteJob(jobDeleteTarget.dataset.jobDeleteKey);
+    return;
+  }
+  const renameTarget = event.target?.closest?.("[data-run-rename-index]");
+  if (renameTarget) {
+    await renameRun(Number(renameTarget.dataset.runRenameIndex));
+    return;
+  }
+  const deleteTarget = event.target?.closest?.("[data-run-delete-index]");
+  if (deleteTarget) {
+    deleteRun(Number(deleteTarget.dataset.runDeleteIndex));
+    return;
+  }
+  const openTarget = event.target?.closest?.("[data-run-open-index]");
+  if (!openTarget) return;
+  const run = state.runs[Number(openTarget.dataset.runOpenIndex)];
+  if (!run?.archive) return;
+  await restoreProjectArchive(run.archive);
+}
+
+async function renameRun(index) {
+  const run = state.runs[index];
+  if (!run) return;
+  const currentName = run.name || run.jobId || run.runId || `Run ${index + 1}`;
+  const nextName = await askText("输入新的 Run 名称", currentName);
+  if (!nextName || nextName.trim() === currentName) return;
+  state.runs = state.runs.map((item, itemIndex) => itemIndex === index ? { ...item, name: nextName.trim() } : item);
+  persistRunsOnly();
+}
+
+function deleteRun(index) {
+  const run = state.runs[index];
+  if (!run) return;
+  const label = run.name || run.jobId || run.runId || run.createdAt || `Run ${index + 1}`;
+  if (!window.confirm(`删除这次 Run？\n${label}\n此操作只删除本机历史列表，不会影响已导出的文件。`)) return;
+  state.runs = state.runs.filter((_, itemIndex) => itemIndex !== index);
+  persistRunsOnly();
+}
+
+async function renameJob(jobKey) {
+  const runs = state.runs.filter((run, index) => runJobKey(run, index) === jobKey);
+  if (!runs.length) return;
+  const currentName = runs[0].jobName || runs[0].jobId || jobKey;
+  const nextName = await askText("输入新的作业名称", currentName);
+  if (!nextName || nextName.trim() === currentName) return;
+  state.runs = state.runs.map((run, index) =>
+    runJobKey(run, index) === jobKey ? { ...run, jobKey, jobName: nextName.trim() } : run
+  );
+  persistRunsOnly();
+}
+
+function deleteJob(jobKey) {
+  const runs = state.runs.filter((run, index) => runJobKey(run, index) === jobKey);
+  if (!runs.length) return;
+  const label = runs[0].jobName || runs[0].jobId || jobKey;
+  if (!window.confirm(`删除整个作业及其 ${runs.length} 次 Run？\n${label}\n此操作只删除本机历史列表，不会影响已导出的文件。`)) return;
+  state.runs = state.runs.filter((run, index) => runJobKey(run, index) !== jobKey);
+  if (state.selectedJobKey === jobKey) state.selectedJobKey = "";
+  persistRunsOnly();
+}
+
+function runJobKey(run, index) {
+  return run.jobKey || run.jobId || run.archive?.jobId || run.storagePath?.split("/")?.[1] || `job-${index}`;
+}
+
+function exportJobArchive(jobKey) {
+  const runs = state.runs
+    .map((run, index) => ({ run, index }))
+    .filter((item) => runJobKey(item.run, item.index) === jobKey);
+  if (!runs.length) return;
+  const jobName = runs[0].run.jobName || runs[0].run.jobId || jobKey;
+  const archive = {
+    schemaVersion: 1,
+    type: "ctv-job-archive",
+    exportedAt: new Date().toISOString(),
+    job: {
+      key: jobKey,
+      name: jobName,
+      runCount: runs.length,
+    },
+    runs: runs.map((item) => item.run),
+  };
+  download(`${slug(jobName)}-job-project.json`, JSON.stringify(archive, null, 2), "application/json");
+}
+
+function exportSelectedJobArchive() {
+  const jobKey = state.selectedJobKey || runJobKey(state.runs[0] || {}, 0);
+  if (!jobKey) return;
+  exportJobArchive(jobKey);
+}
+
+function exportJobLibraryArchive() {
+  if (!state.runs.length) return;
+  const archive = {
+    schemaVersion: 1,
+    type: "ctv-job-library-archive",
+    exportedAt: new Date().toISOString(),
+    jobCount: new Set(state.runs.map((run, index) => runJobKey(run, index))).size,
+    runCount: state.runs.length,
+    runs: state.runs,
+  };
+  download("ctv-job-library-project.json", JSON.stringify(archive, null, 2), "application/json");
+}
+
+function jobDisplayName(context) {
+  return [context.job.customer, context.job.press].filter(Boolean).join(" / ") || context.jobId;
+}
+
+function persistRunsOnly() {
+  const saved = saveStoredRuns(state.runs);
+  if (!saved.ok) {
+    state.storageWarning = saved.warning;
+    window.alert(saved.warning);
+  } else {
+    state.storageWarning = "";
+  }
   _renderRuns(state, els);
   _renderReport(state, els);
 }
@@ -699,9 +1121,42 @@ async function restoreProjectFromText(text) {
   } catch {
     return false;
   }
+  if ((archive?.type === "ctv-job-archive" || archive?.type === "ctv-job-library-archive") && Array.isArray(archive.runs)) {
+    restoreJobArchive(archive);
+    return true;
+  }
   if (!archive || (!archive.job && !archive.measurements && !archive.results)) return false;
+  if (!confirmDataOverwrite("导入 JSON 项目档案会覆盖当前手动表、导入数据和曲线结果，是否继续？")) return true;
   await restoreProjectArchive(archive);
   return true;
+}
+
+function restoreJobArchive(archive) {
+  const incomingRuns = archive.runs
+    .filter((run) => run && typeof run === "object")
+    .map((run, index) => ({
+      ...run,
+      jobKey: run.jobKey || archive.job?.key || runJobKey(run, index),
+      jobName: run.jobName || archive.job?.name || run.jobId || archive.job?.key || `Job ${index + 1}`,
+    }));
+  if (!incomingRuns.length) return;
+  const existingKeys = new Set(state.runs.map((run, index) => runIdentity(run, index)));
+  state.runs = [
+    ...incomingRuns.filter((run, index) => !existingKeys.has(runIdentity(run, index))),
+    ...state.runs,
+  ].slice(0, 24);
+  state.selectedJobKey = incomingRuns[0].jobKey || "";
+  persistRunsOnly();
+  switchView("job");
+}
+
+function runIdentity(run, index) {
+  return [
+    runJobKey(run, index),
+    run.runId || "",
+    run.createdAt || "",
+    run.storagePath || "",
+  ].join("|");
 }
 
 async function restoreProjectArchive(archive) {
@@ -745,6 +1200,15 @@ async function restoreProjectArchive(archive) {
   switchView("job");
 }
 
+function slug(value) {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "job";
+}
+
 function currentImportAudit() {
   return inspectImport({
     importInfo: state.importInfo,
@@ -763,11 +1227,21 @@ function currentG7Preview() {
     rawRows: state.importInfo?.rawRows || [],
     metadata: state.importInfo?.metadata || {},
     importKind: audit.kind,
+    standardPatchMap: state.standardPatchMap,
+    deltaEFormula: els.deltaFormulaSelect.value,
     tolerances: {
       ...(state.standard.g7 || {}),
       deltaEWeighted: state.standard.deltaE?.warning,
       deltaEMax: state.standard.deltaE?.fail ? Math.max(state.standard.deltaE.fail * 2, 8) : 8,
     },
+  });
+}
+
+function currentG7Compensation() {
+  return buildG7Compensation({
+    g7: state.g7,
+    ratio: Number(els.ratioInput.value) / 100,
+    limit: Number(els.limitInput.value),
   });
 }
 
@@ -815,6 +1289,7 @@ function updateCurveOverride(event) {
   state.results = applyCurveOverrides(state.results, state.curveOverrides);
   state.safetyIssues = analyzeCurveSafety(state.results);
   state.g7 = currentG7Preview();
+  if (state.g7Compensation) state.g7Compensation = currentG7Compensation();
   renderShell(state, els);
   _renderAnalyze(state, els);
   _renderCurve(state, els);
