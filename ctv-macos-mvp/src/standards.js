@@ -4,7 +4,14 @@ import { labFromSpectralRow } from "./spectral-color.js";
 
 const COMMON_TOLERANCE = {
   deltaE: { warning: 3.5, fail: 4.2 },
-  g7: { npdcAverage: 1.5, npdcMax: 3, grayAverage: 1.5, grayMax: 3 },
+  g7: {
+    enabled: true,
+    npdcAverage: 1.5,
+    npdcMax: 3,
+    grayAverage: 1.5,
+    grayMax: 3,
+    grayInflection: "",
+  },
 };
 
 const COATED_SOLID_DENSITY_RANGES = {

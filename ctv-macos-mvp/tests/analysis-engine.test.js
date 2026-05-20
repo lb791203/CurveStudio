@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { analyzeCurveSafety, deltaE2000, deltaE76, deltaE94, deltaECMC, diagnosePress, g7Preview, summarizeLabVerification } from "../src/analysis-engine.js";
+import { g7NpdcLTarget } from "../src/g7-targets.js";
 
 test("Delta E formulas return stable finite values", () => {
   const sample = { l: 50, a: 2.6772, b: -79.7751 };
@@ -39,7 +40,7 @@ test("g7Preview reports NPDC delta tone metrics", () => {
   });
 
   assert.equal(g7.npdcRows[0].deltaTone, 4);
-  assert.equal(g7.maxNpdcDelta, 4);
+  assert.equal(g7.legacyMaxNpdcDeltaTone, 4);
 });
 
 test("g7Preview uses raw Lab gray patches without claiming G7 pass", () => {
@@ -116,7 +117,7 @@ test("g7Preview can validate complete manual-equivalent G7 data", () => {
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
       cmyk: { c: tone, m: tone, y: tone, k: 0 },
-      lab: { l: 70, a: 0.5, b: -0.5 },
+      lab: { l: g7NpdcLTarget(tone), a: 0.5, b: -0.5 },
       deltaE: 1,
     })),
   ];

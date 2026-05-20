@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { statusText } from "../src/views/analysis.js";
-import { visibleWarnings } from "../src/views/data.js";
+import { renderCurve, statusText } from "../src/views/analysis.js";
+import { renderMeasurement, visibleWarnings } from "../src/views/data.js";
 import { renderInstrument } from "../src/views/instrument.js";
-import { renderExport, renderReport, renderRuns } from "../src/views/shell.js";
+import { renderExport, renderReport, renderRuns, renderShell } from "../src/views/shell.js";
 
 function els(overrides = {}) {
   return {
@@ -14,9 +14,24 @@ function els(overrides = {}) {
     ratioInput: { value: "50" },
     jobCustomerInput: { value: "Demo" },
     jobPressInput: { value: "KBA" },
+    workflowContextToolbar: { hidden: false },
+    jobTitle: { textContent: "" },
+    jobMeta: { textContent: "" },
+    diagnosisBadge: { textContent: "", className: "" },
+    measurementSummary: { innerHTML: "" },
+    measurementPatchPreview: { innerHTML: "" },
+    importAuditSummary: { innerHTML: "" },
+    manualHealthSummary: { innerHTML: "" },
     exportSummary: { innerHTML: "" },
     instrumentVerificationSummary: { innerHTML: "" },
     instrumentVerificationBody: { innerHTML: "" },
+    deviceAdapterSelect: { value: "" },
+    deviceConnectButton: { disabled: false },
+    deviceDisconnectButton: { disabled: false },
+    deviceCalibrateButton: { disabled: false },
+    deviceReadPatchButton: { disabled: false },
+    deviceAdapterSummary: { innerHTML: "" },
+    deviceQueueBody: { innerHTML: "" },
     reportSummary: { innerHTML: "" },
     reportG7Conclusion: { innerHTML: "" },
     reportLabSummary: { innerHTML: "" },
@@ -34,9 +49,19 @@ function state(overrides = {}) {
     standard: { name: "GRACoL2013 CRPC6" },
     importInfo: { warnings: ["import warning"], metadata: {} },
     manualDirty: false,
+    manualRows: [],
     storageWarning: "",
     measurements: [],
     results: [],
+    runs: [],
+    device: {
+      adapterId: "file",
+      connected: false,
+      calibrated: false,
+      queue: [],
+      queueIndex: 0,
+      message: "",
+    },
     ...overrides,
   };
 }
@@ -57,10 +82,73 @@ test("visibleWarnings keeps non-import warnings available after view split", () 
   assert.ok(warnings.includes("storage warning"));
 });
 
+test("renderMeasurement shows unloaded file prompt and patch empty state", () => {
+  const localEls = els();
+  renderMeasurement(state({ importInfo: null }), localEls);
+
+  assert.match(localEls.measurementSummary.innerHTML, /未加载文件/);
+  assert.match(localEls.measurementPatchPreview.innerHTML, /测量文件色块预览/);
+  assert.match(localEls.measurementPatchPreview.innerHTML, /未加载测量文件/);
+});
+
+test("renderMeasurement renders patch preview from imported raw rows", () => {
+  const localEls = els();
+  renderMeasurement(state({
+    importInfo: {
+      sourceFormat: "CGATS",
+      warnings: [],
+      metadata: {},
+      rawRows: [
+        { sample_id: "PAPER", cmyk_c: 0, cmyk_m: 0, cmyk_y: 0, cmyk_k: 0, lab_l: 95, lab_a: 0, lab_b: -2 },
+        { sample_id: "C50", cmyk_c: 50, cmyk_m: 0, cmyk_y: 0, cmyk_k: 0, lab_l: 70, lab_a: -25, lab_b: -35 },
+      ],
+    },
+    measurements: [{ channel: "C", tone: 50 }],
+  }), localEls);
+
+  assert.match(localEls.measurementSummary.innerHTML, /来源: CGATS/);
+  assert.match(localEls.measurementPatchPreview.innerHTML, /2 个色块/);
+  assert.equal((localEls.measurementPatchPreview.innerHTML.match(/patch-swatch/g) || []).length, 2);
+  assert.match(localEls.measurementPatchPreview.innerHTML, /C50/);
+});
+
+test("renderShell keeps workflow context in the bottom status bar", () => {
+  const localEls = els({
+    statusBar: { innerHTML: "" },
+    saveRunButton: { disabled: false },
+    exportCsvButton: { disabled: false },
+    exportHarmonyButton: { disabled: false },
+    exportPrinergyButton: { disabled: false },
+    exportSimpleRipButton: { disabled: false },
+    exportCgatsButton: { disabled: false },
+    exportG7CsvButton: { disabled: false },
+    exportG7JsonButton: { disabled: false },
+    exportJsonButton: { disabled: false },
+    calculateButton: { disabled: false },
+    applyManualButton: { disabled: false },
+    clearManualButton: { disabled: false },
+  });
+
+  renderShell(state({ activeView: "standard" }), localEls);
+  assert.equal(localEls.workflowContextToolbar.hidden, true);
+  assert.match(localEls.statusBar.innerHTML, /未加载测量数据/);
+
+  renderShell(state({ activeView: "curve", measurements: [{ channel: "K", measuredTone: 50 }] }), localEls);
+  assert.equal(localEls.workflowContextToolbar.hidden, true);
+  assert.match(localEls.jobTitle.textContent, /KBA 测量任务/);
+  assert.doesNotMatch(localEls.statusBar.innerHTML, /KBA 测量任务/);
+  assert.match(localEls.statusBar.innerHTML, /KBA/);
+  assert.match(localEls.statusBar.innerHTML, /等待诊断/);
+});
+
 test("statusText and export summary use full shared warnings", () => {
   const localState = state({
     manualDirty: true,
     results: [{ metricName: "TVI fallback", metricMethod: "reported_tone" }],
+    selectedJobKey: "job-a",
+    runs: [
+      { jobKey: "job-a", jobName: "客户A KBA105", createdAt: "Run1", standard: "GRACoL", measurements: 60, results: 60 },
+    ],
   });
   const localEls = els();
 
@@ -70,13 +158,99 @@ test("statusText and export summary use full shared warnings", () => {
 
   assert.match(localEls.exportSummary.innerHTML, /手动测量表已修改/);
   assert.match(localEls.exportSummary.innerHTML, /ΔE2000/);
+  assert.match(localEls.exportSummary.innerHTML, /Job 档案/);
+  assert.match(localEls.exportSummary.innerHTML, /客户A KBA105/);
+});
+
+test("renderCurve channel filter preserves filtered row override keys", () => {
+  const localEls = els({
+    resultBody: { innerHTML: "" },
+    ripEntryBody: { innerHTML: "" },
+    curveAcceptanceSummary: { innerHTML: "" },
+    measurementChart: { innerHTML: "" },
+    curveChart: { innerHTML: "" },
+    safetySummary: { innerHTML: "" },
+    statusText: { textContent: "" },
+  });
+  const baseRow = {
+    tone: 50,
+    measuredTone: 65,
+    targetTone: 60,
+    measuredTvi: 15,
+    targetTvi: 10,
+    tviDelta: 5,
+    theoreticalCorrection: -5,
+    compensationRatio: 50,
+    theoreticalOutputTone: 45,
+    productionOutputTone: 47.5,
+    correction: -2.5,
+    outputTone: 47.5,
+    metricName: "TVI",
+    metricMethod: "reported_tone",
+  };
+  const localState = state({
+    activeCurveChannel: "K",
+    results: [
+      { ...baseRow, channel: "C", autoOutputTone: 46 },
+      { ...baseRow, channel: "K", autoOutputTone: 47.5 },
+    ],
+    safetyIssues: [],
+  });
+
+  renderCurve(localState, localEls);
+
+  assert.doesNotMatch(localEls.resultBody.innerHTML, /data-curve-key="C:50\.000"/);
+  assert.match(localEls.resultBody.innerHTML, /data-curve-key="K:50\.000"/);
+  assert.match(localEls.resultBody.innerHTML, />K</);
+});
+
+test("renderCurve keeps RIP acceptance table focused on review rows", () => {
+  const localEls = els({
+    resultBody: { innerHTML: "" },
+    ripEntryBody: { innerHTML: "" },
+    curveAcceptanceSummary: { innerHTML: "" },
+    measurementChart: { innerHTML: "" },
+    curveChart: { innerHTML: "" },
+    safetySummary: { innerHTML: "" },
+    statusText: { textContent: "" },
+  });
+  const baseRow = {
+    measuredTone: 50,
+    targetTone: 50,
+    measuredTvi: 0,
+    targetTvi: 0,
+    tviDelta: 0,
+    theoreticalCorrection: 0,
+    compensationRatio: 50,
+    theoreticalOutputTone: 0,
+    productionOutputTone: 0,
+    correction: 0,
+    metricName: "CTV",
+    metricMethod: "iso_20654_lab",
+  };
+  const localState = state({
+    activeCurveChannel: "all",
+    results: [
+      { ...baseRow, channel: "K", tone: 50, outputTone: 50, measuredTone: 50, targetTone: 50 },
+      { ...baseRow, channel: "K", tone: 75, outputTone: 75.7, measuredTone: 73, targetTone: 75, correction: 0.7 },
+    ],
+    safetyIssues: [],
+  });
+
+  renderCurve(localState, localEls);
+
+  assert.doesNotMatch(localEls.ripEntryBody.innerHTML, /50\.00%/);
+  assert.match(localEls.ripEntryBody.innerHTML, /75\.00%/);
+  assert.match(localEls.ripEntryBody.innerHTML, /增加点/);
 });
 
 test("renderRuns compares latest run against previous run", () => {
-  const localEls = els();
+  const localEls = els({ jobRunList: { innerHTML: "" } });
   const localState = state({
     runs: [
       {
+        jobKey: "job-a",
+        jobName: "Demo KBA",
         createdAt: "Run2",
         standard: "GRACoL",
         measurements: 10,
@@ -106,6 +280,8 @@ test("renderRuns compares latest run against previous run", () => {
         },
       },
       {
+        jobKey: "job-a",
+        jobName: "Demo KBA",
         createdAt: "Run1",
         standard: "GRACoL",
         measurements: 10,
@@ -145,6 +321,70 @@ test("renderRuns compares latest run against previous run", () => {
   assert.match(localEls.runCompareSummary.innerHTML, /G7 结论/);
   assert.match(localEls.runCompareSummary.innerHTML, /已解决: Fail: 灰平衡最大 Ch/);
   assert.match(localEls.runBody.innerHTML, /Ready/);
+  assert.match(localEls.jobRunList.innerHTML, /data-run-open-index="0"/);
+  assert.match(localEls.jobRunList.innerHTML, /data-job-select-key="job-a"/);
+  assert.match(localEls.jobRunList.innerHTML, /data-job-export-key="job-a"/);
+  assert.match(localEls.jobRunList.innerHTML, /data-job-rename-key="job-a"/);
+  assert.match(localEls.jobRunList.innerHTML, /data-job-delete-key="job-a"/);
+  assert.match(localEls.runBody.innerHTML, /data-run-delete-index="1"/);
+});
+
+test("renderRuns shows renamed Run names in cards and table rows", () => {
+  const localEls = els({ jobRunList: { innerHTML: "" } });
+  renderRuns(state({
+    runs: [{
+      jobKey: "job-a",
+      jobName: "客户A KBA105",
+      name: "客户A KBA105 第一次",
+      createdAt: "Run1",
+      standard: "GRACoL",
+      measurements: 60,
+      results: 60,
+      diagnosis: "生产可补偿",
+      ratio: 45,
+      avgTviDelta: 2,
+      maxDeltaE: 4,
+      storagePath: "jobs/a/run1.json",
+      g7Status: "Warning",
+      curveQualityStatus: "Ready",
+    }],
+  }), localEls);
+
+  assert.match(localEls.jobRunList.innerHTML, /客户A KBA105/);
+  assert.match(localEls.runBody.innerHTML, /客户A KBA105 第一次/);
+});
+
+test("renderRuns groups multiple runs under one job card", () => {
+  const localEls = els({ jobRunList: { innerHTML: "" } });
+  renderRuns(state({
+    runs: [
+      { jobKey: "job-a", jobName: "客户A KBA105", name: "第二次", createdAt: "Run2", standard: "GRACoL", measurements: 60, results: 60, ratio: 45, avgTviDelta: 3, maxDeltaE: 4, g7Status: "Pass", curveQualityStatus: "Ready" },
+      { jobKey: "job-a", jobName: "客户A KBA105", name: "第一次", createdAt: "Run1", standard: "GRACoL", measurements: 60, results: 60, ratio: 45, avgTviDelta: 6, maxDeltaE: 5, g7Status: "Fail", curveQualityStatus: "Warning" },
+      { jobKey: "job-b", jobName: "客户B KBA162", name: "第一次", createdAt: "Run1", standard: "GRACoL", measurements: 60, results: 60, ratio: 50, avgTviDelta: 2, maxDeltaE: 3, g7Status: "Warning", curveQualityStatus: "Ready" },
+    ],
+  }), localEls);
+
+  assert.match(localEls.jobRunList.innerHTML, /客户A KBA105/);
+  assert.match(localEls.jobRunList.innerHTML, /2 次 Run/);
+  assert.match(localEls.jobRunList.innerHTML, /客户B KBA162/);
+  assert.equal((localEls.jobRunList.innerHTML.match(/job-run-card/g) || []).length, 2);
+});
+
+test("renderRuns filters run table to selected job", () => {
+  const localEls = els({ jobRunList: { innerHTML: "" } });
+  renderRuns(state({
+    selectedJobKey: "job-b",
+    runs: [
+      { jobKey: "job-a", jobName: "客户A KBA105", name: "A 第一次", createdAt: "Run A", standard: "GRACoL", measurements: 60, results: 60, ratio: 45, avgTviDelta: 3, maxDeltaE: 4, g7Status: "Pass", curveQualityStatus: "Ready" },
+      { jobKey: "job-b", jobName: "客户B KBA162", name: "B 第一次", createdAt: "Run B", standard: "GRACoL", measurements: 60, results: 60, ratio: 50, avgTviDelta: 2, maxDeltaE: 3, g7Status: "Warning", curveQualityStatus: "Ready" },
+    ],
+  }), localEls);
+
+  assert.match(localEls.jobRunList.innerHTML, /当前只显示作业/);
+  assert.match(localEls.jobRunList.innerHTML, /data-job-clear-filter/);
+  assert.match(localEls.jobRunList.innerHTML, /job-run-card active/);
+  assert.match(localEls.runBody.innerHTML, /B 第一次/);
+  assert.doesNotMatch(localEls.runBody.innerHTML, /A 第一次/);
 });
 
 test("renderReport summarizes field report sections", () => {
@@ -194,10 +434,12 @@ test("renderReport summarizes field report sections", () => {
   renderReport(localState, localEls);
 
   assert.match(localEls.reportSummary.innerHTML, /GRACoL2013 CRPC6|生产可补偿/);
+  assert.match(localEls.reportSummary.innerHTML, /作业库/);
   assert.match(localEls.reportG7Conclusion.innerHTML, /G7 未通过，需修正后复测/);
   assert.match(localEls.reportLabSummary.innerHTML, /最大 ΔE/);
   assert.match(localEls.reportCurveSummary.innerHTML, /曲线质量|平均 \|TVI\/CTV 偏差\|/);
-  assert.match(localEls.reportRunCompare.innerHTML, /Run 对比|已解决/);
+  assert.match(localEls.reportRunCompare.innerHTML, /已解决/);
+  assert.doesNotMatch(localEls.reportRunCompare.innerHTML, /<strong>Run 对比/);
   assert.equal(localEls.printReportButton.disabled, false);
 });
 
@@ -212,8 +454,35 @@ test("renderInstrument shows i1Pro cross verification rows", () => {
 
   renderInstrument(localState, localEls);
 
+  assert.match(localEls.deviceAdapterSummary.innerHTML, /文件导入/);
   assert.match(localEls.instrumentVerificationSummary.innerHTML, /仪器交叉验证/);
   assert.match(localEls.instrumentVerificationSummary.innerHTML, /X-Rite i1Pro CGATS/);
   assert.match(localEls.instrumentVerificationBody.innerHTML, /C50/);
   assert.match(localEls.instrumentVerificationBody.innerHTML, /Missing Instrument CTV/);
+});
+
+test("renderInstrument shows DeviceAdapter queue state", () => {
+  const localEls = els();
+  renderInstrument(state({
+    manualRows: [{ source: "仪器测量" }],
+    device: {
+      adapterId: "mock",
+      connected: true,
+      calibrated: true,
+      queue: [
+        { patchType: "paper", channel: "Paper", tone: "", label: "纸白" },
+        { patchType: "tone", channel: "C", tone: 50, label: "C 50%" },
+      ],
+      queueIndex: 1,
+      message: "模拟设备已连接",
+    },
+  }), localEls);
+
+  assert.equal(localEls.deviceAdapterSelect.value, "mock");
+  assert.equal(localEls.deviceConnectButton.disabled, true);
+  assert.equal(localEls.deviceReadPatchButton.disabled, false);
+  assert.match(localEls.deviceAdapterSummary.innerHTML, /队列: 1\/2/);
+  assert.match(localEls.deviceAdapterSummary.innerHTML, /仪器测量点: 1/);
+  assert.match(localEls.deviceQueueBody.innerHTML, /C 50%/);
+  assert.match(localEls.deviceQueueBody.innerHTML, /当前/);
 });
