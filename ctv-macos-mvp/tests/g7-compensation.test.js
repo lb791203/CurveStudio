@@ -31,6 +31,7 @@ test("buildG7Compensation recommends reducing K when current NPDC is too dark", 
   assert.equal(preview.status, "Preview");
   assert.equal(k50.action, "减少");
   assert.equal(k50.g7ReferenceOutput, 45);
+  assert.equal(k50.g7Delta, 0);
   assert.equal(k50.outputTone, 45);
 });
 
@@ -52,7 +53,8 @@ test("buildG7Compensation recommends increasing K when current NPDC is too light
   const k50 = preview.rows.find((row) => row.channel === "K" && row.tone === 50);
   assert.equal(k50.action, "增加");
   assert.equal(k50.g7ReferenceOutput, 60);
-  assert.equal(k50.outputTone, 52);
+  assert.equal(k50.g7Delta, 3);
+  assert.equal(k50.outputTone, 55);
 });
 
 test("buildG7Compensation caps large moves with the point limit", () => {
@@ -72,6 +74,7 @@ test("buildG7Compensation caps large moves with the point limit", () => {
 
   const k10 = preview.rows.find((row) => row.channel === "K" && row.tone === 10);
   assert.equal(k10.g7ReferenceOutput, 22);
+  assert.equal(k10.directionConflict, true);
   assert.equal(k10.outputTone, 8);
 });
 
@@ -96,7 +99,28 @@ test("buildG7Compensation does not emit common CMY output rows", () => {
   const c50 = preview.rows.find((row) => row.channel === "C" && row.tone === 50);
   assert.match(c50.hint, /偏红\/偏品/);
   assert.match(c50.hint, /偏蓝/);
-  assert.equal(c50.outputTone, 45);
+  assert.equal(c50.outputTone < 45, true);
+});
+
+test("buildG7Compensation suppresses gray split corrections that oppose TVI direction", () => {
+  const preview = buildG7Compensation({
+    g7: {
+      status: "Fail",
+      npdcVerification: [],
+      grayVerification: [
+        { label: "HR50", tone: 50, measuredL: 32, targetL: 28.4, deltaL: 3.6, weightedDeltaL: 3.6, a: -5, b: -5 },
+      ],
+    },
+    baseRows: [
+      { channel: "Y", tone: 50, outputTone: 45, metricName: "TVI" },
+    ],
+  });
+
+  const y50 = preview.rows.find((row) => row.channel === "Y" && row.tone === 50);
+  assert.equal(y50.requestedG7Delta > 0, true);
+  assert.equal(y50.directionConflict, true);
+  assert.equal(y50.g7Delta, 0);
+  assert.equal(y50.outputTone, 45);
 });
 
 test("buildG7Compensation blocks when G7 data is unavailable", () => {
