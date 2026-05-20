@@ -402,10 +402,10 @@ function renderG7Compensation(compensation, els) {
   const ratioText = Number.isFinite(ratio) ? `${num(ratio * 100)}%` : "-";
   const limitText = Number.isFinite(preview.limit) ? `${num(preview.limit)}%` : "-";
   els.g7CompensationSummary.innerHTML = `
-    <p><strong>状态</strong> <span class="status ${statusClass(level)}">${escapeHtml(preview.status)}</span> ${escapeHtml(preview.message || "")}</p>
+      <p><strong>状态</strong> <span class="status ${statusClass(level)}">${escapeHtml(preview.status)}</span> ${escapeHtml(preview.message || "")}</p>
     ${preview.status === "Preview" ? `
-      <p><strong>生产原则</strong> 正式 C/M/Y/K 输出沿用 TVI/CTV 基础曲线；G7 不再生成 CMY 共同输出。当前单点最大修正 ${limitText}，欠补偿比例 ${ratioText} 只用于 K NPDC 参考计算。</p>
-      <p><strong>灰平衡</strong> CMY gray 只作为偏青/偏品/偏黄/偏蓝诊断；后续需要基于单通道敏感度再拆分 C/M/Y 修正。</p>
+      <p><strong>生产原则</strong> 正式 C/M/Y/K 输出以 TVI/CTV 基础曲线为底；G7 不再生成 CMY 共同输出。当前单点最大修正 ${limitText}，欠补偿比例 ${ratioText}，G7 追加量会被进一步限制为小幅修正。</p>
+      <p><strong>灰平衡</strong> CMY gray 会拆成 C/M/Y 单通道小幅修正；方向冲突时保持 TVI/CTV 输出，只提示复查。</p>
     ` : ""}
     ${(preview.warnings || []).map((item) => `<p>${escapeHtml(item)}</p>`).join("")}
   `;
@@ -415,7 +415,8 @@ function renderG7Compensation(compensation, els) {
         <td><span class="channel ${escapeAttr(row.channel)}">${escapeHtml(row.channel)}</span><div class="cell-note">${escapeHtml(row.source)}</div></td>
         <td>${num(row.tone)}%</td>
         <td><strong>${num(row.baseOutputTone)}%</strong><div class="cell-note">${escapeHtml(row.metricName || "TVI/CTV")} / ${escapeHtml(row.pointSource === "interpolated" ? "插值" : "实测")}</div></td>
-        <td>${Number.isFinite(row.g7ReferenceOutput) ? `${num(row.g7ReferenceOutput)}%<div class="cell-note">${signed(row.g7ReferenceAdjustment)}%${row.directionConflict ? " / 方向冲突" : ""}</div>` : "诊断"}
+        <td>${Number.isFinite(row.g7ReferenceOutput) ? `${num(row.g7ReferenceOutput)}%<div class="cell-note">K参考 ${signed(row.g7ReferenceAdjustment)}%</div>` : `拆分 ${signed(row.requestedG7Delta)}%`}
+          <div class="cell-note">${row.directionConflict ? "方向冲突，未叠加" : `已叠加 ${signed(row.g7Delta)}%`}</div>
         </td>
         <td><strong>${num(row.outputTone)}%</strong></td>
         <td class="${row.action === "增加" ? "negative" : row.action === "减少" ? "positive" : ""}">${escapeHtml(row.action)} ${num(Math.abs(row.adjustment))}%</td>

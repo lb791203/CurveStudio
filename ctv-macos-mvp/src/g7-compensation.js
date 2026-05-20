@@ -2,6 +2,8 @@ import { number } from "./shared.js";
 
 const MIN_TONE = 0;
 const MAX_TONE = 100;
+const GRAY_CHROMA_DEADBAND = 1.5;
+const GRAY_SPLIT_SCALE = 0.35;
 
 export function buildG7Compensation({ g7, baseRows = [], ratio = 0.5, limit = 12 } = {}) {
   const normalizedRatio = normalizeRatio(ratio);
@@ -46,6 +48,8 @@ export function buildG7Compensation({ g7, baseRows = [], ratio = 0.5, limit = 12
   const rows = baseCurveRows.map((row) => buildProductionRow(row, {
     kReferenceRows,
     grayDiagnostics,
+    ratio: normalizedRatio,
+    limit: normalizedLimit,
   }));
 
   const limitedCount = kReferenceRows.filter((row) => row.limited).length;
@@ -53,11 +57,11 @@ export function buildG7Compensation({ g7, baseRows = [], ratio = 0.5, limit = 12
   const conflictCount = rows.filter((row) => row.directionConflict).length;
   if (limitedCount) warnings.push(`${limitedCount} 个点超过单点限制，已按 ${normalizedLimit}% 做保护。`);
   if (increaseCount) warnings.push(`${increaseCount} 个生产曲线点需要增加网点，请结合现场密度和灰平衡复核。`);
-  if (conflictCount) warnings.push(`${conflictCount} 个 K 点的 G7 NPDC 参考方向与 TVI/CTV 基础曲线相反，需复查 Lab、密度和测量条件。`);
+  if (conflictCount) warnings.push(`${conflictCount} 个点的 G7 参考方向与 TVI/CTV 基础曲线相反，已保持基础曲线并提示复查。`);
 
   return {
     status: "Preview",
-    message: `已生成 ${rows.length} 个生产曲线建议点；CMY 共同输出已取消，C/M/Y/K 以 TVI/CTV 曲线为基础，G7 只提供 K NPDC 与灰平衡诊断。`,
+    message: `已生成 ${rows.length} 个生产曲线建议点；CMY 共同输出已取消，C/M/Y/K 以 TVI/CTV 曲线为基础，G7 只做小幅 K NPDC 与灰平衡拆分修正。`,
     ratio: normalizedRatio,
     limit: normalizedLimit,
     rows,
@@ -122,33 +126,40 @@ function normalizeBaseCurveRows(rows) {
     .sort((a, b) => a.channel.localeCompare(b.channel) || a.tone - b.tone);
 }
 
-function buildProductionRow(row, { kReferenceRows, grayDiagnostics }) {
-  const adjustment = row.outputTone - row.tone;
+function buildProductionRow(row, { kReferenceRows, grayDiagnostics, ratio, limit }) {
+  const baseAdjustment = row.outputTone - row.tone;
+  const maxG7Delta = g7DeltaLimit(ratio, limit);
   const reference = row.channel === "K" ? nearestToneRow(kReferenceRows, row.tone) : undefined;
   const gray = row.channel !== "K" ? nearestToneRow(grayDiagnostics, row.tone) : undefined;
   const referenceAdjustment = reference ? reference.outputTone - reference.tone : NaN;
-  const directionConflict = Number.isFinite(referenceAdjustment)
-    && Math.abs(referenceAdjustment) >= 0.2
-    && Math.abs(adjustment) >= 0.2
-    && Math.sign(referenceAdjustment) !== Math.sign(adjustment);
+  const requestedG7Delta = row.channel === "K"
+    ? kNpdcDelta(row, reference, maxG7Delta)
+    : graySplitDelta(row.channel, gray, maxG7Delta);
+  const directionConflict = hasDirectionConflict(baseAdjustment, requestedG7Delta);
+  const g7Delta = directionConflict ? 0 : requestedG7Delta;
+  const outputTone = clamp(row.outputTone + g7Delta, MIN_TONE, MAX_TONE);
+  const adjustment = outputTone - row.tone;
 
   return {
     channel: row.channel,
-    source: row.channel === "K" ? "TVI/CTV 基础 + K NPDC 参考" : "TVI/CTV 基础 + 灰平衡诊断",
+    source: row.channel === "K" ? "TVI/CTV 基础 + K NPDC 修正" : "TVI/CTV 基础 + 灰平衡拆分",
     tone: row.tone,
     measuredTone: row.measuredTone,
     targetTone: row.targetTone,
     baseOutputTone: row.outputTone,
-    outputTone: row.outputTone,
+    outputTone,
+    baseAdjustment,
     adjustment,
     action: adjustmentAction(adjustment),
     g7ReferenceOutput: reference?.outputTone,
     g7ReferenceAdjustment: referenceAdjustment,
+    requestedG7Delta,
+    g7Delta,
     directionConflict,
     pointSource: row.pointSource,
     metricName: row.metricName,
     metricMethod: row.metricMethod,
-    hint: productionHint(row, reference, gray, directionConflict),
+    hint: productionHint(row, reference, gray, directionConflict, requestedG7Delta),
   };
 }
 
@@ -167,14 +178,17 @@ function buildGrayDiagnostics(sourceRows) {
     .sort((a, b) => a.tone - b.tone);
 }
 
-function productionHint(row, reference, gray, conflict) {
+function productionHint(row, reference, gray, conflict, requestedG7Delta) {
   if (row.channel === "K") {
     if (!reference) return "缺少相邻 K NPDC Lab 参考；沿用 TVI/CTV 基础曲线。";
-    if (conflict) return "K NPDC 参考与 TVI/CTV 方向冲突；不要自动覆盖，需复查测量条件。";
-    return "K NPDC 方向与基础曲线可对照；当前生产输出仍以 TVI/CTV 为准。";
+    if (conflict) return "K NPDC 参考与 TVI/CTV 方向冲突；已保持基础曲线，需复查测量条件。";
+    if (Math.abs(requestedG7Delta) < 0.05) return "K NPDC 与基础曲线接近；未追加修正。";
+    return "K NPDC 与基础方向一致；已追加小幅 G7 修正。";
   }
   if (!gray) return "缺少相邻 CMY gray Lab；沿用 TVI/CTV 基础曲线。";
-  return `${gray.hint}；当前不生成 CMY 共同输出，正式曲线仍按单通道 TVI/CTV 执行。`;
+  if (conflict) return `${gray.hint}；拆分方向与基础曲线冲突，已保持 TVI/CTV 输出。`;
+  if (Math.abs(requestedG7Delta) < 0.05) return `${gray.hint}；当前通道无需追加拆分修正。`;
+  return `${gray.hint}；已按通道拆分追加小幅修正，需复测确认。`;
 }
 
 function nearestToneRow(rows, tone) {
@@ -183,6 +197,45 @@ function nearestToneRow(rows, tone) {
   return rows.reduce((best, row) =>
     Math.abs(row.tone - numeric) < Math.abs(best.tone - numeric) ? row : best
   , rows[0]);
+}
+
+function kNpdcDelta(row, reference, maxG7Delta) {
+  if (!reference || !Number.isFinite(reference.outputTone)) return 0;
+  return clamp(reference.outputTone - row.outputTone, -maxG7Delta, maxG7Delta);
+}
+
+function graySplitDelta(channel, gray, maxG7Delta) {
+  if (!gray) return 0;
+  const a = number(gray.a);
+  const b = number(gray.b);
+  let delta = 0;
+  if (Number.isFinite(a)) {
+    const aExcess = Math.max(0, Math.abs(a) - GRAY_CHROMA_DEADBAND) * GRAY_SPLIT_SCALE;
+    if (a > GRAY_CHROMA_DEADBAND && channel === "M") delta -= aExcess;
+    if (a < -GRAY_CHROMA_DEADBAND && channel === "C") delta -= aExcess * 0.6;
+    if (a < -GRAY_CHROMA_DEADBAND && channel === "M") delta += aExcess * 0.4;
+  }
+  if (Number.isFinite(b)) {
+    const bExcess = Math.max(0, Math.abs(b) - GRAY_CHROMA_DEADBAND) * GRAY_SPLIT_SCALE;
+    if (b > GRAY_CHROMA_DEADBAND && channel === "Y") delta -= bExcess;
+    if (b < -GRAY_CHROMA_DEADBAND && channel === "Y") delta += bExcess * 0.7;
+    if (b < -GRAY_CHROMA_DEADBAND && (channel === "C" || channel === "M")) delta -= bExcess * 0.15;
+  }
+  return clamp(delta, -maxG7Delta, maxG7Delta);
+}
+
+function hasDirectionConflict(baseAdjustment, requestedG7Delta) {
+  return Number.isFinite(baseAdjustment)
+    && Number.isFinite(requestedG7Delta)
+    && Math.abs(baseAdjustment) >= 0.2
+    && Math.abs(requestedG7Delta) >= 0.2
+    && Math.sign(baseAdjustment) !== Math.sign(requestedG7Delta);
+}
+
+function g7DeltaLimit(ratio, limit) {
+  const numericRatio = Number.isFinite(ratio) ? ratio : 0.5;
+  const numericLimit = Number.isFinite(limit) ? limit : 12;
+  return clamp(numericLimit * numericRatio * 0.25, 0.5, 3);
 }
 
 export function invertMeasuredToneForTargetL(rows, targetL, preferredTone = NaN) {
