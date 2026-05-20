@@ -22,6 +22,7 @@ test("buildG7Compensation recommends reducing K when current NPDC is too dark", 
       ],
       grayVerification: [],
     },
+    baseRows: [{ channel: "K", tone: 50, outputTone: 45, measuredTone: 68, targetTone: 64, metricName: "TVI" }],
     ratio: 0.5,
     limit: 12,
   });
@@ -29,7 +30,7 @@ test("buildG7Compensation recommends reducing K when current NPDC is too dark", 
   const k50 = preview.rows.find((row) => row.channel === "K" && row.tone === 50);
   assert.equal(preview.status, "Preview");
   assert.equal(k50.action, "减少");
-  assert.equal(k50.theoreticalOutput, 40);
+  assert.equal(k50.g7ReferenceOutput, 45);
   assert.equal(k50.outputTone, 45);
 });
 
@@ -43,13 +44,15 @@ test("buildG7Compensation recommends increasing K when current NPDC is too light
       ],
       grayVerification: [],
     },
+    baseRows: [{ channel: "K", tone: 50, outputTone: 52, measuredTone: 58, targetTone: 64, metricName: "TVI" }],
     ratio: 50,
     limit: 30,
   });
 
   const k50 = preview.rows.find((row) => row.channel === "K" && row.tone === 50);
   assert.equal(k50.action, "增加");
-  assert.equal(k50.outputTone, 60);
+  assert.equal(k50.g7ReferenceOutput, 60);
+  assert.equal(k50.outputTone, 52);
 });
 
 test("buildG7Compensation caps large moves with the point limit", () => {
@@ -62,16 +65,17 @@ test("buildG7Compensation caps large moves with the point limit", () => {
       ],
       grayVerification: [],
     },
+    baseRows: [{ channel: "K", tone: 10, outputTone: 8, metricName: "TVI" }],
     ratio: 1,
     limit: 12,
   });
 
   const k10 = preview.rows.find((row) => row.channel === "K" && row.tone === 10);
-  assert.equal(k10.limited, true);
-  assert.equal(k10.outputTone, 22);
+  assert.equal(k10.g7ReferenceOutput, 22);
+  assert.equal(k10.outputTone, 8);
 });
 
-test("buildG7Compensation includes CMY gray balance hints", () => {
+test("buildG7Compensation does not emit common CMY output rows", () => {
   const preview = buildG7Compensation({
     g7: {
       status: "Fail",
@@ -81,11 +85,18 @@ test("buildG7Compensation includes CMY gray balance hints", () => {
         { label: "HR60", tone: 60, measuredL: 28.4, targetL: 20.1, deltaL: 8.3, weightedDeltaL: 6.64, a: 1, b: 1 },
       ],
     },
+    baseRows: [
+      { channel: "C", tone: 50, outputTone: 45, metricName: "TVI" },
+      { channel: "M", tone: 50, outputTone: 46, metricName: "TVI" },
+      { channel: "Y", tone: 50, outputTone: 44, metricName: "TVI" },
+    ],
   });
 
-  const cmy50 = preview.rows.find((row) => row.channel === "CMY" && row.tone === 50);
-  assert.match(cmy50.hint, /偏红\/偏品/);
-  assert.match(cmy50.hint, /偏蓝/);
+  assert.equal(preview.rows.some((row) => row.channel === "CMY"), false);
+  const c50 = preview.rows.find((row) => row.channel === "C" && row.tone === 50);
+  assert.match(c50.hint, /偏红\/偏品/);
+  assert.match(c50.hint, /偏蓝/);
+  assert.equal(c50.outputTone, 45);
 });
 
 test("buildG7Compensation blocks when G7 data is unavailable", () => {

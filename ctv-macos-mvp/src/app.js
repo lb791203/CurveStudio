@@ -1269,6 +1269,7 @@ function currentG7Preview() {
 function currentG7Compensation() {
   return buildG7Compensation({
     g7: state.g7,
+    baseRows: state.results,
     ratio: Number(els.ratioInput.value) / 100,
     limit: Number(els.limitInput.value),
   });
