@@ -209,6 +209,49 @@ test("renderStandard shows imported ICC metadata as color reference", () => {
   assert.match(localEls.iccProfileSummary.innerHTML, /TVI\/CTV\/G7 目标仍需单独选择/);
 });
 
+test("renderStandard shows ICC characterization sampled preview", () => {
+  const localEls = els({ targetSelect: { value: "isoA" } });
+  renderStandard(state({
+    standard: {
+      name: "GRACoL2013 CRPC6",
+      printCondition: "CGATS21-2 CRPC6",
+      target: "isoA",
+      deltaE: { warning: 3.5, fail: 4.2 },
+      g7: { enabled: true, npdcAverage: 1.5, npdcMax: 3, grayAverage: 1.5, grayMax: 3 },
+    },
+    iccProfile: {
+      profileName: "Mock Press Profile",
+      fileName: "mock.icc",
+      deviceClass: "output",
+      colorSpace: "CMYK",
+      pcs: "Lab",
+      version: "4.3.0",
+      renderingIntent: "relative",
+      mediaWhitePoint: { l: 95.2, a: 0.1, b: -2.1 },
+      tagCount: 4,
+      characterization: {
+        status: "sampled",
+        sourceTag: "A2B1",
+        transformType: "mft2",
+        reason: "已用 A2B1 / mft2 采样 2 个参考色块。",
+        sampledCount: 2,
+        patchCount: 2,
+        capabilities: { a2b: ["A2B1:mft2"], b2a: [], hasChromaticAdaptation: true },
+        rows: [
+          { name: "Paper", group: "paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: -2 }, source: "ICC sampled reference" },
+          { name: "C50", group: "single-channel-ramp", cmyk: { c: 50, m: 0, y: 0, k: 0 }, lab: { l: 70, a: -25, b: -35 }, source: "ICC sampled reference" },
+        ],
+      },
+    },
+  }), localEls);
+
+  assert.match(localEls.iccProfileSummary.innerHTML, /ICC Characterization Preview/);
+  assert.match(localEls.iccProfileSummary.innerHTML, /A2B1/);
+  assert.match(localEls.iccProfileSummary.innerHTML, /mft2/);
+  assert.match(localEls.iccProfileSummary.innerHTML, /ICC sampled reference/);
+  assert.equal((localEls.iccProfileSummary.innerHTML.match(/icc-preview-swatch/g) || []).length, 2);
+});
+
 test("renderShell keeps workflow context in the bottom status bar", () => {
   const localEls = els({
     statusBar: { innerHTML: "" },

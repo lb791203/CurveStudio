@@ -10,6 +10,7 @@ macOS-first MVP for a print compensation curve tool. The first version is a loca
 - Work through formal pages: Job, Standard, Measurement, Analyze, Curve, G7, Export, and Settings.
 - Select built-in standards: GRACoL2013 CRPC1-7, FOGRA39, and ISO TVI A-F target curves.
 - Import ICC/ICM profile metadata in Standard as a Lab/color reference source.
+- Preview ICC characterization patches when a CMYK output profile exposes a supported `mft1` / `mft2` CMYK-to-Lab A2B table.
 - Build custom TVI targets from 25/50/75 input values.
 - Calculate TVI, ISO 20654 CTV, and G7-style MVP compensation curves.
 - Display measured TVI against target and final input-to-output curves with legends and hover values.
@@ -108,7 +109,7 @@ The result table shows a manual-entry reference for Harmony, Prinergy, and other
 - KBA105 sample: identifies `机械异常 / 抢救型生产补偿` and uses 45% as the suggested under-compensation ratio.
 - KBA162 sample: identifies `生产可补偿型 TVI` and uses 55% as the suggested under-compensation ratio.
 - GRACoL2013 CRPC6 standard file loads Lab reference patches into the standard library.
-- ICC/ICM files can be imported in Standard for metadata inspection; they are labeled as color reference, not measurement data.
+- ICC/ICM files can be imported in Standard for metadata inspection and supported CMYK-to-Lab sampling preview; they are labeled as color reference, not measurement data.
 - Pure standard/target files remain reference-only and do not generate false compensation curves.
 - Missing P2P/gray-balance/Lab data keeps G7 in `Data Incomplete` instead of generating a false pass.
 - G7 preview reports P2P/CGATS completeness, paper, CMYK solids, K-only NPDC, CMY gray candidates, and Lab/Delta E readiness.

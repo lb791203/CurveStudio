@@ -150,6 +150,8 @@ Acceptance:
 
 Goal: use a CMYK output ICC as a Lab reference source.
 
+Status: MVP implemented for browser/Tauri with direct sampling of ICC v2 `mft1` / `mft2` CMYK -> Lab A2B tables. Complex ICC v4 `mAB` / full CMM behavior remains planned for the LittleCMS bridge.
+
 Tasks:
 
 - Choose color engine path:

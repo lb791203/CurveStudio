@@ -17,6 +17,8 @@ Use `http://127.0.0.1:4173/` for acceptance. Do not use `file://` when checking 
 - Open `Standard`.
 - Select `GRACoL2013 CRPC1` through `GRACoL2013 CRPC7`, `FOGRA39`, and ISO TVI curves.
 - Import an `.icc` / `.icm` file and confirm profile name, type, color space, PCS, version, media white, intent, and tag count are shown.
+- If the ICC contains a supported CMYK -> Lab `mft1` / `mft2` A2B table, confirm `ICC Characterization Preview` shows sampled paper, solids, overprints, 25/50/75 ramps, and gray candidates.
+- If the ICC uses an unsupported `mAB` / missing A2B structure, confirm the preview explains that LittleCMS/CMM sampling is still required instead of showing fake Lab values.
 - Confirm ICC import is labeled as Lab/color reference and does not silently change TVI/CTV/G7 target settings.
 - Confirm 25/50/75 target values are visible.
 - Confirm paper, solids, overprints, and 25/50/75 Lab rows are listed when the standard file contains them.

@@ -122,12 +122,94 @@ function renderIccProfileSummary(state, els) {
     <p>${escapeHtml(profile.profileName)}${profile.fileName ? ` / ${escapeHtml(profile.fileName)}` : ""}</p>
     <p>类型: ${escapeHtml(profile.deviceClass)} / 色彩空间: ${escapeHtml(profile.colorSpace)} -> ${escapeHtml(profile.pcs)} / 版本 ${escapeHtml(profile.version)}</p>
     <p>白点: ${profile.mediaWhitePoint ? labSummary(profile.mediaWhitePoint) : "未提供"} / Intent: ${escapeHtml(profile.renderingIntent || "")}</p>
-    <p>Tags: ${profile.tagCount || 0} 个。当前仅作为颜色参考元数据，TVI/CTV/G7 目标仍需单独选择。</p>
+    <p>Tags: ${profile.tagCount || 0} 个。TVI/CTV/G7 目标仍需单独选择。</p>
+    ${renderIccCharacterization(profile)}
   `;
 }
 
 function labSummary(lab) {
   return `L* ${fmt(lab.l)} / a* ${fmt(lab.a)} / b* ${fmt(lab.b)}`;
+}
+
+function renderIccCharacterization(profile) {
+  const preview = profile.characterization;
+  if (!preview) {
+    return `
+      <div class="icc-preview-block">
+        <div class="patch-preview-title">
+          <strong>ICC Characterization Preview</strong>
+          <span>未读取特性结构</span>
+        </div>
+        <p class="subtle">当前仅显示 profile metadata；未发现可预览的 A2B 转换结构。</p>
+      </div>
+    `;
+  }
+  const rows = preview.rows || [];
+  const sampled = preview.status === "sampled";
+  const statusText = sampled
+    ? `${preview.sampledCount || 0}/${preview.patchCount || rows.length} 个已采样`
+    : "无法可靠采样";
+  const capabilities = [
+    ...(preview.capabilities?.a2b || []),
+    ...(preview.capabilities?.b2a || []),
+    preview.capabilities?.hasChromaticAdaptation ? "CHAD" : "",
+    preview.capabilities?.hasGamut ? "gamt" : "",
+  ].filter(Boolean);
+  return `
+    <div class="icc-preview-block ${sampled ? "sampled" : "unsupported"}">
+      <div class="patch-preview-title">
+        <strong>ICC Characterization Preview</strong>
+        <span>${escapeHtml(statusText)}${preview.sourceTag ? ` / ${escapeHtml(preview.sourceTag)}` : ""}${preview.transformType ? ` / ${escapeHtml(preview.transformType)}` : ""}</span>
+      </div>
+      <p class="subtle">${escapeHtml(preview.reason || "")}</p>
+      ${capabilities.length ? `<p class="subtle">Profile tags: ${escapeHtml(capabilities.join(" / "))}</p>` : ""}
+      <div class="icc-preview-grid" aria-label="ICC sampled reference patches">
+        ${rows.map((row) => {
+          const color = row.lab ? labToRgb(row.lab) : cmykToRgb(row.cmyk);
+          const title = `${row.name}: CMYK ${fmt(row.cmyk.c)}/${fmt(row.cmyk.m)}/${fmt(row.cmyk.y)}/${fmt(row.cmyk.k)}${row.lab ? ` / Lab ${fmt(row.lab.l)} ${fmt(row.lab.a)} ${fmt(row.lab.b)}` : " / waiting for CMM sampling"}`;
+          return `<span class="icc-preview-swatch${row.lab ? "" : " cmyk-only"}" style="background: ${escapeAttr(color)}" title="${escapeAttr(title)}"></span>`;
+        }).join("")}
+      </div>
+      <div class="table-wrap compact icc-preview-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>色块</th>
+              <th>用途</th>
+              <th>CMYK</th>
+              <th>L*</th>
+              <th>a*</th>
+              <th>b*</th>
+              <th>来源</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((row) => `
+              <tr>
+                <td>${escapeHtml(row.name)}</td>
+                <td>${escapeHtml(iccGroupLabel(row.group))}</td>
+                <td>${fmt(row.cmyk.c)} / ${fmt(row.cmyk.m)} / ${fmt(row.cmyk.y)} / ${fmt(row.cmyk.k)}</td>
+                <td>${row.lab ? fmt(row.lab.l) : "-"}</td>
+                <td>${row.lab ? fmt(row.lab.a) : "-"}</td>
+                <td>${row.lab ? fmt(row.lab.b) : "-"}</td>
+                <td>${escapeHtml(row.source || "ICC preview")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function iccGroupLabel(group) {
+  return {
+    paper: "纸白",
+    solid: "实地",
+    overprint: "叠印",
+    "single-channel-ramp": "单色阶调",
+    "neutral-candidate": "灰平衡候选",
+  }[group] || group || "";
 }
 
 function syncG7ToleranceInputs(els, g7) {

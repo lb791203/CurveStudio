@@ -1,13 +1,13 @@
-import { targetSeries, toExportRows } from "../curve-engine.js?v=20260521-icc-p1";
-import { summarizeLabVerification } from "../analysis-engine.js?v=20260521-icc-p1";
-import { buildCurveAcceptance } from "../curve-acceptance.js?v=20260521-icc-p1";
-import { buildCompensationSimulation, summarizeCompensationSimulation } from "../compensation-simulation.js?v=20260521-icc-p1";
-import { renderCurveChart, renderG7Charts, renderLabChromaticityChart, renderMeasurementChart } from "../chart-renderer.js?v=20260521-icc-p1";
-import { curveRowKey } from "../curve-overrides.js?v=20260521-icc-p1";
-import { escapeAttr, escapeHtml } from "../shared.js?v=20260521-icc-p1";
-import { deltaFormulaLabel, methodLabel } from "../ui-labels.js?v=20260521-icc-p1";
-import { fmt, num, signed, kpiCard, statusClass, labText, renderCurveAcceptanceSummary } from "./helpers.js?v=20260521-icc-p1";
-import { visibleWarnings } from "./data.js?v=20260521-icc-p1";
+import { targetSeries, toExportRows } from "../curve-engine.js?v=20260521-icc-p2";
+import { summarizeLabVerification } from "../analysis-engine.js?v=20260521-icc-p2";
+import { buildCurveAcceptance } from "../curve-acceptance.js?v=20260521-icc-p2";
+import { buildCompensationSimulation, summarizeCompensationSimulation } from "../compensation-simulation.js?v=20260521-icc-p2";
+import { renderCurveChart, renderG7Charts, renderLabChromaticityChart, renderMeasurementChart } from "../chart-renderer.js?v=20260521-icc-p2";
+import { curveRowKey } from "../curve-overrides.js?v=20260521-icc-p2";
+import { escapeAttr, escapeHtml } from "../shared.js?v=20260521-icc-p2";
+import { deltaFormulaLabel, methodLabel } from "../ui-labels.js?v=20260521-icc-p2";
+import { fmt, num, signed, kpiCard, statusClass, labText, renderCurveAcceptanceSummary } from "./helpers.js?v=20260521-icc-p2";
+import { visibleWarnings } from "./data.js?v=20260521-icc-p2";
 
 export function renderAnalyze(state, els) {
   const diagnosis = state.diagnosis || { level: "empty", title: "未诊断", ratio: 50, messages: [] };
