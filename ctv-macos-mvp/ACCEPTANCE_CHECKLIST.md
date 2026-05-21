@@ -52,3 +52,15 @@ Use `http://127.0.0.1:4173/` for acceptance. Do not use `file://` when checking 
 - Confirm curve CSV / CGATS include `measurement_method`, and Prinergy comments include the metric method.
 - Select the exported JSON project archive in Measurement and confirm Job/settings/measurements restore.
 - Open `Job`, click `保存当前 Run` twice after changing data, and confirm Run comparison appears.
+
+## 6. ICC Workflow Future Acceptance
+
+- Import `.icc` / `.icm` from the Standard page and confirm metadata is shown.
+- Confirm ICC import is labeled as Lab/color reference, not a TVI/G7 measurement file.
+- Confirm importing ICC does not silently change the selected TVI/CTV/G7 target curve.
+- Confirm measured Lab can be compared against ICC-derived reference patches after ICC sampling is implemented.
+- Confirm ICC generation is disabled for the first measurement run.
+- Confirm ICC generation is disabled when no compensated re-measurement run exists.
+- Confirm ICC generation is disabled when characterization patch coverage is insufficient.
+- Confirm ICC generation becomes available only after a compensated re-measurement passes the selected validation gates.
+- Confirm generated ICC records provenance: Job, Run, measurement condition, instrument, compensation curve, validation status, and generation time.
