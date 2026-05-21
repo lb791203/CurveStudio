@@ -163,6 +163,7 @@ export function projectArchive(context) {
     job: context.job,
     standard: context.standard,
     iccProfile: context.iccProfile || null,
+    labReferenceSource: context.labReferenceSource || "",
     targetSnapshot: context.targetSnapshot,
     settings: context.settings,
     diagnosis: context.diagnosis,

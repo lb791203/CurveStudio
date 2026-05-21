@@ -1,4 +1,28 @@
 const ICC_SIGNATURE = "acsp";
+const ICC_PREVIEW_PATCHES = [
+  { name: "Paper", group: "paper", cmyk: { c: 0, m: 0, y: 0, k: 0 } },
+  { name: "C solid", group: "solid", cmyk: { c: 100, m: 0, y: 0, k: 0 } },
+  { name: "M solid", group: "solid", cmyk: { c: 0, m: 100, y: 0, k: 0 } },
+  { name: "Y solid", group: "solid", cmyk: { c: 0, m: 0, y: 100, k: 0 } },
+  { name: "K solid", group: "solid", cmyk: { c: 0, m: 0, y: 0, k: 100 } },
+  { name: "CM", group: "overprint", cmyk: { c: 100, m: 100, y: 0, k: 0 } },
+  { name: "CY", group: "overprint", cmyk: { c: 100, m: 0, y: 100, k: 0 } },
+  { name: "MY", group: "overprint", cmyk: { c: 0, m: 100, y: 100, k: 0 } },
+  { name: "CMY", group: "overprint", cmyk: { c: 100, m: 100, y: 100, k: 0 } },
+  ...["C", "M", "Y", "K"].flatMap((channel) => [25, 50, 75].map((tone) => ({
+    name: `${channel}${tone}`,
+    group: "single-channel-ramp",
+    cmyk: {
+      c: channel === "C" ? tone : 0,
+      m: channel === "M" ? tone : 0,
+      y: channel === "Y" ? tone : 0,
+      k: channel === "K" ? tone : 0,
+    },
+  }))),
+  { name: "CMY25", group: "neutral-candidate", cmyk: { c: 25, m: 25, y: 25, k: 0 } },
+  { name: "CMY50", group: "neutral-candidate", cmyk: { c: 50, m: 50, y: 50, k: 0 } },
+  { name: "CMY75", group: "neutral-candidate", cmyk: { c: 75, m: 75, y: 75, k: 0 } },
+];
 
 export function parseIccProfile(buffer, options = {}) {
   const bytes = toUint8Array(buffer);
@@ -18,6 +42,17 @@ export function parseIccProfile(buffer, options = {}) {
   const colorSpace = colorSpaceLabel(ascii(bytes, 16, 4));
   const pcs = colorSpaceLabel(ascii(bytes, 20, 4));
   const profileName = description || options.fileName || "Imported ICC";
+  const tagDetails = [...tags.values()].map((entry) => ({
+    signature: entry.signature,
+    type: entry.type,
+    size: entry.size,
+  }));
+  const characterization = buildCharacterizationPreview(bytes, tags, {
+    colorSpace,
+    pcs,
+    version,
+    renderingIntent: renderingIntentLabel(view.getUint32(64, false)),
+  });
 
   return {
     id: `icc-${fingerprint(bytes)}`,
@@ -37,6 +72,8 @@ export function parseIccProfile(buffer, options = {}) {
     copyright,
     tagCount: tags.size,
     tags: [...tags.keys()],
+    tagDetails,
+    characterization,
     importedAt: options.importedAt || new Date().toISOString(),
     source: "icc-metadata",
   };
@@ -59,9 +96,253 @@ function readTagTable(bytes, view) {
     const offset = u32(view, base + 4);
     const size = u32(view, base + 8);
     if (!signature.trim() || offset < 0 || size <= 0 || offset + size > bytes.byteLength) continue;
-    tags.set(signature, { signature, offset, size });
+    tags.set(signature, { signature, offset, size, type: ascii(bytes, offset, 4) });
   }
   return tags;
+}
+
+function buildCharacterizationPreview(bytes, tags, context) {
+  const capabilities = {
+    a2b: ["A2B0", "A2B1", "A2B2"].filter((key) => tags.has(key)).map((key) => tagCapability(key, tags.get(key))),
+    b2a: ["B2A0", "B2A1", "B2A2"].filter((key) => tags.has(key)).map((key) => tagCapability(key, tags.get(key))),
+    hasChromaticAdaptation: tags.has("chad"),
+    hasMediaWhite: tags.has("wtpt"),
+    hasMediaBlack: tags.has("bkpt"),
+    hasGamut: tags.has("gamt"),
+  };
+  const emptyRows = ICC_PREVIEW_PATCHES.map((patch) => ({
+    ...patch,
+    lab: undefined,
+    source: "ICC preview patch plan",
+  }));
+  if (context.colorSpace !== "CMYK") {
+    return {
+      status: "unsupported",
+      reason: `当前仅采样 CMYK 输出 ICC；此 profile 是 ${context.colorSpace}。`,
+      capabilities,
+      rows: emptyRows,
+      sampledCount: 0,
+      patchCount: emptyRows.length,
+    };
+  }
+  if (context.pcs !== "Lab") {
+    return {
+      status: "unsupported",
+      reason: `当前 MVP 仅可靠解码 PCS Lab；此 profile PCS 是 ${context.pcs}。`,
+      capabilities,
+      rows: emptyRows,
+      sampledCount: 0,
+      patchCount: emptyRows.length,
+    };
+  }
+  const selected = selectA2BTag(tags, context.renderingIntent);
+  if (!selected) {
+    return {
+      status: "unsupported",
+      reason: "未找到 A2B0/A2B1/A2B2 转换表，无法从 ICC 采样 CMYK -> Lab。",
+      capabilities,
+      rows: emptyRows,
+      sampledCount: 0,
+      patchCount: emptyRows.length,
+    };
+  }
+  const transform = parseLutTransform(bytes, selected.entry, context);
+  if (!transform) {
+    return {
+      status: "unsupported",
+      reason: `${selected.signature} 是 ${selected.entry.type || "unknown"}，当前 Web MVP 只支持 ICC v2 mft1/mft2 LUT；复杂 mAB/mBA 后续接 LittleCMS。`,
+      capabilities,
+      sourceTag: selected.signature,
+      transformType: selected.entry.type,
+      rows: emptyRows,
+      sampledCount: 0,
+      patchCount: emptyRows.length,
+    };
+  }
+  const rows = ICC_PREVIEW_PATCHES.map((patch) => ({
+    ...patch,
+    lab: transform.sample(patch.cmyk),
+    source: "ICC sampled reference",
+  }));
+  return {
+    status: "sampled",
+    reason: `已用 ${selected.signature} / ${transform.type} 采样 ${rows.length} 个参考色块。`,
+    capabilities,
+    sourceTag: selected.signature,
+    transformType: transform.type,
+    rows,
+    sampledCount: rows.filter((row) => row.lab).length,
+    patchCount: rows.length,
+  };
+}
+
+function tagCapability(signature, entry) {
+  return `${signature}:${entry?.type || "unknown"}`;
+}
+
+function selectA2BTag(tags, renderingIntent) {
+  const preferred = renderingIntent === "relative"
+    ? ["A2B1", "A2B0", "A2B2"]
+    : renderingIntent === "saturation"
+      ? ["A2B2", "A2B1", "A2B0"]
+      : ["A2B0", "A2B1", "A2B2"];
+  const signature = preferred.find((key) => tags.has(key));
+  return signature ? { signature, entry: tags.get(signature) } : null;
+}
+
+function parseLutTransform(bytes, entry, context) {
+  if (!entry) return null;
+  const type = ascii(bytes, entry.offset, 4);
+  if (type === "mft2") return parseMft2(bytes, entry, context);
+  if (type === "mft1") return parseMft1(bytes, entry, context);
+  return null;
+}
+
+function parseMft2(bytes, entry, context) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const base = entry.offset;
+  const inputChannels = bytes[base + 8];
+  const outputChannels = bytes[base + 9];
+  const gridPoints = bytes[base + 10];
+  if (inputChannels !== 4 || outputChannels < 3 || gridPoints < 2 || entry.size < 52) return null;
+  const inputEntries = view.getUint16(base + 48, false);
+  const outputEntries = view.getUint16(base + 50, false);
+  let cursor = base + 52;
+  const inputTables = readNormalizedTables16(view, cursor, inputChannels, inputEntries);
+  cursor += inputChannels * inputEntries * 2;
+  const clutLength = (gridPoints ** inputChannels) * outputChannels;
+  const clut = readNormalizedArray16(view, cursor, clutLength);
+  cursor += clutLength * 2;
+  const outputTables = readNormalizedTables16(view, cursor, outputChannels, outputEntries);
+  return {
+    type: "mft2",
+    sample: (cmyk) => sampleLut({
+      cmyk,
+      context,
+      inputTables,
+      outputTables,
+      clut,
+      inputChannels,
+      outputChannels,
+      gridPoints,
+      valueDepth: 16,
+    }),
+  };
+}
+
+function parseMft1(bytes, entry, context) {
+  const base = entry.offset;
+  const inputChannels = bytes[base + 8];
+  const outputChannels = bytes[base + 9];
+  const gridPoints = bytes[base + 10];
+  if (inputChannels !== 4 || outputChannels < 3 || gridPoints < 2 || entry.size < 48) return null;
+  let cursor = base + 48;
+  const inputEntries = 256;
+  const outputEntries = 256;
+  const inputTables = readNormalizedTables8(bytes, cursor, inputChannels, inputEntries);
+  cursor += inputChannels * inputEntries;
+  const clutLength = (gridPoints ** inputChannels) * outputChannels;
+  const clut = readNormalizedArray8(bytes, cursor, clutLength);
+  cursor += clutLength;
+  const outputTables = readNormalizedTables8(bytes, cursor, outputChannels, outputEntries);
+  return {
+    type: "mft1",
+    sample: (cmyk) => sampleLut({
+      cmyk,
+      context,
+      inputTables,
+      outputTables,
+      clut,
+      inputChannels,
+      outputChannels,
+      gridPoints,
+      valueDepth: 8,
+    }),
+  };
+}
+
+function readNormalizedTables16(view, cursor, tableCount, entryCount) {
+  return Array.from({ length: tableCount }, (_, tableIndex) =>
+    readNormalizedArray16(view, cursor + tableIndex * entryCount * 2, entryCount));
+}
+
+function readNormalizedArray16(view, cursor, entryCount) {
+  return Array.from({ length: entryCount }, (_, index) => view.getUint16(cursor + index * 2, false) / 65535);
+}
+
+function readNormalizedTables8(bytes, cursor, tableCount, entryCount) {
+  return Array.from({ length: tableCount }, (_, tableIndex) =>
+    readNormalizedArray8(bytes, cursor + tableIndex * entryCount, entryCount));
+}
+
+function readNormalizedArray8(bytes, cursor, entryCount) {
+  return Array.from({ length: entryCount }, (_, index) => (bytes[cursor + index] || 0) / 255);
+}
+
+function sampleLut({ cmyk, context, inputTables, outputTables, clut, inputChannels, outputChannels, gridPoints, valueDepth }) {
+  const input = [cmyk.c, cmyk.m, cmyk.y, cmyk.k].map((value, index) =>
+    lookup1d(inputTables[index], Math.max(0, Math.min(100, value || 0)) / 100));
+  const clutValue = interpolateClut(input, clut, inputChannels, outputChannels, gridPoints);
+  const output = clutValue.map((value, index) => lookup1d(outputTables[index], value));
+  return decodePcsLab(output, context.version, valueDepth);
+}
+
+function lookup1d(table, value) {
+  if (!table?.length) return value;
+  if (table.length === 1) return table[0];
+  const position = Math.max(0, Math.min(1, value)) * (table.length - 1);
+  const low = Math.floor(position);
+  const high = Math.min(table.length - 1, low + 1);
+  const frac = position - low;
+  return table[low] + (table[high] - table[low]) * frac;
+}
+
+function interpolateClut(input, clut, inputChannels, outputChannels, gridPoints) {
+  const positions = input.map((value) => {
+    const position = Math.max(0, Math.min(1, value)) * (gridPoints - 1);
+    const low = Math.floor(position);
+    const high = Math.min(gridPoints - 1, low + 1);
+    return { low, high, frac: position - low };
+  });
+  const output = Array.from({ length: outputChannels }, () => 0);
+  const corners = 1 << inputChannels;
+  for (let corner = 0; corner < corners; corner += 1) {
+    let weight = 1;
+    let index = 0;
+    for (let channel = 0; channel < inputChannels; channel += 1) {
+      const useHigh = Boolean(corner & (1 << channel));
+      const point = positions[channel];
+      const gridIndex = useHigh ? point.high : point.low;
+      weight *= useHigh ? point.frac : 1 - point.frac;
+      index = index * gridPoints + gridIndex;
+    }
+    const base = index * outputChannels;
+    for (let out = 0; out < outputChannels; out += 1) {
+      output[out] += (clut[base + out] || 0) * weight;
+    }
+  }
+  return output;
+}
+
+function decodePcsLab(values, version, valueDepth) {
+  const v4 = Number(String(version).split(".")[0]) >= 4;
+  if (valueDepth === 8) {
+    return {
+      l: clamp(values[0] * 100, 0, 100),
+      a: clamp(values[1] * 255 - 128, -128, 127),
+      b: clamp(values[2] * 255 - 128, -128, 127),
+    };
+  }
+  const lScale = v4 ? 100 : 100 * 65535 / 65280;
+  return {
+    l: clamp(values[0] * lScale, 0, 100),
+    a: clamp(values[1] * 255 - 128, -128, 127),
+    b: clamp(values[2] * 255 - 128, -128, 127),
+  };
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function readTextTag(bytes, entry) {

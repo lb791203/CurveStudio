@@ -1,7 +1,7 @@
 import { channelsPresent } from "../curve-engine.js";
-import { summarizeLabVerification } from "../analysis-engine.js?v=20260521-icc-p1";
-import { buildSuggestedArchivePath, summarizeCurveSafety } from "../exporter.js?v=20260521-icc-p1";
-import { compareRuns, formatMetricChange } from "../run-compare.js?v=20260521-icc-p1";
+import { summarizeLabVerification } from "../analysis-engine.js?v=20260521-icc-p2";
+import { buildSuggestedArchivePath, summarizeCurveSafety } from "../exporter.js?v=20260521-icc-p2";
+import { compareRuns, formatMetricChange } from "../run-compare.js?v=20260521-icc-p2";
 import { escapeAttr, escapeHtml } from "../shared.js";
 import { algorithmDescription, deltaFormulaLabel } from "../ui-labels.js";
 import { num, statusClass } from "./helpers.js";
