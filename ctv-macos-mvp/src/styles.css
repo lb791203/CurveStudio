@@ -518,6 +518,48 @@ textarea {
   justify-content: flex-end;
 }
 
+.gate-check-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.gate-check {
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.gate-check strong {
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.gate-check p {
+  margin: 6px 0 2px;
+}
+
+.gate-check small {
+  color: var(--text-muted);
+}
+
+.gate-check.pass {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.gate-check.warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.gate-check.fail {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
 .compact-empty {
   padding: 10px;
 }
@@ -1770,6 +1812,10 @@ svg {
   }
 
   .icc-pair-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .gate-check-grid {
     grid-template-columns: 1fr;
   }
 
