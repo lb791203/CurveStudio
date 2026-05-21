@@ -25,6 +25,8 @@ function els(overrides = {}) {
     exportSummary: { innerHTML: "" },
     instrumentVerificationSummary: { innerHTML: "" },
     instrumentVerificationBody: { innerHTML: "" },
+    compensationSimulationSummary: { innerHTML: "" },
+    compensationSimulationBody: { innerHTML: "" },
     deviceAdapterSelect: { value: "" },
     deviceConnectButton: { disabled: false },
     deviceDisconnectButton: { disabled: false },
@@ -229,6 +231,8 @@ test("renderCurve channel filter preserves filtered row override keys", () => {
     resultBody: { innerHTML: "" },
     ripEntryBody: { innerHTML: "" },
     curveAcceptanceSummary: { innerHTML: "" },
+    compensationSimulationSummary: { innerHTML: "" },
+    compensationSimulationBody: { innerHTML: "" },
     measurementChart: { innerHTML: "" },
     curveChart: { innerHTML: "" },
     safetySummary: { innerHTML: "" },
@@ -264,6 +268,7 @@ test("renderCurve channel filter preserves filtered row override keys", () => {
   assert.doesNotMatch(localEls.resultBody.innerHTML, /data-curve-key="C:50\.000"/);
   assert.match(localEls.resultBody.innerHTML, /data-curve-key="K:50\.000"/);
   assert.match(localEls.resultBody.innerHTML, />K</);
+  assert.match(localEls.compensationSimulationSummary.innerHTML, /模拟验证/);
 });
 
 test("renderCurve keeps RIP acceptance table focused on review rows", () => {
@@ -271,6 +276,8 @@ test("renderCurve keeps RIP acceptance table focused on review rows", () => {
     resultBody: { innerHTML: "" },
     ripEntryBody: { innerHTML: "" },
     curveAcceptanceSummary: { innerHTML: "" },
+    compensationSimulationSummary: { innerHTML: "" },
+    compensationSimulationBody: { innerHTML: "" },
     measurementChart: { innerHTML: "" },
     curveChart: { innerHTML: "" },
     safetySummary: { innerHTML: "" },
@@ -517,7 +524,7 @@ test("renderInstrument shows i1Pro cross verification rows", () => {
   renderInstrument(localState, localEls);
 
   assert.match(localEls.deviceAdapterSummary.innerHTML, /文件导入/);
-  assert.match(localEls.instrumentVerificationSummary.innerHTML, /仪器交叉验证/);
+  assert.match(localEls.instrumentVerificationSummary.innerHTML, /仪器 \/ 厂商 CTV 对照/);
   assert.match(localEls.instrumentVerificationSummary.innerHTML, /X-Rite i1Pro CGATS/);
   assert.match(localEls.instrumentVerificationBody.innerHTML, /C50/);
   assert.match(localEls.instrumentVerificationBody.innerHTML, /Missing Instrument CTV/);

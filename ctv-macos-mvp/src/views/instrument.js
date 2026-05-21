@@ -1,7 +1,7 @@
-import { buildInstrumentVerificationRows, summarizeInstrumentVerification } from "../instrument-verification.js?v=20260520-patchmap";
+import { buildInstrumentVerificationRows, summarizeInstrumentVerification } from "../instrument-verification.js?v=20260521-prepack-ui";
 import { summarizeDeviceState } from "../device-adapter.js";
-import { escapeHtml } from "../shared.js?v=20260520-patchmap";
-import { num, statusClass, signed } from "./helpers.js?v=20260520-patchmap";
+import { escapeHtml } from "../shared.js?v=20260521-prepack-ui";
+import { num, statusClass, signed } from "./helpers.js?v=20260521-prepack-ui";
 
 export function renderInstrument(state, els) {
   renderDeviceAdapter(state, els);
@@ -10,10 +10,11 @@ export function renderInstrument(state, els) {
   const sourceFormats = [...new Set((state.measurements || []).map((row) => row.sourceFormat || row.source || "").filter(Boolean))];
 
   els.instrumentVerificationSummary.innerHTML = `
-    <strong>仪器交叉验证</strong>
+    <strong>仪器 / 厂商 CTV 对照</strong>
     <p><span class="status ${statusClass(summary.status)}">${escapeHtml(summary.status)}</span> 可比 ${summary.comparable}/${summary.total}，Pass ${summary.pass} / Warning ${summary.warning} / Fail ${summary.fail}</p>
     <p>平均 |ΔCTV|: ${num(summary.avgAbsDelta)} / 最大 |ΔCTV|: ${num(summary.maxAbsDelta)} / 缺仪器 CTV ${summary.missingInstrument} / 缺软件 CTV ${summary.missingSoftware}</p>
     <p>来源: ${sourceFormats.length ? escapeHtml(sourceFormats.join(" / ")) : "未导入"}。容差: Pass <= 0.50 CTV，Warning <= 1.00 CTV。</p>
+    <p>用途: 检查原始测量文件或厂商软件导出的 CTV 字段是否与本软件计算一致；不判断补偿曲线是否有效。</p>
     <p>i1Pro 建议流程: 测量测试样张后，从 X-Rite/i1Profiler/ColorPort 导出 CGATS/IT8/CSV；文件含 Lab/XYZ/光谱即可计算软件 CTV，若额外含 CTV/SCTV 字段则自动对比。</p>
   `;
 
@@ -32,7 +33,7 @@ export function renderInstrument(state, els) {
         <td><span class="status ${statusClass(row.status)}">${escapeHtml(row.status)}</span></td>
       </tr>
     `).join("")
-    : "<tr><td colspan=\"10\">导入 X-Rite / Techkon 的 CGATS、IT8 或 CSV 测量文件后显示交叉验证。</td></tr>";
+    : "<tr><td colspan=\"10\">导入 X-Rite / Techkon 的 CGATS、IT8 或 CSV 测量文件后显示厂商 CTV 对照。</td></tr>";
 }
 
 function renderDeviceAdapter(state, els) {
