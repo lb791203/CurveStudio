@@ -1079,6 +1079,7 @@ function exportContext() {
     deltaFormula: deltaFormulaLabel(els.deltaFormulaSelect.value),
     targetName: targetName(els.targetSelect.value),
     compensationRatio: els.ratioInput.value,
+    ripCompatibility: t("rip_compatibility_value", "专用: Harmony、Kodak Prinergy；通用 CSV: SCREEN Trueflow、Heidelberg Prinect、Agfa Apogee、Harlequin、Founder Flow、Esko 等需按实际导入模板映射。"),
     measurementCondition: state.importInfo?.metadata?.measurement_condition || "unspecified",
     diagnosis: state.diagnosis,
     curveQuality: summarizeCurveSafety(state.safetyIssues),
