@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CTV Curve MVP</title>
-    <link rel="stylesheet" href="./src/styles.css?v=20260520-patchmap2" />
+    <link rel="stylesheet" href="./src/styles.css?v=20260521-prepack-ui" />
   </head>
   <body>
     <main class="app-shell">
@@ -18,7 +18,7 @@
           <button class="nav-button active" type="button" data-view-button="job"><span class="nav-icon">&#x25A3;</span>工作</button>
           <button class="nav-button" type="button" data-view-button="standard"><span class="nav-icon">&#x25C8;</span>标准</button>
           <button class="nav-button" type="button" data-view-button="measurement"><span class="nav-icon">&#x25AD;</span>测量</button>
-          <button class="nav-button" type="button" data-view-button="instrument"><span class="nav-icon">&#x2318;</span>仪器验证</button>
+          <button class="nav-button" type="button" data-view-button="instrument"><span class="nav-icon">&#x2318;</span>数据接入</button>
           <button class="nav-button" type="button" data-view-button="analyze"><span class="nav-icon">&#x25C9;</span>分析</button>
           <button class="nav-button" type="button" data-view-button="curve"><span class="nav-icon">&#x2308;</span>曲线</button>
           <button class="nav-button" type="button" data-view-button="g7"><span class="nav-icon">&#x25CE;</span>G7</button>
@@ -319,8 +319,8 @@
           <section class="panel wide-panel">
             <div class="table-title">
               <div>
-                <h2>仪器交叉验证</h2>
-                <span>用 X-Rite / Techkon 导出的 Lab、XYZ 或光谱数据计算 ISO 20654 CTV，并与仪器/厂商软件 CTV 字段对比。</span>
+                <h2>仪器 / 厂商数据对照</h2>
+                <span>用 X-Rite / Techkon 导出的 Lab、XYZ 或光谱数据计算 ISO 20654 CTV，并与仪器/厂商软件 CTV 字段对比；补偿效果验证在曲线页模拟。</span>
               </div>
             </div>
             <div class="summary-box" id="instrumentVerificationSummary"></div>
@@ -470,6 +470,34 @@
           <section class="panel wide-panel">
             <div class="table-title">
               <div>
+                <h2>补偿模拟验证</h2>
+                <span>基于第一次测量曲线估算套用当前补偿后的网点结果；用于复测前判断方向，不替代第二次实测。</span>
+              </div>
+            </div>
+            <div class="summary-box" id="compensationSimulationSummary"></div>
+            <div class="table-wrap compact">
+              <table>
+                <thead>
+                  <tr>
+                    <th>通道</th>
+                    <th>输入网点</th>
+                    <th>当前实测</th>
+                    <th>目标</th>
+                    <th class="zone-start">建议输出</th>
+                    <th>模拟套用后</th>
+                    <th>剩余偏差</th>
+                    <th>改善</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody id="compensationSimulationBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel wide-panel">
+            <div class="table-title">
+              <div>
                 <h2>Harmony / Prinergy 手动录入验收</h2>
                 <span>只列出需要现场复核的增加点、质量警告点或人工锁定点。</span>
               </div>
@@ -611,48 +639,45 @@
               </div>
             </section>
 
-            <!-- G7 Certification-level sections -->
-            <section class="chart-grid" id="g7CertificationSummarySection" data-g7-panel="details">
-              <article class="chart-panel">
-                <div class="chart-title">
+            <section class="split-grid" id="g7CertificationTablesSection" data-g7-panel="details">
+              <section class="panel compact-panel">
+                <div class="table-title">
                   <h2>NPDC wΔL* 验证</h2>
                   <span id="g7NpdcSummary">NPDC L*: 数据不足</span>
                 </div>
-              </article>
-              <article class="chart-panel">
-                <div class="chart-title">
+                <div class="table-wrap compact">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>K 输入</th>
+                        <th>实测 L*</th>
+                        <th>G7 NPDC 目标 L*</th>
+                        <th>wΔL*</th>
+                      </tr>
+                    </thead>
+                    <tbody id="g7NpdcVerificationBody"></tbody>
+                  </table>
+                </div>
+              </section>
+              <section class="panel compact-panel">
+                <div class="table-title">
                   <h2>灰平衡 wΔCh 验证</h2>
                   <span id="g7GraySummary">灰平衡 Ch: 数据不足</span>
                 </div>
-              </article>
-            </section>
-            <section class="split-grid" id="g7CertificationTablesSection" data-g7-panel="details">
-              <div class="table-wrap compact">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>K 输入</th>
-                      <th>实测 L*</th>
-                      <th>G7 NPDC 目标 L*</th>
-                      <th>wΔL*</th>
-                    </tr>
-                  </thead>
-                  <tbody id="g7NpdcVerificationBody"></tbody>
-                </table>
-              </div>
-              <div class="table-wrap compact">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>灰/叠印</th>
-                      <th>a*</th>
-                      <th>b*</th>
-                      <th>wΔCh</th>
-                    </tr>
-                  </thead>
-                  <tbody id="g7GrayVerificationBody"></tbody>
-                </table>
-              </div>
+                <div class="table-wrap compact">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>灰/叠印</th>
+                        <th>a*</th>
+                        <th>b*</th>
+                        <th>wΔCh</th>
+                      </tr>
+                    </thead>
+                    <tbody id="g7GrayVerificationBody"></tbody>
+                  </table>
+                </div>
+              </section>
             </section>
             <section class="panel" id="g7ColorspaceSection" data-g7-panel="details">
               <div class="table-title"><h2>G7 色彩空间合规 (认证级)</h2></div>
@@ -857,6 +882,6 @@
       </section>
     </div>
 
-    <script type="module" src="./src/app.js?v=20260520-patchmap2"></script>
+    <script type="module" src="./src/app.js?v=20260521-prepack-ui"></script>
   </body>
 </html>

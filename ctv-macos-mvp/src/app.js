@@ -7,14 +7,14 @@ import {
   toCsv,
   toHarmonyCsv,
   upsertTarget,
-} from "./curve-engine.js?v=20260520-patchmap2";
-import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260520-patchmap2";
+} from "./curve-engine.js?v=20260521-prepack-ui";
+import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260521-prepack-ui";
 import { applyCurveOverrides, curveRowKey, pruneCurveOverrides } from "./curve-overrides.js";
-import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260520-patchmap2";
-import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260520-patchmap2";
-import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260520-patchmap2";
-import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260520-patchmap2";
-import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260520-patchmap2";
+import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260521-prepack-ui";
+import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260521-prepack-ui";
+import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260521-prepack-ui";
+import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260521-prepack-ui";
+import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260521-prepack-ui";
 import { buildG7Compensation } from "./g7-compensation.js";
 import { DEVICE_ADAPTERS, buildMeasurementQueue, calibrateDeviceState, changeDeviceAdapterState, connectDeviceState, disconnectDeviceState, readDevicePatchState } from "./device-adapter.js";
 import { inspectImport } from "./import-inspector.js";
@@ -37,7 +37,7 @@ import {
   updateManualRowFromEvent,
 } from "./manual-table.js";
 import { clearStoredRuns, loadStoredRuns, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js";
-import { buildRunMetrics } from "./run-compare.js?v=20260520-patchmap2";
+import { buildRunMetrics } from "./run-compare.js?v=20260521-prepack-ui";
 import { STANDARD_LIBRARY, buildPatchMap, standardById, targetOptions } from "./standards.js";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 
@@ -110,6 +110,8 @@ const els = {
   g7GrayChart: document.querySelector("#g7GrayChart"),
   g7WeightedChart: document.querySelector("#g7WeightedChart"),
   resultBody: document.querySelector("#resultBody"),
+  compensationSimulationSummary: document.querySelector("#compensationSimulationSummary"),
+  compensationSimulationBody: document.querySelector("#compensationSimulationBody"),
   ripEntryBody: document.querySelector("#ripEntryBody"),
   labBody: document.querySelector("#labBody"),
   verificationChecklistSummary: document.querySelector("#verificationChecklistSummary"),
@@ -469,7 +471,7 @@ async function loadSelectedSample() {
     els.modeSelect.value = "ctv";
     els.targetSelect.value = "linear";
     calculate({ preserveRatio: true });
-    switchView("instrument");
+    switchView("measurement");
   }
 }
 

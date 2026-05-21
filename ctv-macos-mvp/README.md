@@ -90,7 +90,9 @@ For CTV mode, the same compensation pipeline uses `measured_ctv - target_ctv` as
 
 When spectral-only measurement files are used, the current density estimate is visibly marked as `status_t_spectral` / `ISO Status-T 密度`. Status-E remains a planned, disabled option.
 
-The `仪器验证` page compares software-calculated ISO 20654 CTV against vendor/instrument CTV fields when present. X-Rite i1Pro workflows should first export CGATS/IT8/CSV from X-Rite/i1Profiler/ColorPort with Lab, XYZ, or spectral data. If the file also contains `CTV`, `SCTV`, `instrument_ctv`, `measured_ctv`, or similar columns, the page reports software CTV, instrument CTV, ΔCTV, and Pass/Warning/Fail.
+The `数据接入` page compares software-calculated ISO 20654 CTV against vendor/instrument CTV fields when present. X-Rite i1Pro workflows should first export CGATS/IT8/CSV from X-Rite/i1Profiler/ColorPort with Lab, XYZ, or spectral data. If the file also contains `CTV`, `SCTV`, `instrument_ctv`, `measured_ctv`, or similar columns, the page reports software CTV, instrument CTV, ΔCTV, and Pass/Warning/Fail. This is a data/vendor cross-check only; it does not validate the compensation curve.
+
+Curve validation starts from the generated compensation result. The Curve page now includes a compensation simulation table: it uses the first measured press response curve to estimate the printed tone after applying the current recommended output tone. This helps check whether the proposed TVI/CTV correction moves each point toward the target before making a second proof/press run. Formal validation still requires applying the curve, printing again, and remeasuring.
 
 The result table shows a manual-entry reference for Harmony, Prinergy, and other RIP tools:
 
@@ -115,7 +117,8 @@ The result table shows a manual-entry reference for Harmony, Prinergy, and other
 - CTV Lab sample generates ISO 20654 CTV rows and exports `measurement_method` metadata.
 - Lab verification supports ΔE76, ΔE94, ΔE2000, and CMC formula selection from Settings.
 - CTV fallback and Status-T spectral-density warnings are visible in Curve and Export.
-- Instrument cross verification reports ISO 20654 software CTV, instrument CTV, ΔCTV, and missing-field status.
+- Data/vendor cross-check reports ISO 20654 software CTV, instrument CTV, ΔCTV, and missing-field status.
+- Curve simulation reports estimated post-compensation tone, residual deviation, and improvement/worsening before the second measurement run.
 
 ## Next engineering steps
 
