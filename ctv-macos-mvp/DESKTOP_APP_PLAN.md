@@ -29,6 +29,8 @@ Use the same `src-tauri` project and JavaScript core. Build on Windows after the
 
 ## ICC workflow roadmap
 
+Detailed implementation plan: [ICC_WORKFLOW_PLAN.md](./ICC_WORKFLOW_PLAN.md)
+
 The production workflow should become:
 
 `Standard / ICC Import -> Measurement -> Compensation Curve -> Re-measure Verification -> ICC Generation`
