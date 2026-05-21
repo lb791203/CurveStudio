@@ -7,17 +7,18 @@ import {
   toCsv,
   toHarmonyCsv,
   upsertTarget,
-} from "./curve-engine.js?v=20260521-prepack-ui";
-import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260521-prepack-ui";
+} from "./curve-engine.js?v=20260521-icc-p1";
+import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260521-icc-p1";
 import { applyCurveOverrides, curveRowKey, pruneCurveOverrides } from "./curve-overrides.js";
-import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260521-prepack-ui";
-import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260521-prepack-ui";
-import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260521-prepack-ui";
-import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260521-prepack-ui";
-import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260521-prepack-ui";
+import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260521-icc-p1";
+import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260521-icc-p1";
+import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260521-icc-p1";
+import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260521-icc-p1";
+import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260521-icc-p1";
 import { buildG7Compensation } from "./g7-compensation.js";
 import { DEVICE_ADAPTERS, buildMeasurementQueue, calibrateDeviceState, changeDeviceAdapterState, connectDeviceState, disconnectDeviceState, readDevicePatchState } from "./device-adapter.js";
 import { inspectImport } from "./import-inspector.js";
+import { parseIccProfile } from "./icc-profile.js?v=20260521-icc-p1";
 import { openTextFileDesktop, saveTextFileDesktop } from "./desktop-io.js";
 import {
   canCalculateCurve,
@@ -37,7 +38,7 @@ import {
   updateManualRowFromEvent,
 } from "./manual-table.js";
 import { clearStoredRuns, loadStoredRuns, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js";
-import { buildRunMetrics } from "./run-compare.js?v=20260521-prepack-ui";
+import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p1";
 import { STANDARD_LIBRARY, buildPatchMap, standardById, targetOptions } from "./standards.js";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 
@@ -72,6 +73,7 @@ const els = {
   saveRunButton: document.querySelector("#saveRunButton"),
   clearRunsButton: document.querySelector("#clearRunsButton"),
   reloadStandardButton: document.querySelector("#reloadStandardButton"),
+  standardIccInput: document.querySelector("#standardIccInput"),
   applyCustomTargetButton: document.querySelector("#applyCustomTargetButton"),
   runG7Button: document.querySelector("#runG7Button"),
   generateG7CompensationButton: document.querySelector("#generateG7CompensationButton"),
@@ -133,6 +135,7 @@ const els = {
   g7CompensationBody: document.querySelector("#g7CompensationBody"),
   targetCurveBody: document.querySelector("#targetCurveBody"),
   standardPatchBody: document.querySelector("#standardPatchBody"),
+  iccProfileSummary: document.querySelector("#iccProfileSummary"),
   diagnosisCards: document.querySelector("#diagnosisCards"),
   diagnosisBadge: document.querySelector("#diagnosisBadge"),
   safetySummary: document.querySelector("#safetySummary"),
@@ -194,6 +197,7 @@ const state = {
   standardImport: null,
   standardLoading: false,
   standardPatchMap: new Map(),
+  iccProfile: null,
   manualRows: [],
   measurements: [],
   results: [],
@@ -271,6 +275,7 @@ function attachEvents() {
   els.saveRunButton.addEventListener("click", saveRun);
   els.clearRunsButton.addEventListener("click", clearRuns);
   els.reloadStandardButton.addEventListener("click", () => loadStandard(els.standardSelect.value));
+  els.standardIccInput?.addEventListener("change", importStandardIcc);
   els.applyCustomTargetButton.addEventListener("click", applyCustomTarget);
   els.runG7Button.addEventListener("click", () => {
     state.g7 = currentG7Preview();
@@ -368,6 +373,7 @@ async function loadStandard(id) {
   state.standard = cloneData(standardById(id));
   state.standardImport = null;
   state.standardPatchMap = new Map();
+  state.iccProfile = null;
   state.standardLoading = Boolean(state.standard.referencePath);
   els.standardSelect.value = state.standard.id;
   els.targetSelect.value = state.standard.target;
@@ -387,6 +393,40 @@ async function loadStandard(id) {
 
   state.standardLoading = false;
   calculate({ preserveRatio: true });
+}
+
+async function importStandardIcc(event) {
+  const [file] = event.target.files || [];
+  if (!file) return;
+  try {
+    const profile = parseIccProfile(await file.arrayBuffer(), { fileName: file.name });
+    state.iccProfile = profile;
+    state.standard = {
+      ...state.standard,
+      iccReference: {
+        id: profile.id,
+        fileName: profile.fileName,
+        profileName: profile.profileName,
+        colorSpace: profile.colorSpace,
+        pcs: profile.pcs,
+        deviceClass: profile.deviceClass,
+      },
+    };
+    renderStandard();
+    renderExport();
+    renderReport();
+  } catch (error) {
+    state.iccProfile = {
+      fileName: file.name,
+      profileName: "ICC 导入失败",
+      source: "icc-metadata",
+      error: error.message,
+      importedAt: new Date().toISOString(),
+    };
+    renderStandard();
+  } finally {
+    event.target.value = "";
+  }
 }
 
 function g7ToleranceInputs() {
@@ -800,6 +840,7 @@ function exportContext() {
     runId: (pathParts.at(-1) || generatedAt).replace(/\.json$/, ""),
     suggestedArchivePath,
     standard: state.standard,
+    iccProfile: state.iccProfile,
     targetSnapshot: {
       name: targetName(els.targetSelect.value),
       points: targetSeries(els.targetSelect.value).map((point) => [point.tone, point.value]),
@@ -1197,6 +1238,20 @@ async function restoreProjectArchive(archive) {
   }
   if (archive.standard?.id) {
     await loadStandard(archive.standard.id);
+  }
+  state.iccProfile = archive.iccProfile || null;
+  if (state.iccProfile && !state.iccProfile.error) {
+    state.standard = {
+      ...state.standard,
+      iccReference: {
+        id: state.iccProfile.id,
+        fileName: state.iccProfile.fileName,
+        profileName: state.iccProfile.profileName,
+        colorSpace: state.iccProfile.colorSpace,
+        pcs: state.iccProfile.pcs,
+        deviceClass: state.iccProfile.deviceClass,
+      },
+    };
   }
   els.jobCustomerInput.value = archive.job?.customer || "";
   els.jobPressInput.value = archive.job?.press || "";
