@@ -204,7 +204,9 @@ test("renderStandard shows imported ICC metadata as color reference", () => {
     },
   }), localEls);
 
-  assert.match(localEls.standardSummary.innerHTML, /ICC 参考/);
+  assert.match(localEls.standardSummary.innerHTML, /Lab Reference/);
+  assert.match(localEls.standardSummary.innerHTML, /Tone Target/);
+  assert.match(localEls.standardSummary.innerHTML, /Mock Press Profile/);
   assert.match(localEls.iccProfileSummary.innerHTML, /Mock Press Profile/);
   assert.match(localEls.iccProfileSummary.innerHTML, /TVI\/CTV\/G7 目标仍需单独选择/);
 });
