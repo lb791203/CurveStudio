@@ -354,7 +354,7 @@ textarea {
 
 .measurement-workbench {
   display: grid;
-  grid-template-columns: minmax(300px, 0.85fr) minmax(340px, 1fr) minmax(280px, 0.85fr);
+  grid-template-columns: minmax(260px, 0.78fr) minmax(320px, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -365,7 +365,6 @@ textarea {
 
 .measurement-status-grid {
   display: grid;
-  grid-column: span 2;
   grid-template-columns: 1fr;
   gap: 12px;
   align-items: start;
@@ -479,7 +478,7 @@ textarea {
 
 .patch-preview-layout {
   display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(220px, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   align-items: start;
   max-width: 100%;
@@ -487,7 +486,7 @@ textarea {
 }
 
 .patch-map-card {
-  width: max-content;
+  width: 100%;
   max-width: 100%;
   padding: 10px;
   border: 1px solid var(--line-soft);
@@ -503,6 +502,8 @@ textarea {
   justify-content: start;
   gap: 3px;
   align-items: center;
+  width: max-content;
+  min-width: 0;
 }
 
 .patch-swatch {
@@ -543,6 +544,7 @@ textarea {
 
 .patch-guide-side {
   display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(220px, .7fr);
   gap: 10px;
   min-width: 0;
 }
@@ -656,16 +658,12 @@ textarea {
 }
 
 @media (max-width: 960px) {
-  .patch-preview-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .patch-map-card {
-    width: 100%;
-  }
-
   .patch-preview-grid {
     justify-content: center;
+  }
+
+  .patch-guide-side {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -810,6 +808,11 @@ textarea {
   background: #f8fafc;
   min-height: 118px;
   align-content: center;
+}
+
+.compact-panel {
+  gap: 10px;
+  padding: 12px;
 }
 
 .manual-commit-actions #addManualRowButton {

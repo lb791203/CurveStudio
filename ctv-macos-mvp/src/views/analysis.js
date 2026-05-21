@@ -1,12 +1,13 @@
-import { targetSeries, toExportRows } from "../curve-engine.js?v=20260520-patchmap";
-import { summarizeLabVerification } from "../analysis-engine.js?v=20260520-patchmap";
-import { buildCurveAcceptance } from "../curve-acceptance.js?v=20260520-patchmap";
-import { renderCurveChart, renderG7Charts, renderLabChromaticityChart, renderMeasurementChart } from "../chart-renderer.js?v=20260520-patchmap";
-import { curveRowKey } from "../curve-overrides.js?v=20260520-patchmap";
-import { escapeAttr, escapeHtml } from "../shared.js?v=20260520-patchmap";
-import { deltaFormulaLabel, methodLabel } from "../ui-labels.js?v=20260520-patchmap";
-import { fmt, num, signed, kpiCard, statusClass, labText, renderCurveAcceptanceSummary } from "./helpers.js?v=20260520-patchmap";
-import { visibleWarnings } from "./data.js?v=20260520-patchmap";
+import { targetSeries, toExportRows } from "../curve-engine.js?v=20260521-prepack-ui";
+import { summarizeLabVerification } from "../analysis-engine.js?v=20260521-prepack-ui";
+import { buildCurveAcceptance } from "../curve-acceptance.js?v=20260521-prepack-ui";
+import { buildCompensationSimulation, summarizeCompensationSimulation } from "../compensation-simulation.js?v=20260521-prepack-ui";
+import { renderCurveChart, renderG7Charts, renderLabChromaticityChart, renderMeasurementChart } from "../chart-renderer.js?v=20260521-prepack-ui";
+import { curveRowKey } from "../curve-overrides.js?v=20260521-prepack-ui";
+import { escapeAttr, escapeHtml } from "../shared.js?v=20260521-prepack-ui";
+import { deltaFormulaLabel, methodLabel } from "../ui-labels.js?v=20260521-prepack-ui";
+import { fmt, num, signed, kpiCard, statusClass, labText, renderCurveAcceptanceSummary } from "./helpers.js?v=20260521-prepack-ui";
+import { visibleWarnings } from "./data.js?v=20260521-prepack-ui";
 
 export function renderAnalyze(state, els) {
   const diagnosis = state.diagnosis || { level: "empty", title: "未诊断", ratio: 50, messages: [] };
@@ -112,6 +113,7 @@ export function renderCurve(state, els) {
     })
     .join("");
   els.curveAcceptanceSummary.innerHTML = renderCurveAcceptanceSummary(acceptance);
+  renderCompensationSimulation(filtered, els);
   const reviewRows = acceptanceReviewRows(acceptance.rows, qualityMap);
   els.ripEntryBody.innerHTML = reviewRows.length
     ? reviewRows.map(({ row, quality }) => `
@@ -137,6 +139,46 @@ export function renderCurve(state, els) {
   els.safetySummary.innerHTML = state.safetyIssues.length
     ? renderSafetySummary(state.safetyIssues)
     : "<p>未发现反折、异常跳变或高光/暗调保护问题。</p>";
+}
+
+function renderCompensationSimulation(rows, els) {
+  if (!els.compensationSimulationSummary || !els.compensationSimulationBody) return;
+  const simulationRows = buildCompensationSimulation(rows);
+  const summary = summarizeCompensationSimulation(simulationRows);
+  els.compensationSimulationSummary.innerHTML = summary.total
+    ? `
+      <p><strong>模拟验证</strong> <span class="status ${statusClass(summary.status)}">${escapeHtml(summary.status)}</span> 可模拟 ${summary.total} 点，Pass ${summary.pass} / Warning ${summary.warning} / Fail ${summary.fail}</p>
+      <p>平均 |偏差|：当前 ${num(summary.avgBefore)}% → 套用后 ${num(summary.avgAfter)}%；改善 ${summary.improved} 点，变差 ${summary.worsened} 点。</p>
+      <p>说明：这是按同一次测量得到的机器响应曲线做估算，用来判断补偿方向；正式验收仍需要输出补偿后样张并复测。</p>
+    `
+    : "<p>尚未生成可模拟的补偿曲线。先导入测量数据并计算曲线。</p>";
+
+  const reviewRows = simulationRows.filter((row) =>
+    row.status !== "Pass"
+    || row.pointSource !== "interpolated"
+    || Math.abs(row.tone - 25) < 0.01
+    || Math.abs(row.tone - 50) < 0.01
+    || Math.abs(row.tone - 75) < 0.01
+    || row.tone <= 10
+    || row.tone >= 90
+  );
+  els.compensationSimulationBody.innerHTML = reviewRows.length
+    ? reviewRows.map((row) => `
+      <tr>
+        <td><span class="channel ${escapeAttr(row.channel)}">${escapeHtml(row.channel)}</span></td>
+        <td>${num(row.tone)}%</td>
+        <td>${num(row.measuredTone)}%<div class="cell-note">当前偏差 ${signed(row.beforeDelta)}%</div></td>
+        <td>${num(row.targetTone)}%</td>
+        <td class="zone-start"><strong>${num(row.outputTone)}%</strong></td>
+        <td>${num(row.simulatedTone)}%</td>
+        <td class="${Math.abs(row.afterDelta) > row.tolerance ? "negative" : "positive"}">${signed(row.afterDelta)}%</td>
+        <td class="${row.improvement < -0.05 ? "negative" : row.improvement > 0.05 ? "positive" : ""}">${signed(row.improvement)}%</td>
+        <td><span class="status ${statusClass(row.status)}">${escapeHtml(row.status)}</span><div class="cell-note">${escapeHtml(row.basis)} / 容差 ±${num(row.tolerance)}%</div></td>
+      </tr>
+    `).join("")
+    : summary.total
+      ? "<tr><td colspan=\"9\">模拟结果全部在容差内；完整点位以上方主表为准。</td></tr>"
+      : "<tr><td colspan=\"9\">尚未生成可模拟的补偿曲线。</td></tr>";
 }
 
 function renderSafetySummary(issues) {
@@ -383,7 +425,6 @@ function applyG7Pagination(state, els, availability) {
   setHidden(els.g7Cards, activePanel !== "overview");
   setHidden(els.g7ChartGrid, activePanel !== "charts" || !availability.charts);
   setHidden(els.g7QuickTablesSection, activePanel !== "details" || !availability.hasQuickTables);
-  setHidden(els.g7CertificationSummarySection, activePanel !== "details" || !availability.hasCertification);
   setHidden(els.g7CertificationTablesSection, activePanel !== "details" || !availability.hasCertification);
   setHidden(els.g7ColorspaceSection, activePanel !== "details" || !availability.hasColorspace);
   setHidden(els.g7CompensationSection, activePanel !== "compensation" || !availability.compensation);
