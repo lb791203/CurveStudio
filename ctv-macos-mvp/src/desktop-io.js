@@ -16,6 +16,20 @@ export async function saveTextFileDesktop({ filename, contents, title = "保存�
   return { handled: true, path };
 }
 
+export async function saveBinaryFileDesktop({ filename, contents, title = "保存文件" }) {
+  const tauri = tauriApi();
+  if (!canUseDesktopFileDialog()) return { handled: false, path: "" };
+  const path = await tauri.dialog.save({
+    title,
+    defaultPath: filename,
+    filters: exportFilters(filename),
+  });
+  if (!path) return { handled: true, path: "", canceled: true };
+  const bytes = contents instanceof Uint8Array ? Array.from(contents) : Array.from(new Uint8Array(contents));
+  await tauri.core.invoke("write_binary_file", { path, contents: bytes });
+  return { handled: true, path };
+}
+
 export async function openTextFileDesktop() {
   const tauri = tauriApi();
   if (!canUseDesktopFileDialog()) return { handled: false, path: "", contents: "" };
@@ -41,6 +55,7 @@ function exportFilters(filename) {
   const lower = String(filename || "").toLowerCase();
   if (lower.endsWith(".csv")) return [{ name: "CSV", extensions: ["csv"] }];
   if (lower.endsWith(".json")) return [{ name: "JSON", extensions: ["json"] }];
-  if (lower.endsWith(".txt")) return [{ name: "Text", extensions: ["txt"] }];
-  return [{ name: "导出文件", extensions: ["csv", "txt", "json"] }];
+  if (lower.endsWith(".txt") || lower.endsWith(".cgats")) return [{ name: "CGATS / TXT", extensions: ["txt", "cgats"] }];
+  if (lower.endsWith(".icc") || lower.endsWith(".icm")) return [{ name: "ICC Profile", extensions: ["icc", "icm"] }];
+  return [{ name: "导出文件", extensions: ["csv", "txt", "json", "icc", "icm"] }];
 }

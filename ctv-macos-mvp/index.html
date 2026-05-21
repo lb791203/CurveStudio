@@ -7,27 +7,30 @@
     <link rel="stylesheet" href="./src/styles.css?v=20260521-icc-p4" />
   </head>
   <body>
-    <main class="app-shell">
+    <main class="app-shell" data-active-step="setup">
       <aside class="sidebar">
-        <div>
-          <h1>CTV Curve</h1>
-          <p class="subtle">TVI / CTV / G7 compensation MVP</p>
+        <div class="sidebar-header">
+          <div>
+            <h1 class="brand-logo" data-translate="brand_logo">CTV 曲线工具</h1>
+            <p class="subtle">TVI / CTV / G7 compensation MVP</p>
+          </div>
+          <button id="themeToggle" class="theme-toggle-btn" type="button" aria-label="切换深色模式">
+            <span class="theme-icon" id="themeIcon">&#x263E;</span>
+          </button>
+          <button id="langToggle" class="theme-toggle-btn" type="button" aria-label="切换语言" title="Toggle Language">
+            <span class="theme-icon" id="langIcon" style="font-size: 11px; font-weight: bold;">EN</span>
+          </button>
         </div>
 
         <nav class="nav-list" aria-label="主要页面">
-          <button class="nav-button active" type="button" data-view-button="job"><span class="nav-icon">&#x25A3;</span>工作</button>
-          <button class="nav-button" type="button" data-view-button="standard"><span class="nav-icon">&#x25C8;</span>标准</button>
-          <button class="nav-button" type="button" data-view-button="measurement"><span class="nav-icon">&#x25AD;</span>测量</button>
-          <button class="nav-button" type="button" data-view-button="instrument"><span class="nav-icon">&#x2318;</span>数据接入</button>
-          <button class="nav-button" type="button" data-view-button="analyze"><span class="nav-icon">&#x25C9;</span>分析</button>
-          <button class="nav-button" type="button" data-view-button="curve"><span class="nav-icon">&#x2308;</span>曲线</button>
-          <button class="nav-button" type="button" data-view-button="g7"><span class="nav-icon">&#x25CE;</span>G7</button>
-          <button class="nav-button" type="button" data-view-button="export"><span class="nav-icon">&#x21E7;</span>导出</button>
-          <button class="nav-button" type="button" data-view-button="report"><span class="nav-icon">&#x25A8;</span>报告</button>
-          <button class="nav-button" type="button" data-view-button="settings"><span class="nav-icon">&#x2699;</span>设置</button>
+          <button class="nav-button active" type="button" data-step-button="setup" data-translate="nav_setup"><span class="nav-icon">&#x25A3;</span>任务配置</button>
+          <button class="nav-button" type="button" data-step-button="acquisition" data-translate="nav_acquisition"><span class="nav-icon">&#x25AD;</span>数据采集</button>
+          <button class="nav-button" type="button" data-step-button="diagnose" data-translate="nav_diagnose"><span class="nav-icon">&#x25C9;</span>分析诊断</button>
+          <button class="nav-button" type="button" data-step-button="curves" data-translate="nav_curves"><span class="nav-icon">&#x2308;</span>曲线生成</button>
+          <button class="nav-button" type="button" data-step-button="delivery" data-translate="nav_delivery"><span class="nav-icon">&#x21E7;</span>交付归档</button>
         </nav>
 
-        <section class="panel">
+        <section class="panel control-panel-widget">
           <h2>计算设置</h2>
           <label>
             曲线模式
@@ -62,12 +65,39 @@
       </aside>
 
       <section class="workspace">
-        <header class="toolbar workflow-context-toolbar" id="workflowContextToolbar" hidden>
-          <div>
-            <strong id="jobTitle">未加载测量数据</strong>
-            <span id="jobMeta"></span>
+        <header class="workspace-header">
+          <div class="step-indicator-row">
+            <span class="step-badge" id="currentStepName">第 1 步：任务配置</span>
+            <div class="sub-nav" id="subNavBar">
+              <!-- Setup Sub-tabs -->
+              <button class="sub-nav-button active" type="button" data-sub-view-button="job" data-parent-step="setup" data-translate="subnav_job">项目记录</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="standard" data-parent-step="setup" data-translate="subnav_standard">印刷标准</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="settings" data-parent-step="setup" data-translate="subnav_settings">系统设置</button>
+
+              <!-- Acquisition Sub-tabs -->
+              <button class="sub-nav-button" type="button" data-sub-view-button="measurement" data-parent-step="acquisition" data-translate="subnav_file_import">文件导入</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="manual" data-parent-step="acquisition" data-translate="subnav_manual">手动测量</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="instrument" data-parent-step="acquisition" data-translate="subnav_instrument">仪器测量</button>
+
+              <!-- Diagnose Sub-tabs -->
+              <button class="sub-nav-button" type="button" data-sub-view-button="analyze" data-parent-step="diagnose" data-translate="subnav_diagnose">印刷诊断</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="g7" data-parent-step="diagnose" data-translate="subnav_g7">G7 灰平衡</button>
+
+              <!-- Curves Sub-tabs -->
+              <button class="sub-nav-button" type="button" data-sub-view-button="curve" data-parent-step="curves" data-translate="subnav_curve">补偿生成</button>
+
+              <!-- Delivery Sub-tabs -->
+              <button class="sub-nav-button" type="button" data-sub-view-button="report" data-parent-step="delivery" data-translate="subnav_report">现场报告</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="export" data-parent-step="delivery" data-translate="subnav_export">数据导出</button>
+            </div>
           </div>
-          <div class="status-pill" id="diagnosisBadge">等待诊断</div>
+          <div class="toolbar workflow-context-toolbar" id="workflowContextToolbar" hidden>
+            <div>
+              <strong id="jobTitle">未加载测量数据</strong>
+              <span id="jobMeta"></span>
+            </div>
+            <div class="status-pill" id="diagnosisBadge">等待诊断</div>
+          </div>
         </header>
 
         <section class="view active" data-view="job">
@@ -236,7 +266,9 @@
               <div class="summary-box patch-preview-panel" id="measurementPatchPreview"></div>
             </div>
           </section>
+        </section>
 
+        <section class="view" data-view="manual">
           <section class="panel wide-panel">
             <div class="table-title manual-title">
               <div class="manual-title-text">
@@ -714,16 +746,18 @@
               </div>
             </div>
             <div class="export-grid">
-              <button id="exportCsvButton" type="button">导出曲线 CSV</button>
-              <button id="exportHarmonyButton" type="button">导出 Harmony 手录表</button>
-              <button id="exportPrinergyButton" type="button">导出 Prinergy CSV</button>
-              <button id="exportSimpleRipButton" type="button">导出简化 RIP CSV</button>
-              <button id="exportCgatsButton" type="button">导出 CGATS TXT</button>
-              <button id="exportG7CsvButton" type="button">导出 G7 验证 CSV</button>
-              <button id="exportG7JsonButton" type="button">导出 G7 报告 JSON</button>
-              <button id="exportJsonButton" type="button">导出 JSON 项目档案</button>
-              <button id="exportJobArchiveButton" type="button">导出当前 Job 档案</button>
-              <button id="exportJobLibraryButton" type="button">导出全部 Job 历史</button>
+              <button id="exportCsvButton" type="button" data-translate="btn_export_csv">导出曲线 CSV</button>
+              <button id="exportHarmonyButton" type="button" data-translate="btn_export_harmony">导出 Harmony 手录表</button>
+              <button id="exportPrinergyButton" type="button" data-translate="btn_export_prinergy">导出 Prinergy CSV</button>
+              <button id="exportSimpleRipButton" type="button" data-translate="btn_export_simple_rip">导出简化 RIP CSV</button>
+              <button id="exportCgatsButton" type="button" data-translate="btn_export_cgats">导出 CGATS TXT</button>
+              <button id="exportG7CsvButton" type="button" data-translate="btn_export_g7_csv">导出 G7 验证 CSV</button>
+              <button id="exportG7JsonButton" type="button" data-translate="btn_export_g7_json">导出 G7 报告 JSON</button>
+              <button id="exportJsonButton" type="button" data-translate="btn_export_json_project">导出 JSON 项目档案</button>
+              <button id="exportJobArchiveButton" type="button" data-translate="btn_export_job">导出当前 Job 档案</button>
+              <button id="exportJobLibraryButton" type="button" data-translate="btn_export_library">导出全部 Job 历史</button>
+              <button id="generateIccProfileButton" type="button" data-translate="btn_export_icc_draft">生成 ICC 草稿（实验）</button>
+              <button id="exportIccReferenceButton" type="button" data-translate="btn_export_cgats_ref">导出 CGATS 测量数据（来自最新 Run）</button>
             </div>
             <div class="summary-box" id="exportSummary"></div>
           </section>
@@ -884,6 +918,8 @@
     <footer class="status-bar" id="statusBar">
       <span>等待加载数据</span>
     </footer>
+
+    <div id="chart-tooltip" class="chart-tooltip" hidden></div>
 
     <div class="modal-backdrop" id="textPromptDialog" hidden>
       <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="textPromptTitle">

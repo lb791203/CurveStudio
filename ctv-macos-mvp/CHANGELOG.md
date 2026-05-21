@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 - 2026-05-22
+
+- Added gate-controlled experimental ICC draft export with a metadata sidecar.
+- ICC export now uses the latest saved re-measurement Run and blocks when the ICC generation gate is not ready.
+- Added latest-Run CGATS measurement export for ICC characterization handoff.
+- Added ICC generator tests for gate blocking, latest Run provenance, metadata, profile parsing, and CGATS output.
+- Tightened the English UI pass for the main workflow chrome, status bar, export/report text, Standard page, and dynamic empty states.
+
 ## 0.1.2 - 2026-05-21
 
 - Added a conservative ICC generation gate for the re-measure verification workflow.

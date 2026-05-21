@@ -8,6 +8,7 @@ import { escapeAttr, escapeHtml } from "../shared.js";
 import { buildPatchLayout, patchCoordinate, patchName } from "../target-layouts.js";
 import { deltaFormulaLabel, methodLabel } from "../ui-labels.js";
 import { renderImportAudit, fmt } from "./helpers.js";
+import { t } from "../translations.js";
 
 export function targetName(id) {
   return targetOptions().find((item) => item.id === id)?.name || id;
@@ -57,7 +58,7 @@ function standardPatchRows(state) {
 export function renderStandard(state, els) {
   const target = targetSeries(els.targetSelect.value);
   const warning = state.standardImport?.warnings?.[0] || "";
-  const loading = state.standardLoading ? " / 正在加载标准参考数据..." : "";
+  const loading = state.standardLoading ? ` / ${t("loading_standard_reference", "正在加载标准参考数据...")}` : "";
   const g7 = {
     enabled: true,
     npdcAverage: 1.5,
@@ -77,11 +78,11 @@ export function renderStandard(state, els) {
   els.standardSummary.innerHTML = `
     <strong>${state.standard.name}</strong>
     <p>${state.standard.printCondition}</p>
-    <p>TVI 目标: ${targetName(els.targetSelect.value)}</p>
+    <p>TVI ${escapeHtml(t("target_label", "目标"))}: ${targetName(els.targetSelect.value)}</p>
     <p>25/50/75: ${fmt(targetAt(target, 25))}% / ${fmt(targetAt(target, 50))}% / ${fmt(targetAt(target, 75))}%</p>
-    <p>Lab 色块: ${state.standardPatchMap.size || 0} 个${loading}${warning ? ` / ${escapeHtml(warning)}` : ""}</p>
-    <p>ΔE 阈值: ${deltaFormulaLabel(els.deltaFormulaSelect.value)} Warning ${state.standard.deltaE.warning}, Fail ${state.standard.deltaE.fail}</p>
-    <p>G7: ${g7.enabled === false ? "关闭" : "启用"} / NPDC wΔL* ${g7.npdcAverage}/${g7.npdcMax} / 灰平衡 wΔCh ${g7.grayAverage}/${g7.grayMax}</p>
+    <p>Lab ${escapeHtml(t("patch_label", "色块"))}: ${state.standardPatchMap.size || 0} ${escapeHtml(t("count_suffix", "个"))}${loading}${warning ? ` / ${escapeHtml(warning)}` : ""}</p>
+    <p>ΔE ${escapeHtml(t("threshold_label", "阈值"))}: ${deltaFormulaLabel(els.deltaFormulaSelect.value)} Warning ${state.standard.deltaE.warning}, Fail ${state.standard.deltaE.fail}</p>
+    <p>G7: ${g7.enabled === false ? t("off_label", "关闭") : t("on_label", "启用")} / NPDC wΔL* ${g7.npdcAverage}/${g7.npdcMax} / ${escapeHtml(t("gray_balance_label", "灰平衡"))} wΔCh ${g7.grayAverage}/${g7.grayMax}</p>
     ${renderIccPairSummary(pair)}
   `;
   renderIccProfileSummary(state, els);
@@ -118,7 +119,7 @@ function renderIccPairSummary(pair) {
       <div>
         <span class="micro-label">Tone Target</span>
         <strong>${escapeHtml(pair.toneTarget.standardName)}</strong>
-        <p>${escapeHtml(`${pair.toneTarget.targetName} / G7 ${pair.toneTarget.g7Enabled ? "启用" : "关闭"}`)}</p>
+        <p>${escapeHtml(`${pair.toneTarget.targetName} / G7 ${pair.toneTarget.g7Enabled ? t("on_label", "启用") : t("off_label", "关闭")}`)}</p>
       </div>
       <div class="icc-pair-status">
         <span class="status ${pair.status === "pass" ? "pass" : "warning"}">${statusLabel}</span>
@@ -141,25 +142,25 @@ function renderIccProfileSummary(state, els) {
   const profile = state.iccProfile;
   if (!profile) {
     els.iccProfileSummary.innerHTML = `
-      <strong>ICC 颜色参考</strong>
-      <p>未导入 ICC。ICC 可作为 Lab/色彩参考，不能单独生成 TVI/G7 补偿曲线。</p>
+      <strong>${escapeHtml(t("icc_color_reference", "ICC 颜色参考"))}</strong>
+      <p>${escapeHtml(t("icc_not_imported_help", "未导入 ICC。ICC 可作为 Lab/色彩参考，不能单独生成 TVI/G7 补偿曲线。"))}</p>
     `;
     return;
   }
   if (profile.error) {
     els.iccProfileSummary.innerHTML = `
-      <strong>ICC 导入失败</strong>
+      <strong>${escapeHtml(t("icc_import_failed", "ICC 导入失败"))}</strong>
       <p>${escapeHtml(profile.fileName || "")}</p>
       <p><span class="status fail">${escapeHtml(profile.error)}</span></p>
     `;
     return;
   }
   els.iccProfileSummary.innerHTML = `
-    <strong>ICC 颜色参考</strong>
+    <strong>${escapeHtml(t("icc_color_reference", "ICC 颜色参考"))}</strong>
     <p>${escapeHtml(profile.profileName)}${profile.fileName ? ` / ${escapeHtml(profile.fileName)}` : ""}</p>
-    <p>类型: ${escapeHtml(profile.deviceClass)} / 色彩空间: ${escapeHtml(profile.colorSpace)} -> ${escapeHtml(profile.pcs)} / 版本 ${escapeHtml(profile.version)}</p>
-    <p>白点: ${profile.mediaWhitePoint ? labSummary(profile.mediaWhitePoint) : "未提供"} / Intent: ${escapeHtml(profile.renderingIntent || "")}</p>
-    <p>Tags: ${profile.tagCount || 0} 个。TVI/CTV/G7 目标仍需单独选择。</p>
+    <p>${escapeHtml(t("type_label", "类型"))}: ${escapeHtml(profile.deviceClass)} / ${escapeHtml(t("color_space_label", "色彩空间"))}: ${escapeHtml(profile.colorSpace)} -> ${escapeHtml(profile.pcs)} / ${escapeHtml(t("version_label", "版本"))} ${escapeHtml(profile.version)}</p>
+    <p>${escapeHtml(t("white_point_label", "白点"))}: ${profile.mediaWhitePoint ? labSummary(profile.mediaWhitePoint) : t("not_provided", "未提供")} / Intent: ${escapeHtml(profile.renderingIntent || "")}</p>
+    <p>Tags: ${profile.tagCount || 0} ${escapeHtml(t("count_suffix", "个"))}. ${escapeHtml(t("icc_target_separate_help", "TVI/CTV/G7 目标仍需单独选择。"))}</p>
     ${renderIccCharacterization(profile)}
   `;
 }
