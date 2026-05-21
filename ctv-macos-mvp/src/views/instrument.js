@@ -1,7 +1,7 @@
-import { buildInstrumentVerificationRows, summarizeInstrumentVerification } from "../instrument-verification.js?v=20260521-icc-p3";
+import { buildInstrumentVerificationRows, summarizeInstrumentVerification } from "../instrument-verification.js?v=20260521-icc-p4";
 import { summarizeDeviceState } from "../device-adapter.js";
-import { escapeHtml } from "../shared.js?v=20260521-icc-p3";
-import { num, statusClass, signed } from "./helpers.js?v=20260521-icc-p3";
+import { escapeHtml } from "../shared.js?v=20260521-icc-p4";
+import { num, statusClass, signed } from "./helpers.js?v=20260521-icc-p4";
 
 export function renderInstrument(state, els) {
   renderDeviceAdapter(state, els);

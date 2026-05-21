@@ -197,6 +197,8 @@ Acceptance:
 
 Goal: decide whether ICC generation is allowed.
 
+Status: implemented in `0.1.2` as a conservative gate. It reports readiness only after saved pre/post Runs plus enough characterization patches, Lab data, TVI/CTV residuals, G7 pass when enabled, and curve quality checks.
+
 Tasks:
 
 - Add `src/icc-generation-gate.js`.

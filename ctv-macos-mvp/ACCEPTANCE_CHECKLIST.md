@@ -59,12 +59,14 @@ Use `http://127.0.0.1:4173/` for acceptance. Do not use `file://` when checking 
 - Confirm curve CSV / CGATS include `measurement_method`, and Prinergy comments include the metric method.
 - Select the exported JSON project archive in Measurement and confirm Job/settings/measurements restore.
 - Open `Job`, click `保存当前 Run` twice after changing data, and confirm Run comparison appears.
+- Open `Report` and confirm `ICC 生成闸门` blocks a first Run and explains missing conditions.
+- Save/import a compensated re-measurement as the second Run and confirm the ICC gate checks Run sequence, patch count, Lab, paper/solid/overprint, TVI/CTV residual, G7, and curve quality.
 
 ## 6. ICC Workflow Future Acceptance
 
 - Confirm measured Lab can be compared against ICC-derived reference patches after ICC sampling is implemented.
-- Confirm ICC generation is disabled for the first measurement run.
-- Confirm ICC generation is disabled when no compensated re-measurement run exists.
-- Confirm ICC generation is disabled when characterization patch coverage is insufficient.
-- Confirm ICC generation becomes available only after a compensated re-measurement passes the selected validation gates.
+- Confirm ICC generation gate is blocked for the first measurement run.
+- Confirm ICC generation gate is blocked when no compensated re-measurement run exists.
+- Confirm ICC generation gate is blocked when characterization patch coverage is insufficient.
+- Confirm ICC generation gate shows `Ready for ICC generation` only after a compensated re-measurement passes the selected validation gates.
 - Confirm generated ICC records provenance: Job, Run, measurement condition, instrument, compensation curve, validation status, and generation time.

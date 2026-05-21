@@ -18,6 +18,7 @@ test("projectArchive persists curve overrides for JSON restore", () => {
       toneTarget: { standardName: "GRACoL2013 CRPC6", targetName: "ISO B" },
       messages: ["paired"],
     },
+    iccGenerationGate: { status: "Ready", title: "Ready for ICC generation" },
     targetSnapshot: { name: "ISO B", points: [[50, 14]] },
     settings: { mode: "tvi" },
     diagnosis: { title: "Ready" },
@@ -41,6 +42,7 @@ test("projectArchive persists curve overrides for JSON restore", () => {
   assert.equal(archive.curveSafety[0].type, "折点突变");
   assert.equal(archive.iccProfile.profileName, "Mock Press Profile");
   assert.equal(archive.iccStandardPair.labReference.label, "Mock Press Profile");
+  assert.equal(archive.iccGenerationGate.status, "Ready");
 });
 
 test("RIP exports include curve quality metadata and row comments", () => {
@@ -55,6 +57,7 @@ test("RIP exports include curve quality metadata and row comments", () => {
       labReference: { label: "Mock ICC" },
       toneTarget: { standardName: "GRACoL2013 CRPC6" },
     },
+    iccGenerationGate: { status: "Ready" },
     compensationRatio: 50,
     measurementCondition: "M1",
     suggestedArchivePath: "jobs/demo/runs/run.json",
@@ -69,6 +72,7 @@ test("RIP exports include curve quality metadata and row comments", () => {
   assert.match(simple, /# curve_quality_status=Warning/);
   assert.match(simple, /# lab_reference=Mock ICC/);
   assert.match(simple, /# tone_target=GRACoL2013 CRPC6 \/ ISO B/);
+  assert.match(simple, /# icc_generation_gate=Ready/);
   assert.match(simple, /channel,input,output,quality,comment/);
   assert.match(simple, /Warning,metric=TVI/);
   assert.match(prinergy, /折点突变:K 70% kink/);
