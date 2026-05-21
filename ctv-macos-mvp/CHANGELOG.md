@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4 - 2026-05-22
+
+- Reworked Export into grouped sections for RIP/curve delivery, verification reports, project archives, and ICC/characterization handoff.
+- Renamed the simple RIP output as a generic RIP CSV and documented compatibility intent for Kodak Prinergy, SCREEN Trueflow, Heidelberg Prinect, Agfa Apogee, Harlequin, Founder Flow, Esko, and similar RIPs.
+- Added RIP compatibility metadata to export headers.
+- Changed the ICC generation gate report from a large fail-card wall into a compact summary with expandable details.
+
 ## 0.1.3 - 2026-05-22
 
 - Added gate-controlled experimental ICC draft export with a metadata sidecar.

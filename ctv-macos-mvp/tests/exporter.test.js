@@ -53,6 +53,7 @@ test("RIP exports include curve quality metadata and row comments", () => {
     calculationFormula: "TVI",
     deltaFormula: "ΔE76",
     targetName: "ISO B",
+    ripCompatibility: "Generic RIP CSV for Prinergy / Trueflow / Prinect / Apogee / Harlequin / Founder Flow / Esko",
     iccStandardPair: {
       labReference: { label: "Mock ICC" },
       toneTarget: { standardName: "GRACoL2013 CRPC6" },
@@ -72,6 +73,7 @@ test("RIP exports include curve quality metadata and row comments", () => {
   assert.match(simple, /# curve_quality_status=Warning/);
   assert.match(simple, /# lab_reference=Mock ICC/);
   assert.match(simple, /# tone_target=GRACoL2013 CRPC6 \/ ISO B/);
+  assert.match(simple, /# rip_compatibility=Generic RIP CSV/);
   assert.match(simple, /# icc_generation_gate=Ready/);
   assert.match(simple, /channel,input,output,quality,comment/);
   assert.match(simple, /Warning,metric=TVI/);

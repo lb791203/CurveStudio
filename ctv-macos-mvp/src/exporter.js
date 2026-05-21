@@ -12,6 +12,7 @@ export function withExportHeader(body, context) {
     `# calculation_formula=${context.calculationFormula}`,
     `# delta_formula=${context.deltaFormula}`,
     `# target=${context.targetName}`,
+    `# rip_compatibility=${context.ripCompatibility || ""}`,
     `# lab_reference=${context.iccStandardPair?.labReference?.label || context.labReferenceSource || ""}`,
     `# tone_target=${context.iccStandardPair?.toneTarget?.standardName || context.standard.name} / ${context.targetName}`,
     `# icc_generation_gate=${context.iccGenerationGate?.status || ""}`,
