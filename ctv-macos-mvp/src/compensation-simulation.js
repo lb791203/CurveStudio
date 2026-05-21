@@ -1,4 +1,4 @@
-import { average, groupByChannel } from "./shared.js?v=20260521-icc-p3";
+import { average, groupByChannel } from "./shared.js?v=20260521-icc-p4";
 
 export function buildCompensationSimulation(rows, options = {}) {
   const toleranceForTone = options.toleranceForTone || defaultToleranceForTone;

@@ -1,7 +1,8 @@
 import { channelsPresent } from "../curve-engine.js";
-import { summarizeLabVerification } from "../analysis-engine.js?v=20260521-icc-p3";
-import { buildSuggestedArchivePath, summarizeCurveSafety } from "../exporter.js?v=20260521-icc-p3";
-import { compareRuns, formatMetricChange } from "../run-compare.js?v=20260521-icc-p3";
+import { summarizeLabVerification } from "../analysis-engine.js?v=20260521-icc-p4";
+import { buildSuggestedArchivePath, summarizeCurveSafety } from "../exporter.js?v=20260521-icc-p4";
+import { buildIccGenerationGate } from "../icc-generation-gate.js";
+import { compareRuns, formatMetricChange } from "../run-compare.js?v=20260521-icc-p4";
 import { escapeAttr, escapeHtml } from "../shared.js";
 import { algorithmDescription, deltaFormulaLabel } from "../ui-labels.js";
 import { num, statusClass } from "./helpers.js";
@@ -189,6 +190,7 @@ function changeClass(change) {
 export function renderExport(state, els) {
   const warnings = visibleWarnings(state, els);
   const quality = summarizeCurveSafety(state.safetyIssues || []);
+  const iccGate = buildIccGenerationGate({ runs: state.runs || [], standard: state.standard });
   const jobs = groupJobRuns(state.runs || []);
   const selectedJob = jobs.find((job) => job.key === state.selectedJobKey) || jobs[0];
   const suggestedPath = buildSuggestedArchivePath({
@@ -205,6 +207,7 @@ export function renderExport(state, els) {
     <p>欠补偿比例: ${els.ratioInput.value}%</p>
     <p>曲线质量: ${quality.status} / 警告 ${quality.warnings} / 严重 ${quality.dangers}</p>
     <p>G7: ${escapeHtml(state.g7?.status || "未运行")} / NPDC wΔL* ${num(state.g7?.weightedAverage)} / Gray wΔCh 最大 ${num(state.g7?.maxGrayCh)}</p>
+    <p>ICC 生成闸门: <span class="status ${iccGate.level}">${escapeHtml(iccGate.title)}</span> / ${escapeHtml(iccGate.summary)}</p>
     <p>测量条件: ${state.importInfo?.metadata?.measurement_condition || "未指定"}</p>
     <p>曲线点: ${state.results.length}</p>
     <p>建议项目路径: ${escapeHtml(suggestedPath)}</p>
@@ -222,6 +225,7 @@ export function renderReport(state, els) {
   const conclusion = g7.conclusion || {};
   const tvi = tviDeltaSummary(state.results || []);
   const compare = state.runs.length >= 2 ? compareRuns(state.runs[0], state.runs[1]) : null;
+  const iccGate = buildIccGenerationGate({ runs: state.runs || [], standard: state.standard });
   const generatedAt = new Date().toLocaleString();
   const jobs = groupJobRuns(state.runs || []);
 
@@ -235,6 +239,7 @@ export function renderReport(state, els) {
     ${reportKpi("测量点 / 曲线点", `${state.measurements.length} / ${state.results.length}`)}
     ${reportKpi("ΔE 公式", deltaFormulaLabel(els.deltaFormulaSelect.value))}
     ${reportKpi("G7", g7.status || "未运行", statusClass(g7.status))}
+    ${reportKpi("ICC Gate", iccGate.status, iccGate.level)}
     ${reportKpi("曲线质量", quality.status, quality.status === "Ready" ? "pass" : quality.dangers ? "danger" : "warning")}
     <div class="summary-box span-card report-context">
       <strong>报告上下文</strong>
@@ -268,9 +273,31 @@ export function renderReport(state, els) {
     <p>解释: 图表中的折点来自实测点、插值点、端点保护和锁定点；曲线质量检查用于提示跳变、反向、过度修正和手动锁定风险。</p>
   `;
 
+  if (els.reportIccGate) {
+    els.reportIccGate.innerHTML = renderIccGenerationGate(iccGate);
+  }
+
   els.reportRunCompare.innerHTML = compare
     ? reportRunCompareText(compare)
     : "<p>保存至少两次 Run 后，这里会显示补偿前后 TVI、ΔE、G7 和曲线质量变化。</p>";
+}
+
+function renderIccGenerationGate(gate) {
+  return `
+    <p><span class="status ${gate.level}">${escapeHtml(gate.title)}</span></p>
+    <p>${escapeHtml(gate.summary)}</p>
+    <p>最新复测 Run: ${escapeHtml(gate.latestRun || "无")} / 上一次 Run: ${escapeHtml(gate.previousRun || "无")}</p>
+    <div class="gate-check-grid">
+      ${(gate.checks || []).map((item) => `
+        <div class="gate-check ${item.status}">
+          <strong>${escapeHtml(item.label)}</strong>
+          <span class="status ${item.status === "pass" ? "pass" : item.status === "warning" ? "warning" : "fail"}">${escapeHtml(item.status)}</span>
+          <p>${escapeHtml(item.value || "")}</p>
+          <small>${escapeHtml(item.message || "")}</small>
+        </div>
+      `).join("")}
+    </div>
+  `;
 }
 
 export function renderSettings(state, els) {

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CTV Curve MVP</title>
-    <link rel="stylesheet" href="./src/styles.css?v=20260521-icc-p3" />
+    <link rel="stylesheet" href="./src/styles.css?v=20260521-icc-p4" />
   </head>
   <body>
     <main class="app-shell">
@@ -784,6 +784,16 @@
             </div>
             <div id="reportRunCompare" class="summary-box"></div>
           </section>
+
+          <section class="panel wide-panel report-panel">
+            <div class="table-title">
+              <div>
+                <h2>ICC 生成闸门</h2>
+                <span>检查复测 Run、特性化色块、Lab、G7 和曲线质量是否达到生成 ICC 的最低条件。</span>
+              </div>
+            </div>
+            <div id="reportIccGate" class="summary-box"></div>
+          </section>
         </section>
 
         <section class="view" data-view="settings">
@@ -889,6 +899,6 @@
       </section>
     </div>
 
-    <script type="module" src="./src/app.js?v=20260521-icc-p3"></script>
+    <script type="module" src="./src/app.js?v=20260521-icc-p4"></script>
   </body>
 </html>

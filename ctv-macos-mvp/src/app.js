@@ -7,19 +7,20 @@ import {
   toCsv,
   toHarmonyCsv,
   upsertTarget,
-} from "./curve-engine.js?v=20260521-icc-p3";
-import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260521-icc-p3";
+} from "./curve-engine.js?v=20260521-icc-p4";
+import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260521-icc-p4";
 import { applyCurveOverrides, curveRowKey, pruneCurveOverrides } from "./curve-overrides.js";
-import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260521-icc-p3";
-import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260521-icc-p3";
-import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260521-icc-p3";
-import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260521-icc-p3";
-import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260521-icc-p3";
+import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260521-icc-p4";
+import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260521-icc-p4";
+import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260521-icc-p4";
+import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260521-icc-p4";
+import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260521-icc-p4";
 import { buildG7Compensation } from "./g7-compensation.js";
+import { buildIccGenerationGate } from "./icc-generation-gate.js";
 import { DEVICE_ADAPTERS, buildMeasurementQueue, calibrateDeviceState, changeDeviceAdapterState, connectDeviceState, disconnectDeviceState, readDevicePatchState } from "./device-adapter.js";
 import { inspectImport } from "./import-inspector.js";
-import { buildIccStandardPair } from "./icc-pairing.js?v=20260521-icc-p3";
-import { parseIccProfile } from "./icc-profile.js?v=20260521-icc-p3";
+import { buildIccStandardPair } from "./icc-pairing.js?v=20260521-icc-p4";
+import { parseIccProfile } from "./icc-profile.js?v=20260521-icc-p4";
 import { openTextFileDesktop, saveTextFileDesktop } from "./desktop-io.js";
 import {
   canCalculateCurve,
@@ -39,7 +40,7 @@ import {
   updateManualRowFromEvent,
 } from "./manual-table.js";
 import { clearStoredRuns, loadStoredRuns, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js";
-import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p3";
+import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
 import { STANDARD_LIBRARY, buildPatchMap, cmykKey, standardById, targetOptions } from "./standards.js";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 
@@ -168,6 +169,7 @@ const els = {
   reportG7Conclusion: document.querySelector("#reportG7Conclusion"),
   reportLabSummary: document.querySelector("#reportLabSummary"),
   reportCurveSummary: document.querySelector("#reportCurveSummary"),
+  reportIccGate: document.querySelector("#reportIccGate"),
   reportRunCompare: document.querySelector("#reportRunCompare"),
   desktopSummary: document.querySelector("#desktopSummary"),
   runCompareSummary: document.querySelector("#runCompareSummary"),
@@ -838,7 +840,7 @@ function exportContext() {
   };
   const suggestedArchivePath = buildSuggestedArchivePath({ ...job, generatedAt });
   const pathParts = suggestedArchivePath.split("/");
-  return {
+  const context = {
     generatedAt,
     job,
     jobId: pathParts[1] || "job",
@@ -879,6 +881,8 @@ function exportContext() {
     labRows: state.labRows,
     g7: state.g7,
   };
+  context.iccGenerationGate = currentIccGenerationGate(state.runs);
+  return context;
 }
 
 async function download(filename, content, type) {
@@ -1017,7 +1021,10 @@ function saveRun() {
     archive,
   };
   const nextRuns = [run, ...state.runs].slice(0, 12);
-  const saved = saveRunsAndLastProject(nextRuns, archive);
+  const gate = currentIccGenerationGate(nextRuns);
+  run.iccGenerationGate = gate;
+  run.archive = { ...run.archive, iccGenerationGate: gate };
+  const saved = saveRunsAndLastProject(nextRuns, run.archive);
   if (!saved.ok) {
     state.storageWarning = saved.warning;
     if (typeof window !== "undefined" && typeof window.alert === "function") window.alert(saved.warning);
@@ -1339,6 +1346,13 @@ function currentIccStandardPair() {
     standard: state.standard,
     targetName: targetName(els.targetSelect.value),
     standardPatchCount: state.standardPatchMap.size || 0,
+  });
+}
+
+function currentIccGenerationGate(runs = state.runs) {
+  return buildIccGenerationGate({
+    runs,
+    standard: state.standard,
   });
 }
 

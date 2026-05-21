@@ -1,6 +1,6 @@
 [package]
 name = "ctv_curve"
-version = "0.1.1"
+version = "0.1.2"
 description = "TVI / CTV / G7 compensation curve desktop app"
 authors = ["FM PRINT"]
 edition = "2021"
