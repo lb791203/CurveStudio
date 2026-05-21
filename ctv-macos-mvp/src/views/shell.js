@@ -215,6 +215,7 @@ export function renderExport(state, els) {
     <p>${escapeHtml(t("standard_select_label", "印刷标准"))}: ${state.standard.name}</p>
     <p>${escapeHtml(t("algorithm_label", "算法"))}: ${els.modeSelect.value.toUpperCase()} / ${targetName(els.targetSelect.value)}</p>
     <p>${escapeHtml(t("formula_label_short", "公式"))}: ${algorithmDescription(els.modeSelect.value)}</p>
+    <p>${escapeHtml(t("rip_compatibility_label", "RIP 兼容"))}: ${escapeHtml(t("rip_compatibility_value", "专用: Harmony、Kodak Prinergy；通用 CSV: SCREEN Trueflow、Heidelberg Prinect、Agfa Apogee、Harlequin、Founder Flow、Esko 等需按实际导入模板映射。"))}</p>
     <p>ΔE ${escapeHtml(t("formula_label_short", "公式"))}: ${deltaFormulaLabel(els.deltaFormulaSelect.value)}</p>
     <p>${escapeHtml(t("ratio_label", "自定义欠补偿比例"))}: ${els.ratioInput.value}%</p>
     <p>${escapeHtml(t("gate_curve_quality", "曲线质量"))}: ${quality.status} / ${escapeHtml(t("curve_quality_warnings", "警告"))} ${quality.warnings} / ${escapeHtml(t("curve_quality_dangers", "严重"))} ${quality.dangers}</p>
@@ -295,22 +296,40 @@ export function renderReport(state, els) {
 }
 
 function renderIccGenerationGate(gate) {
+  const blockingChecks = (gate.checks || []).filter((item) => item.status === "fail" && item.required !== false);
+  const reviewChecks = (gate.checks || []).filter((item) => item.status === "warning");
+  const topChecks = (blockingChecks.length ? blockingChecks : reviewChecks).slice(0, 3);
+  const hint = gate.status === "Ready"
+    ? t("icc_gate_ready_export_hint", "可在 Export 页面生成 ICC 草稿和 metadata。")
+    : t("icc_gate_blocked_hint", "先保存第一次测量与补偿后复测 Run，再重新检查。");
   return `
-    <p><span class="status ${gate.level}">${escapeHtml(gate.title)}</span></p>
-    <p>${escapeHtml(gate.summary)}</p>
-    ${gate.status === "Ready" ? `<p><span class="status warning">${escapeHtml(t("icc_draft_notice", "Current ICC engine is experimental IDW CLUT. Generated .icc is for testing only, not for production RIP use."))}</span></p>` : ""}
-    <p>${escapeHtml(t("latest_remeasure_run", "最新复测 Run"))}: ${escapeHtml(gate.latestRun || t("none_label", "无"))} / ${escapeHtml(t("previous_run", "上一次 Run"))}: ${escapeHtml(gate.previousRun || t("none_label", "无"))}</p>
-    <div class="gate-check-grid">
-      ${(gate.checks || []).map((item) => `
-        <div class="gate-check ${item.status}">
-          <div class="gate-check-title-row">
-            <strong>${escapeHtml(item.label)}</strong>
-            <span class="status ${item.status === "pass" ? "pass" : item.status === "warning" ? "warning" : "fail"}">${escapeHtml(item.status)}</span>
-          </div>
-          <p>${escapeHtml(item.value || "")}</p>
-          <small>${escapeHtml(item.message || "")}</small>
+    <div class="icc-gate-summary-card ${gate.level}">
+      <div class="icc-gate-summary-head">
+        <span class="status ${gate.level}">${escapeHtml(gate.title)}</span>
+        <span>${escapeHtml(gate.summary)}</span>
+      </div>
+      <p>${escapeHtml(hint)}</p>
+      ${gate.status === "Ready" ? `<p><span class="status warning">${escapeHtml(t("icc_draft_notice", "Current ICC engine is experimental IDW CLUT. Generated .icc is for testing only, not for production RIP use."))}</span></p>` : ""}
+      <p>${escapeHtml(t("latest_remeasure_run", "最新复测 Run"))}: ${escapeHtml(gate.latestRun || t("none_label", "无"))} / ${escapeHtml(t("previous_run", "上一次 Run"))}: ${escapeHtml(gate.previousRun || t("none_label", "无"))}</p>
+      <div class="icc-gate-reasons">
+        <strong>${escapeHtml(t("icc_gate_top_reasons", "主要卡点"))}</strong>
+        ${topChecks.length ? `<ul>${topChecks.map((item) => `<li><b>${escapeHtml(item.label)}</b>: ${escapeHtml(item.value || "")} - ${escapeHtml(item.message || "")}</li>`).join("")}</ul>` : `<p>${escapeHtml(t("icc_gate_no_issue", "没有必要卡点。"))}</p>`}
+      </div>
+      <details class="icc-gate-details">
+        <summary>${escapeHtml(t("icc_gate_detail_summary", "展开详细检查项"))}</summary>
+        <div class="gate-check-grid">
+          ${(gate.checks || []).map((item) => `
+            <div class="gate-check ${item.status}">
+              <div class="gate-check-title-row">
+                <strong>${escapeHtml(item.label)}</strong>
+                <span class="status ${item.status === "pass" ? "pass" : item.status === "warning" ? "warning" : "fail"}">${escapeHtml(item.status)}</span>
+              </div>
+              <p>${escapeHtml(item.value || "")}</p>
+              <small>${escapeHtml(item.message || "")}</small>
+            </div>
+          `).join("")}
         </div>
-      `).join("")}
+      </details>
     </div>
   `;
 }

@@ -745,19 +745,43 @@
                 <span>导出字段必须记录标准、算法、欠补偿比例和生成时间。</span>
               </div>
             </div>
-            <div class="export-grid">
-              <button id="exportCsvButton" type="button" data-translate="btn_export_csv">导出曲线 CSV</button>
-              <button id="exportHarmonyButton" type="button" data-translate="btn_export_harmony">导出 Harmony 手录表</button>
-              <button id="exportPrinergyButton" type="button" data-translate="btn_export_prinergy">导出 Prinergy CSV</button>
-              <button id="exportSimpleRipButton" type="button" data-translate="btn_export_simple_rip">导出简化 RIP CSV</button>
-              <button id="exportCgatsButton" type="button" data-translate="btn_export_cgats">导出 CGATS TXT</button>
-              <button id="exportG7CsvButton" type="button" data-translate="btn_export_g7_csv">导出 G7 验证 CSV</button>
-              <button id="exportG7JsonButton" type="button" data-translate="btn_export_g7_json">导出 G7 报告 JSON</button>
-              <button id="exportJsonButton" type="button" data-translate="btn_export_json_project">导出 JSON 项目档案</button>
-              <button id="exportJobArchiveButton" type="button" data-translate="btn_export_job">导出当前 Job 档案</button>
-              <button id="exportJobLibraryButton" type="button" data-translate="btn_export_library">导出全部 Job 历史</button>
-              <button id="generateIccProfileButton" type="button" data-translate="btn_export_icc_draft">生成 ICC 草稿（实验）</button>
-              <button id="exportIccReferenceButton" type="button" data-translate="btn_export_cgats_ref">导出 CGATS 测量数据（来自最新 Run）</button>
+            <div class="export-group-grid">
+              <section class="export-group-card">
+                <h3 data-translate="export_group_rip_title">RIP / 曲线交付</h3>
+                <p data-translate="export_group_rip_help">现场录入 Harmony / Prinergy 或给 RIP 使用的补偿曲线。</p>
+                <div class="export-action-list">
+                  <button id="exportHarmonyButton" type="button" data-translate="btn_export_harmony">导出 Harmony 手录表</button>
+                  <button id="exportPrinergyButton" type="button" data-translate="btn_export_prinergy">导出 Prinergy CSV</button>
+                  <button id="exportSimpleRipButton" type="button" data-translate="btn_export_simple_rip">导出通用 RIP CSV</button>
+                  <button id="exportCsvButton" type="button" data-translate="btn_export_csv">导出曲线 CSV</button>
+                </div>
+              </section>
+              <section class="export-group-card">
+                <h3 data-translate="export_group_report_title">验证报告</h3>
+                <p data-translate="export_group_report_help">给复盘、留档和第三方软件交换的 G7 / CGATS 数据。</p>
+                <div class="export-action-list">
+                  <button id="exportG7JsonButton" type="button" data-translate="btn_export_g7_json">导出 G7 报告 JSON</button>
+                  <button id="exportG7CsvButton" type="button" data-translate="btn_export_g7_csv">导出 G7 验证 CSV</button>
+                  <button id="exportCgatsButton" type="button" data-translate="btn_export_cgats">导出 CGATS TXT</button>
+                </div>
+              </section>
+              <section class="export-group-card">
+                <h3 data-translate="export_group_archive_title">项目归档</h3>
+                <p data-translate="export_group_archive_help">保存当前项目、单个 Job 或全部历史，方便以后恢复和对比。</p>
+                <div class="export-action-list">
+                  <button id="exportJobArchiveButton" type="button" data-translate="btn_export_job">导出当前 Job 档案</button>
+                  <button id="exportJobLibraryButton" type="button" data-translate="btn_export_library">导出全部 Job 历史</button>
+                  <button id="exportJsonButton" type="button" data-translate="btn_export_json_project">导出 JSON 项目档案</button>
+                </div>
+              </section>
+              <section class="export-group-card export-group-card-icc">
+                <h3 data-translate="export_group_icc_title">ICC / 特性化</h3>
+                <p data-translate="export_group_icc_help">复测通过后生成实验 ICC 草稿；也可导出最新 Run 的测量数据。</p>
+                <div class="export-action-list">
+                  <button id="generateIccProfileButton" type="button" data-translate="btn_export_icc_draft">生成 ICC 草稿（实验）</button>
+                  <button id="exportIccReferenceButton" type="button" data-translate="btn_export_cgats_ref">导出 CGATS 测量数据（来自最新 Run）</button>
+                </div>
+              </section>
             </div>
             <div class="summary-box" id="exportSummary"></div>
           </section>

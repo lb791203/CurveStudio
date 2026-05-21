@@ -1765,10 +1765,46 @@ svg {
 }
 
 .export-grid,
+.export-group-grid,
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(180px, 1fr));
   gap: 12px;
+}
+
+.export-group-grid {
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  align-items: stretch;
+}
+
+.export-group-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.export-group-card h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.export-group-card p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.export-action-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.export-action-list button {
+  min-height: 42px;
 }
 
 .settings-grid {
@@ -1783,6 +1819,49 @@ svg {
 
 .export-grid button {
   min-height: 52px;
+}
+
+.icc-gate-summary-card {
+  display: grid;
+  gap: 10px;
+}
+
+.icc-gate-summary-card p {
+  margin: 0;
+}
+
+.icc-gate-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.icc-gate-reasons {
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.icc-gate-reasons ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.icc-gate-reasons li + li {
+  margin-top: 4px;
+}
+
+.icc-gate-details {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 8px;
+}
+
+.icc-gate-details summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-weight: 700;
 }
 
 .positive {
@@ -1969,7 +2048,12 @@ body.dark-theme .status-bar-diagnosis.danger {
   .kpi-grid,
   .report-grid,
   .export-grid,
+  .export-group-grid,
   .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .export-action-list {
     grid-template-columns: 1fr;
   }
 }
@@ -2969,6 +3053,16 @@ body.dark-theme .gate-check.fail small {
   color: #fca5a5 !important;
 }
 
+body.dark-theme .export-group-card,
+body.dark-theme .icc-gate-reasons {
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+}
+
+body.dark-theme .icc-gate-details {
+  border-color: var(--line) !important;
+}
+
 /* Enhance channel badge K visibility in dark mode */
 body.dark-theme .channel.K {
   background: #334155 !important;
@@ -3045,4 +3139,3 @@ body.dark-theme tbody,
 body.dark-theme tr {
   background-color: transparent;
 }
-
