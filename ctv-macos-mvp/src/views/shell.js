@@ -4,6 +4,7 @@ import { buildSuggestedArchivePath, summarizeCurveSafety } from "../exporter.js?
 import { buildIccGenerationGate } from "../icc-generation-gate.js";
 import { compareRuns, formatMetricChange } from "../run-compare.js?v=20260521-icc-p4";
 import { escapeAttr, escapeHtml } from "../shared.js";
+import { t } from "../translations.js";
 import { algorithmDescription, deltaFormulaLabel } from "../ui-labels.js";
 import { num, statusClass } from "./helpers.js";
 import { targetName, visibleWarnings } from "./data.js";
@@ -19,11 +20,13 @@ export function renderShell(state, els) {
   if (els.workflowContextToolbar) {
     els.workflowContextToolbar.hidden = true;
   }
-  const jobTitle = state.measurements.length ? `${els.jobPressInput.value || "当前"} 测量任务` : "未加载测量数据";
+  const jobTitle = state.measurements.length
+    ? `${els.jobPressInput.value || t("current_press_label", "当前")} ${t("measurement_job_suffix", "测量任务")}`
+    : t("no_measurement_loaded", "未加载测量数据");
   const jobMeta = state.measurements.length
-    ? `${state.importInfo?.sourceFormat || "Data"} / ${state.measurements.length} 个单色阶调点 / ${usableCount} 个可计算点 / ${channels.join(" ")} 通道 / ${state.standard.name}`
-    : `${state.standard.name} / 等待导入或手动输入`;
-  const diagnosisTitle = state.diagnosis?.title || (state.measurements.length ? "等待诊断" : "未加载测量数据");
+    ? `${state.importInfo?.sourceFormat || "Data"} / ${state.measurements.length} ${t("solid_tone_points_label", "个单色阶调点")} / ${usableCount} ${t("usable_points_label", "个可计算点")} / ${channels.join(" ")} ${t("channel_suffix_label", "通道")} / ${state.standard.name}`
+    : `${state.standard.name} / ${t("waiting_import_manual", "等待导入或手动输入")}`;
+  const diagnosisTitle = state.diagnosis?.title || (state.measurements.length ? t("awaiting_diagnosis", "等待诊断") : t("no_measurement_loaded", "未加载测量数据"));
   if (els.jobTitle) els.jobTitle.textContent = jobTitle;
   if (els.jobMeta) els.jobMeta.textContent = jobMeta;
   if (els.diagnosisBadge) {
@@ -38,6 +41,15 @@ export function renderShell(state, els) {
   ].forEach((el) => { if (el) el.disabled = disabled; });
   if (els.exportJobArchiveButton) els.exportJobArchiveButton.disabled = !state.runs.length;
   if (els.exportJobLibraryButton) els.exportJobLibraryButton.disabled = !state.runs.length;
+  const iccGate = buildIccGenerationGate({ runs: state.runs || [], standard: state.standard });
+  if (els.generateIccProfileButton) {
+    els.generateIccProfileButton.disabled = iccGate.status !== "Ready";
+    els.generateIccProfileButton.title = iccGate.status === "Ready" ? t("icc_ready_title", "ICC Gate passed; generate an experimental draft.") : iccGate.summary;
+  }
+  if (els.exportIccReferenceButton) {
+    els.exportIccReferenceButton.disabled = !(state.runs || []).length;
+    els.exportIccReferenceButton.title = (state.runs || []).length ? t("icc_export_latest_run_title", "Export measurement data from the latest saved Run.") : t("icc_no_run", "No saved Run available for measurement data export.");
+  }
   if (els.runG7Button) els.runG7Button.disabled = !hasMeasurements;
   if (els.generateG7CompensationButton) els.generateG7CompensationButton.disabled = !hasMeasurements;
   if (els.calculateButton) els.calculateButton.disabled = !hasMeasurements || state.manualDirty;
@@ -53,13 +65,13 @@ export function renderShell(state, els) {
   if (els.statusBar) {
     const parts = [];
     parts.push(escapeHtml(jobMeta));
-    parts.push(els.modeSelect ? escapeHtml(`模式:${els.modeSelect.value.toUpperCase()}`) : "");
-    if (els.targetSelect) parts.push(escapeHtml(`目标:${targetName(els.targetSelect.value)}`));
-    if (state.measurements.length) parts.push(escapeHtml(`${state.measurements.length}测点`));
-    if (state.results.length) parts.push(escapeHtml(`${state.results.length}曲线点`));
+    parts.push(els.modeSelect ? escapeHtml(`${t("mode_status_prefix", "模式:")}${els.modeSelect.value.toUpperCase()}`) : "");
+    if (els.targetSelect) parts.push(escapeHtml(`${t("target_status_prefix", "目标:")}${targetName(els.targetSelect.value)}`));
+    if (state.measurements.length) parts.push(escapeHtml(`${state.measurements.length}${t("pts_measured", "测点")}`));
+    if (state.results.length) parts.push(escapeHtml(`${state.results.length}${t("pts_curve", "曲线点")}`));
     const condition = state.importInfo?.metadata?.measurement_condition;
     if (condition) parts.push(escapeHtml(condition));
-    if (els.ratioInput) parts.push(escapeHtml(`欠补偿${els.ratioInput.value}%`));
+    if (els.ratioInput) parts.push(escapeHtml(`${t("undercomp_status_prefix", "欠补偿")}${els.ratioInput.value}%`));
     const press = els.jobPressInput?.value;
     if (press) parts.push(escapeHtml(press));
     parts.push(`<span class="status-bar-diagnosis ${state.diagnosis?.level || ""}">${escapeHtml(diagnosisTitle)}</span>`);
@@ -72,11 +84,11 @@ export function renderControlValues(els) {
 }
 
 function runCompareText(state, runs = state.runs) {
-  if (runs.length < 2) return "<strong>Run 比较</strong><p>保存至少两次 Run 后显示补偿前后变化。</p>";
+  if (runs.length < 2) return `<strong>${escapeHtml(t("run_compare_title", "Run 比较"))}</strong><p>${escapeHtml(t("run_compare_need_two", "保存至少两次 Run 后显示补偿前后变化。"))}</p>`;
   const compare = compareRuns(runs[0], runs[1]);
-  if (!compare) return "<strong>Run 比较</strong><p>缺少可比较的 Run 指标。</p>";
+  if (!compare) return `<strong>${escapeHtml(t("run_compare_title", "Run 比较"))}</strong><p>${escapeHtml(t("run_compare_missing_metrics", "缺少可比较的 Run 指标。"))}</p>`;
   return `
-    <strong>Run 比较</strong>
+    <strong>${escapeHtml(t("run_compare_title", "Run 比较"))}</strong>
     <p>最新: ${escapeHtml(compare.latest.createdAt || "")} / 上一次: ${escapeHtml(compare.previous.createdAt || "")}</p>
     <p>平均 TVI 偏差: <span class="${changeClass(compare.avgTviDelta)}">${formatMetricChange(compare.avgTviDelta, "%")}</span></p>
     <p>最大 ΔE: <span class="${changeClass(compare.maxDeltaE)}">${formatMetricChange(compare.maxDeltaE)}</span></p>
@@ -128,7 +140,7 @@ export function renderRuns(state, els) {
         </article>
       `),
       ].join("")
-      : "<p class=\"empty-run-list\">保存 Run 后，这里会形成作业列表；每个作业下面可以保留多次 Run。</p>";
+      : `<p class="empty-run-list">${escapeHtml(t("empty_run_list_help", "保存 Run 后，这里会形成作业列表；每个作业下面可以保留多次 Run。"))}</p>`;
   }
   els.runBody.innerHTML = visibleItems.length
     ? visibleItems.map(({ run, index }) => `
@@ -150,7 +162,7 @@ export function renderRuns(state, els) {
         </td>
       </tr>
     `).join("")
-    : `<tr><td colspan="12">${selectedJobKey ? "这个作业还没有保存 Run。" : "还没有保存 Run。"}</td></tr>`;
+    : `<tr><td colspan="12">${selectedJobKey ? escapeHtml(t("selected_job_no_run", "这个作业还没有保存 Run。")) : escapeHtml(t("no_saved_run", "还没有保存 Run。"))}</td></tr>`;
   els.runCompareSummary.innerHTML = runCompareText(state, visibleRuns);
 }
 
@@ -199,21 +211,21 @@ export function renderExport(state, els) {
     generatedAt: new Date().toISOString(),
   });
   els.exportSummary.innerHTML = `
-    <strong>导出上下文</strong>
-    <p>标准: ${state.standard.name}</p>
-    <p>算法: ${els.modeSelect.value.toUpperCase()} / ${targetName(els.targetSelect.value)}</p>
-    <p>公式: ${algorithmDescription(els.modeSelect.value)}</p>
-    <p>ΔE 公式: ${deltaFormulaLabel(els.deltaFormulaSelect.value)}</p>
-    <p>欠补偿比例: ${els.ratioInput.value}%</p>
-    <p>曲线质量: ${quality.status} / 警告 ${quality.warnings} / 严重 ${quality.dangers}</p>
-    <p>G7: ${escapeHtml(state.g7?.status || "未运行")} / NPDC wΔL* ${num(state.g7?.weightedAverage)} / Gray wΔCh 最大 ${num(state.g7?.maxGrayCh)}</p>
-    <p>ICC 生成闸门: <span class="status ${iccGate.level}">${escapeHtml(iccGate.title)}</span> / ${escapeHtml(iccGate.summary)}</p>
-    <p>测量条件: ${state.importInfo?.metadata?.measurement_condition || "未指定"}</p>
-    <p>曲线点: ${state.results.length}</p>
-    <p>建议项目路径: ${escapeHtml(suggestedPath)}</p>
-    <p>Job 档案: ${jobs.length ? `${jobs.length} 个作业 / ${state.runs.length} 次 Run；当前导出 ${escapeHtml(selectedJob?.name || "最新作业")}` : "还没有保存 Run，暂不能导出 Job 档案。"}</p>
-    <p>JSON 导入: 文件选择框可识别单次项目档案、单个 Job 档案和全部 Job 历史。</p>
-    <p>提醒: ${warnings.length ? escapeHtml(warnings.join(" / ")) : "无"}</p>
+    <strong>${escapeHtml(t("export_context_title", "导出上下文"))}</strong>
+    <p>${escapeHtml(t("standard_select_label", "印刷标准"))}: ${state.standard.name}</p>
+    <p>${escapeHtml(t("algorithm_label", "算法"))}: ${els.modeSelect.value.toUpperCase()} / ${targetName(els.targetSelect.value)}</p>
+    <p>${escapeHtml(t("formula_label_short", "公式"))}: ${algorithmDescription(els.modeSelect.value)}</p>
+    <p>ΔE ${escapeHtml(t("formula_label_short", "公式"))}: ${deltaFormulaLabel(els.deltaFormulaSelect.value)}</p>
+    <p>${escapeHtml(t("ratio_label", "自定义欠补偿比例"))}: ${els.ratioInput.value}%</p>
+    <p>${escapeHtml(t("gate_curve_quality", "曲线质量"))}: ${quality.status} / ${escapeHtml(t("curve_quality_warnings", "警告"))} ${quality.warnings} / ${escapeHtml(t("curve_quality_dangers", "严重"))} ${quality.dangers}</p>
+    <p>G7: ${escapeHtml(state.g7?.status || t("g7_not_run_label", "未运行"))} / NPDC wΔL* ${num(state.g7?.weightedAverage)} / Gray wΔCh Max ${num(state.g7?.maxGrayCh)}</p>
+    <p>${escapeHtml(t("icc_gate_label", "ICC 生成闸门"))}: <span class="status ${iccGate.level}">${escapeHtml(iccGate.title)}</span> / ${escapeHtml(iccGate.summary)}</p>
+    <p>${escapeHtml(t("measurement_condition_label", "测量条件"))}: ${state.importInfo?.metadata?.measurement_condition || t("unspecified_label", "未指定")}</p>
+    <p>${escapeHtml(t("curve_points_label", "曲线点"))}: ${state.results.length}</p>
+    <p>${escapeHtml(t("suggested_project_path", "建议项目路径"))}: ${escapeHtml(suggestedPath)}</p>
+    <p>${escapeHtml(t("job_archive_label", "Job 档案"))}: ${jobs.length ? `${jobs.length} ${t("jobs_suffix", "个作业")} / ${state.runs.length} ${t("runs_suffix", "次 Run")}；${t("current_export_label", "当前导出")} ${escapeHtml(selectedJob?.name || t("latest_job_label", "最新作业"))}` : t("no_run_export_blocked", "还没有保存 Run，暂不能导出 Job 档案。")}</p>
+    <p>JSON ${escapeHtml(t("import_label", "导入"))}: ${escapeHtml(t("json_import_help", "文件选择框可识别单次项目档案、单个 Job 档案和全部 Job 历史。"))}</p>
+    <p>${escapeHtml(t("reminder_label", "提醒"))}: ${warnings.length ? escapeHtml(warnings.join(" / ")) : t("none_label", "无")}</p>
   `;
 }
 
@@ -232,22 +244,22 @@ export function renderReport(state, els) {
   if (els.printReportButton) els.printReportButton.disabled = !state.results.length;
 
   els.reportSummary.innerHTML = `
-    ${reportKpi("客户 / 机器", `${els.jobCustomerInput.value || "未填"} / ${els.jobPressInput.value || "未填"}`)}
-    ${reportKpi("标准", state.standard?.name || "未选择")}
-    ${reportKpi("算法", `${els.modeSelect.value.toUpperCase()} / ${targetName(els.targetSelect.value)}`)}
-    ${reportKpi("欠补偿比例", `${els.ratioInput.value}%`)}
-    ${reportKpi("测量点 / 曲线点", `${state.measurements.length} / ${state.results.length}`)}
-    ${reportKpi("ΔE 公式", deltaFormulaLabel(els.deltaFormulaSelect.value))}
-    ${reportKpi("G7", g7.status || "未运行", statusClass(g7.status))}
+    ${reportKpi(t("customer_press_label", "客户 / 机器"), `${els.jobCustomerInput.value || t("not_filled", "未填")} / ${els.jobPressInput.value || t("not_filled", "未填")}`)}
+    ${reportKpi(t("standard_select_label", "标准"), state.standard?.name || t("not_selected", "未选择"))}
+    ${reportKpi(t("algorithm_label", "算法"), `${els.modeSelect.value.toUpperCase()} / ${targetName(els.targetSelect.value)}`)}
+    ${reportKpi(t("ratio_label", "欠补偿比例"), `${els.ratioInput.value}%`)}
+    ${reportKpi(t("measurement_curve_points_label", "测量点 / 曲线点"), `${state.measurements.length} / ${state.results.length}`)}
+    ${reportKpi(`ΔE ${t("formula_label_short", "公式")}`, deltaFormulaLabel(els.deltaFormulaSelect.value))}
+    ${reportKpi("G7", g7.status || t("g7_not_run_label", "未运行"), statusClass(g7.status))}
     ${reportKpi("ICC Gate", iccGate.status, iccGate.level)}
     ${reportKpi("曲线质量", quality.status, quality.status === "Ready" ? "pass" : quality.dangers ? "danger" : "warning")}
     <div class="summary-box span-card report-context">
-      <strong>报告上下文</strong>
-      <p>纸张: ${escapeHtml(els.jobPaperInput.value || "未填")} / 设备: ${escapeHtml(els.jobDeviceInput.value || "未填")} / 操作员: ${escapeHtml(els.jobOperatorInput.value || "未填")}</p>
-      <p>诊断: ${escapeHtml(state.diagnosis?.title || "等待诊断")} / 测量条件: ${escapeHtml(state.importInfo?.metadata?.measurement_condition || "未指定")} / 生成时间: ${escapeHtml(generatedAt)}</p>
-      <p>作业库: ${jobs.length ? `${jobs.length} 个作业 / ${state.runs.length} 次 Run；可在 Export 导出 Job 档案` : "还没有保存 Run。"}</p>
-      <p>提醒: ${warnings.length ? escapeHtml(warnings.join(" / ")) : "无"}</p>
-      ${els.jobNoteInput.value ? `<p>备注: ${escapeHtml(els.jobNoteInput.value)}</p>` : ""}
+      <strong>${escapeHtml(t("report_context_title", "报告上下文"))}</strong>
+      <p>${escapeHtml(t("paper_prefix", "纸张"))}: ${escapeHtml(els.jobPaperInput.value || t("not_filled", "未填"))} / ${escapeHtml(t("device_label", "设备"))}: ${escapeHtml(els.jobDeviceInput.value || t("not_filled", "未填"))} / ${escapeHtml(t("operator_label", "操作员"))}: ${escapeHtml(els.jobOperatorInput.value || t("not_filled", "未填"))}</p>
+      <p>${escapeHtml(t("diagnosis_label", "诊断"))}: ${escapeHtml(state.diagnosis?.title || t("awaiting_diagnosis", "等待诊断"))} / ${escapeHtml(t("measurement_condition_label", "测量条件"))}: ${escapeHtml(state.importInfo?.metadata?.measurement_condition || t("unspecified_label", "未指定"))} / ${escapeHtml(t("generated_at_label", "生成时间"))}: ${escapeHtml(generatedAt)}</p>
+      <p>${escapeHtml(t("job_library_label", "作业库"))}: ${jobs.length ? `${jobs.length} ${t("jobs_suffix", "个作业")} / ${state.runs.length} ${t("runs_suffix", "次 Run")}；${t("job_archive_export_help", "可在 Export 导出 Job 档案")}` : t("no_saved_run", "还没有保存 Run。")}</p>
+      <p>${escapeHtml(t("reminder_label", "提醒"))}: ${warnings.length ? escapeHtml(warnings.join(" / ")) : t("none_label", "无")}</p>
+      ${els.jobNoteInput.value ? `<p>${escapeHtml(t("note_label", "备注"))}: ${escapeHtml(els.jobNoteInput.value)}</p>` : ""}
     </div>
   `;
 
@@ -286,12 +298,15 @@ function renderIccGenerationGate(gate) {
   return `
     <p><span class="status ${gate.level}">${escapeHtml(gate.title)}</span></p>
     <p>${escapeHtml(gate.summary)}</p>
-    <p>最新复测 Run: ${escapeHtml(gate.latestRun || "无")} / 上一次 Run: ${escapeHtml(gate.previousRun || "无")}</p>
+    ${gate.status === "Ready" ? `<p><span class="status warning">${escapeHtml(t("icc_draft_notice", "Current ICC engine is experimental IDW CLUT. Generated .icc is for testing only, not for production RIP use."))}</span></p>` : ""}
+    <p>${escapeHtml(t("latest_remeasure_run", "最新复测 Run"))}: ${escapeHtml(gate.latestRun || t("none_label", "无"))} / ${escapeHtml(t("previous_run", "上一次 Run"))}: ${escapeHtml(gate.previousRun || t("none_label", "无"))}</p>
     <div class="gate-check-grid">
       ${(gate.checks || []).map((item) => `
         <div class="gate-check ${item.status}">
-          <strong>${escapeHtml(item.label)}</strong>
-          <span class="status ${item.status === "pass" ? "pass" : item.status === "warning" ? "warning" : "fail"}">${escapeHtml(item.status)}</span>
+          <div class="gate-check-title-row">
+            <strong>${escapeHtml(item.label)}</strong>
+            <span class="status ${item.status === "pass" ? "pass" : item.status === "warning" ? "warning" : "fail"}">${escapeHtml(item.status)}</span>
+          </div>
           <p>${escapeHtml(item.value || "")}</p>
           <small>${escapeHtml(item.message || "")}</small>
         </div>

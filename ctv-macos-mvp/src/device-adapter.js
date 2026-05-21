@@ -1,5 +1,9 @@
 import { defaultManualRow } from "./manual-table.js";
 
+export function isTauriAvailable() {
+  return typeof window !== "undefined" && Boolean(window.__TAURI__ || window.__TAURI_INTERNALS__ || window.__TAURI_ENV__);
+}
+
 export const DEVICE_ADAPTERS = [
   {
     id: "file",
@@ -17,9 +21,11 @@ export const DEVICE_ADAPTERS = [
   },
   {
     id: "sdk",
-    name: "SDK 待接入",
-    status: "Blocked",
-    description: "等待 X-Rite / Techkon SDK、授权文件或通讯协议后启用。",
+    name: isTauriAvailable() ? "仪器 SDK" : "SDK 待接入",
+    status: isTauriAvailable() ? "Ready" : "Blocked",
+    description: isTauriAvailable()
+      ? "连接 Techkon (0x197B) 或 X-Rite (0x0981) USB 分光光度仪进行实时测量。"
+      : "等待 X-Rite / Techkon SDK、授权文件或通讯协议后启用。",
     capabilities: ["connect", "disconnect", "calibrateWhite", "readPatch", "readStrip", "getDeviceInfo"],
   },
 ];
@@ -58,9 +64,9 @@ export function summarizeDeviceState(deviceState = {}, manualRows = []) {
     total: queue.length,
     next,
     manualInstrumentRows: manualRows.filter((row) => row.source === "仪器测量").length,
-    canConnect: adapter.capabilities.includes("connect") && adapter.id !== "sdk",
+    canConnect: adapter.capabilities.includes("connect") && (adapter.id !== "sdk" || isTauriAvailable()),
     canCalibrate: adapter.capabilities.includes("calibrateWhite") && Boolean(deviceState.connected),
-    canReadPatch: adapter.capabilities.includes("readPatch") && Boolean(deviceState.connected) && adapter.id !== "sdk",
+    canReadPatch: adapter.capabilities.includes("readPatch") && Boolean(deviceState.connected) && (adapter.id !== "sdk" || isTauriAvailable()),
     message: deviceState.message || adapter.description,
   };
 }
@@ -71,7 +77,9 @@ export function changeDeviceAdapterState(deviceState = {}, adapterId) {
     adapterId,
     connected: false,
     calibrated: false,
-    message: adapterId === "sdk" ? "SDK 适配器等待厂商 SDK、授权文件或通讯协议。" : "",
+    message: adapterId === "sdk"
+      ? (isTauriAvailable() ? "已选择仪器 SDK。请点击连接以寻找 USB HID 仪器。" : "SDK 待接入，暂不能在此模式下连接设备。")
+      : "",
   };
 }
 

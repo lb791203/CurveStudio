@@ -45,6 +45,7 @@ export function renderCurveChart(svg, results, safetyIssues = []) {
     yMin: 0,
     yMax: 100,
     yLabel: "输出网点 %",
+    interactivePoints: true,
     reference: [{ name: "Identity", points: [{ x: 0, y: 0 }, { x: 100, y: 100 }], color: "#9ca3af" }],
   });
 }
@@ -101,7 +102,7 @@ export function renderLabChromaticityChart(svg, labRows = []) {
         <stop offset="100%" stop-color="#bfdbfe" stop-opacity=".5" />
       </linearGradient>
     </defs>
-    <rect x="0" y="0" width="${width}" height="${height}" fill="white" />
+    <rect x="0" y="0" width="${width}" height="${height}" class="chart-bg" />
     <rect x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}" fill="url(#labBgA)" opacity=".55" />
     <rect x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}" fill="url(#labBgB)" opacity=".75" />
     ${grid}
@@ -235,7 +236,15 @@ function drawChart(svg, series, config) {
   const plotH = height - pad.top - pad.bottom;
   const xScale = (x) => pad.left + (x / 100) * plotW;
   const yScale = (y) => pad.top + (1 - (y - config.yMin) / (config.yMax - config.yMin)) * plotH;
-  const colors = { C: "#0891b2", M: "#be185d", Y: "#ca8a04", K: "#111827", a: "#7c3aed", b: "#ea580c", Gray: "#475569" };
+  const colors = {
+    C: "var(--chart-c, #0891b2)",
+    M: "var(--chart-m, #be185d)",
+    Y: "var(--chart-y, #ca8a04)",
+    K: "var(--chart-k, #111827)",
+    a: "var(--chart-a, #7c3aed)",
+    b: "var(--chart-b, #ea580c)",
+    Gray: "var(--chart-gray, #475569)"
+  };
 
   const grid = [0, 25, 50, 75, 100].map((x) => `
     <line x1="${xScale(x)}" y1="${pad.top}" x2="${xScale(x)}" y2="${height - pad.bottom}" class="grid" />
@@ -250,11 +259,19 @@ function drawChart(svg, series, config) {
   const lines = config.connectLines === false
     ? ""
     : Object.entries(series).map(([channel, points]) => path(points, xScale, yScale, colors[channel] || "#2563eb", "series", channel)).join("");
-  const dots = Object.entries(series).flatMap(([channel, points]) => points.map((point) => `
-    <circle class="chart-dot${point.locked ? " locked" : ""}${point.quality ? ` ${point.quality}` : ""}" cx="${xScale(point.x)}" cy="${yScale(point.y)}" r="${point.locked || point.quality ? 5 : 4}" fill="${colors[channel] || "#2563eb"}">
-      <title>${escapeHtml(point.tooltip || `${channel} ${fmt(point.x)} / ${fmt(point.y)}`)}</title>
-    </circle>
-  `)).join("");
+  const dots = Object.entries(series).flatMap(([channel, points]) => points.map((point) => {
+    const isDraggable = config.interactivePoints;
+    return `
+      <circle class="chart-dot${point.locked ? " locked" : ""}${point.quality ? ` ${point.quality}` : ""}${isDraggable ? " draggable-point" : ""}"
+        cx="${xScale(point.x)}" cy="${yScale(point.y)}" r="${point.locked || point.quality ? 5 : 4}" fill="${colors[channel] || "#2563eb"}"
+        data-dot-channel="${escapeHtml(channel)}"
+        data-dot-x="${escapeHtml(point.x)}"
+        ${isDraggable ? `data-draggable-point="true" data-channel="${escapeHtml(channel)}" data-tone="${escapeHtml(point.x)}" data-y="${escapeHtml(point.y)}"` : ""}
+      >
+        <title>${escapeHtml(point.tooltip || `${channel} ${fmt(point.x)} / ${fmt(point.y)}`)}</title>
+      </circle>
+    `;
+  })).join("");
   const refDots = (config.reference || []).flatMap((item) => item.points.map((point) => `
     <circle class="chart-dot reference-dot" cx="${xScale(point.x)}" cy="${yScale(point.y)}" r="3" fill="${item.color}">
       <title>${escapeHtml(point.tooltip || `${item.name} ${fmt(point.x)} / ${fmt(point.y)}`)}</title>
@@ -268,7 +285,7 @@ function drawChart(svg, series, config) {
   `).join("");
 
   svg.innerHTML = `
-    <rect x="0" y="0" width="${width}" height="${height}" fill="white" />
+    <rect x="0" y="0" width="${width}" height="${height}" class="chart-bg" />
     ${legend}
     ${grid}${yTicks}
     <line x1="${pad.left}" y1="${height - pad.bottom}" x2="${width - pad.right}" y2="${height - pad.bottom}" class="axis" />
