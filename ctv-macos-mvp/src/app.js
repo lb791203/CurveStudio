@@ -16,12 +16,15 @@ import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 
 import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260521-icc-p4";
 import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260521-icc-p4";
 import { buildG7Compensation } from "./g7-compensation.js";
+import { renderCurveChart, renderMeasurementChart, renderLabChromaticityChart, renderG7Charts } from "./chart-renderer.js?v=20260521-icc-p4";
 import { buildIccGenerationGate } from "./icc-generation-gate.js";
-import { DEVICE_ADAPTERS, buildMeasurementQueue, calibrateDeviceState, changeDeviceAdapterState, connectDeviceState, disconnectDeviceState, readDevicePatchState } from "./device-adapter.js";
+import { DEVICE_ADAPTERS, buildMeasurementQueue, calibrateDeviceState, changeDeviceAdapterState, connectDeviceState, disconnectDeviceState, readDevicePatchState, isTauriAvailable } from "./device-adapter.js";
 import { inspectImport } from "./import-inspector.js";
 import { buildIccStandardPair } from "./icc-pairing.js?v=20260521-icc-p4";
 import { parseIccProfile } from "./icc-profile.js?v=20260521-icc-p4";
-import { openTextFileDesktop, saveTextFileDesktop } from "./desktop-io.js";
+import { openTextFileDesktop, saveTextFileDesktop, saveBinaryFileDesktop } from "./desktop-io.js";
+import { buildIccExportPackage, exportMeasurementToCgats } from "./icc-generator.js";
+import { t, updateDomTranslations, getLanguage, setLanguage } from "./translations.js";
 import {
   canCalculateCurve,
   defaultManualRow,
@@ -190,6 +193,9 @@ const els = {
   textPromptInput: document.querySelector("#textPromptInput"),
   textPromptOkButton: document.querySelector("#textPromptOkButton"),
   textPromptCancelButton: document.querySelector("#textPromptCancelButton"),
+  generateIccProfileButton: document.querySelector("#generateIccProfileButton"),
+  exportIccReferenceButton: document.querySelector("#exportIccReferenceButton"),
+  langToggle: document.querySelector("#langToggle"),
 };
 
 const state = {
@@ -234,6 +240,18 @@ let kbaPresetCache = null;
 initialize();
 
 async function initialize() {
+  // Initialize theme from localStorage
+  const savedTheme = localStorage.getItem("theme");
+  if (savedTheme === "dark") {
+    document.body.classList.add("dark-theme");
+    const icon = document.getElementById("themeIcon");
+    if (icon) icon.innerHTML = "&#x2600;"; // Sun
+  }
+
+  // Initialize language from localStorage (default to "zh")
+  const savedLang = localStorage.getItem("lang") || "zh";
+  updateDomTranslations(savedLang);
+
   populateSelects();
   loadRuns();
   attachEvents();
@@ -242,8 +260,58 @@ async function initialize() {
 }
 
 function attachEvents() {
-  document.querySelectorAll("[data-view-button]").forEach((button) => {
-    button.addEventListener("click", () => switchView(button.dataset.viewButton));
+  // Bind theme toggle event
+  const themeToggle = document.getElementById("themeToggle");
+  if (themeToggle) {
+    themeToggle.addEventListener("click", () => {
+      const isDark = document.body.classList.toggle("dark-theme");
+      localStorage.setItem("theme", isDark ? "dark" : "light");
+      const icon = document.getElementById("themeIcon");
+      if (icon) {
+        icon.innerHTML = isDark ? "&#x2600;" : "&#x263E;";
+      }
+      
+      // Redraw charts
+      if (state.results.length) {
+        const filtered = state.activeCurveChannel && state.activeCurveChannel !== "all"
+          ? state.results.filter((row) => row.channel === state.activeCurveChannel)
+          : state.results;
+        renderCurveChart(els.curveChart, filtered, state.safetyIssues);
+        renderMeasurementChart(els.measurementChart, state.results, targetSeries(els.targetSelect.value), els.modeSelect.value);
+      }
+      if (state.labRows.length) {
+        renderLabChromaticityChart(els.labChromaticityChart, state.labRows);
+      }
+      if (state.g7) {
+        renderG7Charts({
+          npdcChart: els.g7NpdcChart,
+          grayChart: els.g7GrayChart,
+          cmyNpdcChart: els.g7CmyNpdcChart,
+          weightedChart: els.g7WeightedChart,
+        }, state.g7, targetSeries("g7"));
+      }
+    });
+  }
+
+  // Bind curve chart dragging events
+  els.curveChart?.addEventListener("mousedown", handleCurveDragStart);
+  window.addEventListener("mousemove", handleCurveDragMove);
+  window.addEventListener("mouseup", handleCurveDragEnd);
+
+  // Bind chart hover tooltips events
+  [els.curveChart, els.measurementChart].forEach((svg) => {
+    if (svg) {
+      svg.addEventListener("mousemove", handleMouseMove);
+      svg.addEventListener("mouseleave", hideHover);
+    }
+  });
+
+  document.querySelectorAll("[data-step-button]").forEach((button) => {
+    button.addEventListener("click", () => switchView(button.dataset.stepButton));
+  });
+
+  document.querySelectorAll("[data-sub-view-button]").forEach((button) => {
+    button.addEventListener("click", () => switchView(button.dataset.subViewButton));
   });
 
   els.fileInput.addEventListener("change", async (event) => {
@@ -307,6 +375,51 @@ function attachEvents() {
   els.exportG7CsvButton.addEventListener("click", () => download("g7-verification-report.csv", toG7VerificationCsv(exportContext()), "text/csv"));
   els.exportG7JsonButton.addEventListener("click", () => download("g7-verification-report.json", JSON.stringify(g7ReportArchive(exportContext()), null, 2), "application/json"));
   els.exportJsonButton.addEventListener("click", () => download("ctv-project-export.json", JSON.stringify(projectArchive(exportContext()), null, 2), "application/json"));
+  els.generateIccProfileButton?.addEventListener("click", () => {
+    const gate = currentIccGenerationGate(state.runs);
+    if (gate.status !== "Ready") {
+      const reasons = gate.checks
+        .filter((check) => check.status === "fail" && check.required !== false)
+        .map((check) => `- ${check.label}: ${check.message}`)
+        .join("\n");
+      window.alert(`${t("icc_gate_blocked_alert", "ICC 生成闸门未通过，不能生成 ICC。")}\n\n${gate.status}: ${gate.summary}\n${reasons || ""}`);
+      return;
+    }
+    try {
+      const pkg = buildIccExportPackage(gate, state.runs, {
+        standard: state.standard,
+        measurementCondition: state.runs?.[0]?.archive?.measurementCondition || state.importInfo?.metadata?.measurement_condition,
+        jobCustomer: els.jobCustomerInput.value,
+        jobPress: els.jobPressInput.value,
+        jobId: state.runs?.[0]?.jobId,
+      });
+      downloadBinary(pkg.filename, pkg.iccBuffer, "application/octet-stream", { allowWithoutResults: true, skipManualDirty: true });
+      download(pkg.metadataFilename, JSON.stringify(pkg.metadata, null, 2), "application/json", { allowWithoutResults: true, skipManualDirty: true });
+    } catch (err) {
+      window.alert(err.message || err);
+    }
+  });
+  els.exportIccReferenceButton?.addEventListener("click", () => {
+    const latestRun = state.runs?.[0];
+    if (!latestRun) {
+      window.alert(t("icc_no_run", "没有已保存的 Run，无法导出测量数据。"));
+      return;
+    }
+    try {
+      const txt = exportMeasurementToCgats(latestRun);
+      download("icc-scattered-measurements.latest-run.cgats.txt", txt, "text/plain", { allowWithoutResults: true, skipManualDirty: true });
+    } catch (err) {
+      window.alert(err.message || err);
+    }
+  });
+  els.langToggle?.addEventListener("click", () => {
+    const lang = getLanguage() === "zh" ? "en" : "zh";
+    localStorage.setItem("lang", lang);
+    updateDomTranslations(lang);
+    switchView(state.activeView);
+    populateSelects();
+    render();
+  });
   els.exportJobArchiveButton?.addEventListener("click", exportSelectedJobArchive);
   els.exportJobLibraryButton?.addEventListener("click", exportJobLibraryArchive);
   els.printReportButton.addEventListener("click", () => window.print());
@@ -579,7 +692,31 @@ function changeDeviceAdapter() {
   renderInstrument();
 }
 
-function connectDevice() {
+async function connectDevice() {
+  if (state.device.adapterId === "sdk" && isTauriAvailable()) {
+    state.device.message = "正在扫描 USB 仪器...";
+    renderInstrument();
+    try {
+      const devices = await window.__TAURI__.core.invoke("sdk_scan_devices");
+      if (!devices || devices.length === 0) {
+        state.device.connected = false;
+        state.device.message = "未扫描到支持的 Techkon 或 X-Rite 仪器。";
+      } else {
+        const dev = devices[0];
+        state.device.connected = true;
+        state.device.vendorId = dev.vendor_id;
+        state.device.productId = dev.product_id;
+        state.device.productName = dev.product_string || "未知设备";
+        state.device.message = `已连接设备: ${state.device.productName} (VID: 0x${dev.vendor_id.toString(16)}, PID: 0x${dev.product_id.toString(16)})`;
+      }
+    } catch (e) {
+      state.device.connected = false;
+      state.device.message = `连接失败: ${e}`;
+    }
+    renderInstrument();
+    return;
+  }
+
   state.device = connectDeviceState(state.device);
   renderInstrument();
 }
@@ -589,12 +726,85 @@ function disconnectDevice() {
   renderInstrument();
 }
 
-function calibrateDevice() {
+async function calibrateDevice() {
+  if (state.device.adapterId === "sdk" && isTauriAvailable()) {
+    if (!state.device.connected) {
+      state.device.message = "请先连接设备。";
+      renderInstrument();
+      return;
+    }
+    state.device.message = "正在校准白板，请勿移动设备...";
+    renderInstrument();
+    try {
+      const res = await window.__TAURI__.core.invoke("sdk_calibrate", {
+        vendorId: state.device.vendorId,
+        productId: state.device.productId
+      });
+      state.device.calibrated = true;
+      state.device.message = `白板校准成功: ${res}`;
+    } catch (e) {
+      state.device.calibrated = false;
+      state.device.message = `校准失败: ${e}`;
+    }
+    renderInstrument();
+    return;
+  }
+
   state.device = calibrateDeviceState(state.device);
   renderInstrument();
 }
 
-function readDevicePatch() {
+async function readDevicePatch() {
+  if (state.device.adapterId === "sdk" && isTauriAvailable()) {
+    if (!state.device.connected) {
+      state.device.message = "请先连接设备。";
+      renderInstrument();
+      return;
+    }
+    state.device.message = "正在读取色块，请按下仪器测量键...";
+    renderInstrument();
+    try {
+      const queue = state.device.queue || buildMeasurementQueue(state.device.queueProfile || "press-basic");
+      const queueIndex = Number(state.device.queueIndex || 0);
+      const item = queue[queueIndex];
+      if (!item) {
+        state.device.message = "测量队列已完成。";
+        renderInstrument();
+        return;
+      }
+
+      const res = await window.__TAURI__.core.invoke("sdk_read_patch", {
+        vendorId: state.device.vendorId,
+        productId: state.device.productId
+      });
+
+      const row = defaultManualRow({
+        patchType: item.patchType,
+        channel: item.channel,
+        tone: item.tone,
+        measuredTone: "",
+        density: res.density || 0,
+        labL: res.lab.l,
+        labA: res.lab.a,
+        labB: res.lab.b,
+        source: "仪器测量",
+        note: `SDK读取 ${item.label}: ${res.message || ""}`,
+      });
+
+      state.device.queueIndex = queueIndex + 1;
+      state.device.message = `已成功读取 ${item.label} (L*:${res.lab.l.toFixed(2)}, a*:${res.lab.a.toFixed(2)}, b*:${res.lab.b.toFixed(2)})`;
+
+      state.manualRows.push(row);
+      markManualDirty();
+      renderManualTable();
+      renderMeasurement();
+    } catch (e) {
+      state.device.message = `读取失败: ${e}`;
+    }
+    renderInstrument();
+    return;
+  }
+
   const result = readDevicePatchState(state.device);
   state.device = result.device;
   const row = result.row;
@@ -773,6 +983,7 @@ function render() {
   renderExport(state, els);
   renderReport(state, els);
   renderSettings(state, els);
+  updateDomTranslations(getLanguage());
 }
 
 function renderShell() {
@@ -885,17 +1096,38 @@ function exportContext() {
   return context;
 }
 
-async function download(filename, content, type) {
-  if (!state.results.length && !filename.includes("project")) return;
-  if (state.manualDirty && !filename.includes("project")) {
-    window.alert("手动测量表已修改，请先点击「应用测量表」重新生成曲线后再导出。");
+async function download(filename, content, type, options = {}) {
+  if (!options.allowWithoutResults && !state.results.length && !filename.includes("project")) return;
+  if (!options.skipManualDirty && state.manualDirty && !filename.includes("project")) {
+    window.alert(t("manual_dirty_warning", "手动测量表已修改，请先点击「应用测量表」重新生成曲线后再导出。"));
     return;
   }
   try {
     const desktop = await saveTextFileDesktop({ filename, contents: content });
     if (desktop.handled) return;
   } catch (error) {
-    window.alert(`桌面保存失败，已改用浏览器下载：${error.message || error}`);
+    window.alert(t("desktop_save_failed", `桌面保存失败，已改用浏览器下载：${error.message || error}`));
+  }
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadBinary(filename, content, type, options = {}) {
+  if (!options.allowWithoutResults && !state.results.length) return;
+  if (!options.skipManualDirty && state.manualDirty) {
+    window.alert(t("manual_dirty_warning", "手动测量表已修改，请先点击「应用测量表」重新生成曲线后再导出。"));
+    return;
+  }
+  try {
+    const desktop = await saveBinaryFileDesktop({ filename, contents: content });
+    if (desktop.handled) return;
+  } catch (error) {
+    window.alert(t("desktop_save_failed", `桌面保存失败，已改用浏览器下载：${error.message || error}`));
   }
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -967,10 +1199,65 @@ function confirmDataOverwrite(message) {
   return !hasExistingData || window.confirm(message);
 }
 
+const viewToStepMap = {
+  job: "setup",
+  standard: "setup",
+  settings: "setup",
+  measurement: "acquisition",
+  manual: "acquisition",
+  instrument: "acquisition",
+  analyze: "diagnose",
+  g7: "diagnose",
+  curve: "curves",
+  report: "delivery",
+  export: "delivery"
+};
+
+const stepDefaultViewMap = {
+  setup: "job",
+  acquisition: "measurement",
+  diagnose: "analyze",
+  curves: "curve",
+  delivery: "report"
+};
+
 function switchView(view) {
+  if (stepDefaultViewMap[view]) {
+    view = stepDefaultViewMap[view];
+  }
+  
+  const step = viewToStepMap[view] || "setup";
   state.activeView = view;
-  document.querySelectorAll("[data-view]").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
-  document.querySelectorAll("[data-view-button]").forEach((item) => item.classList.toggle("active", item.dataset.viewButton === view));
+  
+  const appShell = document.querySelector(".app-shell");
+  if (appShell) {
+    appShell.setAttribute("data-active-step", step);
+  }
+
+  const stepNames = {
+    setup: t("step_setup", "第 1 步：任务配置"),
+    acquisition: t("step_acquisition", "第 2 步：数据采集"),
+    diagnose: t("step_diagnose", "第 3 步：分析诊断"),
+    curves: t("step_curves", "第 4 步：曲线生成"),
+    delivery: t("step_delivery", "第 5 步：交付归档")
+  };
+  const stepIndicator = document.getElementById("currentStepName");
+  if (stepIndicator) {
+    stepIndicator.textContent = stepNames[step] || "";
+  }
+
+  document.querySelectorAll("[data-view]").forEach((item) => {
+    item.classList.toggle("active", item.dataset.view === view);
+  });
+
+  document.querySelectorAll("[data-step-button]").forEach((item) => {
+    item.classList.toggle("active", item.dataset.stepButton === step);
+  });
+
+  document.querySelectorAll("[data-sub-view-button]").forEach((item) => {
+    item.classList.toggle("active", item.dataset.subViewButton === view);
+  });
+
   if (els.workflowContextToolbar) els.workflowContextToolbar.hidden = true;
 }
 
@@ -1494,4 +1781,241 @@ function formatPastePreview(rows) {
     rows.length > samples.length ? `... 还有 ${rows.length - samples.length} 行` : "",
     "是否继续？",
   ].filter(Boolean).join("\n");
+}
+
+let activeDragPoint = null;
+
+function handleCurveDragStart(event) {
+  const target = event.target;
+  if (!target || !target.dataset.draggablePoint) return;
+  
+  event.preventDefault();
+  const channel = target.dataset.channel;
+  const tone = Number(target.dataset.tone);
+  const key = `${channel}:${tone.toFixed(3)}`;
+  
+  activeDragPoint = { channel, tone, key, svg: els.curveChart };
+  target.classList.add("dragging");
+  
+  const tooltip = document.getElementById("chart-tooltip");
+  if (tooltip) tooltip.hidden = true;
+}
+
+function handleCurveDragMove(event) {
+  if (!activeDragPoint) return;
+  
+  event.preventDefault();
+  const svg = activeDragPoint.svg;
+  
+  const pt = svg.createSVGPoint();
+  pt.x = event.clientX;
+  pt.y = event.clientY;
+  const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+  
+  const pad = { top: 42, bottom: 48 };
+  const height = 420;
+  const plotH = height - pad.top - pad.bottom;
+  
+  let yVal = 100 - ((svgP.y - pad.top) / plotH) * 100;
+  yVal = Math.max(0, Math.min(100, yVal));
+  yVal = Math.round(yVal * 10) / 10;
+  
+  const key = activeDragPoint.key;
+  state.curveOverrides[key] = { locked: true, outputTone: yVal };
+  state.results = applyCurveOverrides(state.results, state.curveOverrides);
+  
+  const tableRow = document.querySelector(`input[data-curve-field="outputTone"][data-curve-key="${key}"]`);
+  if (tableRow) {
+    tableRow.value = yVal.toFixed(1);
+    const checkbox = tableRow.closest("tr")?.querySelector(`input[data-curve-field="locked"][data-curve-key="${key}"]`);
+    if (checkbox) checkbox.checked = true;
+  }
+  
+  const filtered = state.activeCurveChannel && state.activeCurveChannel !== "all"
+    ? state.results.filter((row) => row.channel === state.activeCurveChannel)
+    : state.results;
+  
+  renderCurveChart(els.curveChart, filtered, state.safetyIssues);
+}
+
+function handleCurveDragEnd(event) {
+  if (!activeDragPoint) return;
+  
+  const draggingDot = els.curveChart.querySelector(".dragging");
+  if (draggingDot) draggingDot.classList.remove("dragging");
+  
+  activeDragPoint = null;
+  
+  state.curveOverrides = pruneCurveOverrides(state.results, state.curveOverrides);
+  state.results = applyCurveOverrides(state.results, state.curveOverrides);
+  state.safetyIssues = analyzeCurveSafety(state.results);
+  state.g7 = currentG7Preview();
+  if (state.g7Compensation) state.g7Compensation = currentG7Compensation();
+  
+  renderShell(state, els);
+  _renderAnalyze(state, els);
+  _renderCurve(state, els);
+  _renderG7(state, els);
+  _renderInstrument(state, els);
+  _renderExport(state, els);
+  _renderReport(state, els);
+}
+
+function handleMouseMove(event) {
+  const tooltip = document.getElementById("chart-tooltip");
+  if (!tooltip) return;
+  
+  const svg = event.currentTarget;
+  const isCurveChart = svg.id === "curveChart";
+  const isMeasChart = svg.id === "measurementChart";
+  if (!isCurveChart && !isMeasChart) return;
+  
+  if (activeDragPoint) {
+    tooltip.hidden = true;
+    return;
+  }
+
+  const pt = svg.createSVGPoint();
+  pt.x = event.clientX;
+  pt.y = event.clientY;
+  const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+  const pad = { left: 58, right: 24, top: 42, bottom: 48 };
+  const width = 720;
+  const height = 420;
+  const plotW = width - pad.left - pad.right;
+
+  if (svgP.x < pad.left - 10 || svgP.x > width - pad.right + 10 ||
+      svgP.y < pad.top - 10 || svgP.y > height - pad.bottom + 10) {
+    hideHover();
+    return;
+  }
+
+  const dots = Array.from(svg.querySelectorAll(".chart-dot"));
+  if (!dots.length) {
+    hideHover();
+    return;
+  }
+
+  let closestDot = null;
+  let minDistance = Infinity;
+  
+  for (const dot of dots) {
+    if (dot.classList.contains("reference-dot")) continue;
+
+    const cx = Number(dot.getAttribute("cx"));
+    const cy = Number(dot.getAttribute("cy"));
+    if (isNaN(cx) || isNaN(cy)) continue;
+
+    const dist = (cx - svgP.x) ** 2 + (cy - svgP.y) ** 2;
+    if (dist < minDistance) {
+      minDistance = dist;
+      closestDot = dot;
+    }
+  }
+
+  if (closestDot && minDistance < 2500) {
+    const cx = Number(closestDot.getAttribute("cx"));
+    const cy = Number(closestDot.getAttribute("cy"));
+    
+    let hoverLine = svg.querySelector(".hover-line");
+    let hoverHighlight = svg.querySelector(".hover-highlight");
+    
+    if (!hoverLine || !hoverHighlight) {
+      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.setAttribute("class", "chart-hover-group");
+      g.setAttribute("style", "pointer-events: none;");
+      
+      hoverLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      hoverLine.setAttribute("class", "hover-line");
+      hoverLine.setAttribute("stroke", "#3b82f6");
+      hoverLine.setAttribute("stroke-width", "1");
+      hoverLine.setAttribute("stroke-dasharray", "3 3");
+      
+      hoverHighlight = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      hoverHighlight.setAttribute("class", "hover-highlight");
+      hoverHighlight.setAttribute("fill", "none");
+      hoverHighlight.setAttribute("stroke", "#3b82f6");
+      hoverHighlight.setAttribute("stroke-width", "2");
+      hoverHighlight.setAttribute("r", "7");
+      
+      g.appendChild(hoverLine);
+      g.appendChild(hoverHighlight);
+      svg.appendChild(g);
+    }
+    
+    hoverLine.setAttribute("x1", cx);
+    hoverLine.setAttribute("y1", pad.top);
+    hoverLine.setAttribute("x2", cx);
+    hoverLine.setAttribute("y2", height - pad.bottom);
+    hoverLine.style.display = "block";
+    
+    hoverHighlight.setAttribute("cx", cx);
+    hoverHighlight.setAttribute("cy", cy);
+    hoverHighlight.style.display = "block";
+
+    const channel = closestDot.dataset.dotChannel;
+    const tone = Number(closestDot.dataset.dotX);
+    const row = state.results.find((r) => r.channel === channel && Math.abs(r.tone - tone) < 0.01);
+    
+    if (row) {
+      const mode = els.modeSelect.value;
+      const isCtv = mode === "ctv";
+      
+      const channelColors = { C: "#0891b2", M: "#be185d", Y: "#ca8a04", K: "#111827" };
+      const chColor = channelColors[channel] || "#2563eb";
+      
+      let html = `
+        <div class="chart-tooltip-header">
+          <span class="chart-tooltip-badge" style="background-color: ${chColor}">${channel}</span>
+          <strong>阶调 ${tone}%</strong>
+        </div>
+        <div class="chart-tooltip-row">
+          <span class="chart-tooltip-label">实测 ${isCtv ? "CTV" : "TVI"}:</span>
+          <span class="chart-tooltip-value">${signed(row.measuredTvi)}%</span>
+        </div>
+        <div class="chart-tooltip-row">
+          <span class="chart-tooltip-label">目标 ${isCtv ? "CTV" : "TVI"}:</span>
+          <span class="chart-tooltip-value">${row.targetTvi.toFixed(1)}%</span>
+        </div>
+        <div class="chart-tooltip-row">
+          <span class="chart-tooltip-label">实测偏差:</span>
+          <span class="chart-tooltip-value ${Math.abs(row.tviDelta) > (isCtv ? 3 : 4) ? "negative" : "positive"}">${signed(row.tviDelta)}%</span>
+        </div>
+        <div class="chart-tooltip-row" style="border-top: 1px dashed rgba(0,0,0,0.08); padding-top: 4px; margin-top: 4px;">
+          <span class="chart-tooltip-label">补偿输出:</span>
+          <span class="chart-tooltip-value" style="color: var(--blue);">${row.outputTone.toFixed(1)}%</span>
+        </div>
+      `;
+      
+      if (document.body.classList.contains("dark-theme")) {
+        html = html.replace("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)");
+      }
+      
+      tooltip.innerHTML = html;
+      tooltip.hidden = false;
+      tooltip.style.left = (event.clientX + 15) + "px";
+      tooltip.style.top = (event.clientY + 15) + "px";
+    } else {
+      tooltip.hidden = true;
+    }
+  } else {
+    hideHover();
+  }
+}
+
+function hideHover() {
+  const tooltip = document.getElementById("chart-tooltip");
+  if (tooltip) tooltip.hidden = true;
+  
+  const hoverLines = document.querySelectorAll(".hover-line");
+  const hoverHighlights = document.querySelectorAll(".hover-highlight");
+  hoverLines.forEach(l => l.style.display = "none");
+  hoverHighlights.forEach(h => h.style.display = "none");
+}
+
+function signed(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "-";
+  return `${numeric > 0 ? "+" : ""}${numeric.toFixed(1)}`;
 }
