@@ -11,6 +11,13 @@ test("projectArchive persists curve overrides for JSON restore", () => {
     job: { customer: "Demo", press: "KBA" },
     standard: { id: "gracol2013_crpc6", name: "GRACoL2013 CRPC6" },
     iccProfile: { id: "icc-1", profileName: "Mock Press Profile", colorSpace: "CMYK", pcs: "Lab" },
+    labReferenceSource: "ICC sampled reference (24 patches)",
+    iccStandardPair: {
+      status: "pass",
+      labReference: { label: "Mock Press Profile", source: "imported-icc", sampledCount: 24 },
+      toneTarget: { standardName: "GRACoL2013 CRPC6", targetName: "ISO B" },
+      messages: ["paired"],
+    },
     targetSnapshot: { name: "ISO B", points: [[50, 14]] },
     settings: { mode: "tvi" },
     diagnosis: { title: "Ready" },
@@ -33,6 +40,7 @@ test("projectArchive persists curve overrides for JSON restore", () => {
   assert.equal(archive.curveQuality.status, "Warning");
   assert.equal(archive.curveSafety[0].type, "折点突变");
   assert.equal(archive.iccProfile.profileName, "Mock Press Profile");
+  assert.equal(archive.iccStandardPair.labReference.label, "Mock Press Profile");
 });
 
 test("RIP exports include curve quality metadata and row comments", () => {
@@ -43,6 +51,10 @@ test("RIP exports include curve quality metadata and row comments", () => {
     calculationFormula: "TVI",
     deltaFormula: "ΔE76",
     targetName: "ISO B",
+    iccStandardPair: {
+      labReference: { label: "Mock ICC" },
+      toneTarget: { standardName: "GRACoL2013 CRPC6" },
+    },
     compensationRatio: 50,
     measurementCondition: "M1",
     suggestedArchivePath: "jobs/demo/runs/run.json",
@@ -55,6 +67,8 @@ test("RIP exports include curve quality metadata and row comments", () => {
   const prinergy = toPrinergyCsv(rows, context);
 
   assert.match(simple, /# curve_quality_status=Warning/);
+  assert.match(simple, /# lab_reference=Mock ICC/);
+  assert.match(simple, /# tone_target=GRACoL2013 CRPC6 \/ ISO B/);
   assert.match(simple, /channel,input,output,quality,comment/);
   assert.match(simple, /Warning,metric=TVI/);
   assert.match(prinergy, /折点突变:K 70% kink/);

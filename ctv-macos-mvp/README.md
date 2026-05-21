@@ -2,6 +2,8 @@
 
 macOS-first MVP for a print compensation curve tool. The first version is a local browser app so it can be used immediately on macOS and later wrapped with Tauri or SwiftUI.
 
+Current version: `0.1.1`. See [CHANGELOG.md](./CHANGELOG.md) for feature history.
+
 ## MVP scope
 
 - Import CSV, CGATS, IT8, and P2P-style text measurement/target data.
@@ -11,6 +13,7 @@ macOS-first MVP for a print compensation curve tool. The first version is a loca
 - Select built-in standards: GRACoL2013 CRPC1-7, FOGRA39, and ISO TVI A-F target curves.
 - Import ICC/ICM profile metadata in Standard as a Lab/color reference source.
 - Preview ICC characterization patches when a CMYK output profile exposes a supported `mft1` / `mft2` CMYK-to-Lab A2B table.
+- Pair imported ICC Lab references with explicit TVI/CTV/G7 tone targets without silently changing the compensation algorithm.
 - Build custom TVI targets from 25/50/75 input values.
 - Calculate TVI, ISO 20654 CTV, and G7-style MVP compensation curves.
 - Display measured TVI against target and final input-to-output curves with legends and hover values.

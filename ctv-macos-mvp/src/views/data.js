@@ -2,6 +2,7 @@ import { targetSeries } from "../curve-engine.js";
 import { classifyP2PPatch } from "../g7-targets.js";
 import { manualHealth, manualRowsToCsv } from "../manual-table.js";
 import { inspectImport } from "../import-inspector.js";
+import { buildIccStandardPair } from "../icc-pairing.js";
 import { cmykFromRow, cmykKey, labFromRow, targetOptions } from "../standards.js";
 import { escapeAttr, escapeHtml } from "../shared.js";
 import { buildPatchLayout, patchCoordinate, patchName } from "../target-layouts.js";
@@ -66,6 +67,12 @@ export function renderStandard(state, els) {
     grayInflection: "",
     ...(state.standard.g7 || {}),
   };
+  const pair = buildIccStandardPair({
+    iccProfile: state.iccProfile,
+    standard: state.standard,
+    targetName: targetName(els.targetSelect.value),
+    standardPatchCount: state.standardPatchMap.size || 0,
+  });
   syncG7ToleranceInputs(els, g7);
   els.standardSummary.innerHTML = `
     <strong>${state.standard.name}</strong>
@@ -75,7 +82,7 @@ export function renderStandard(state, els) {
     <p>Lab 色块: ${state.standardPatchMap.size || 0} 个${loading}${warning ? ` / ${escapeHtml(warning)}` : ""}</p>
     <p>ΔE 阈值: ${deltaFormulaLabel(els.deltaFormulaSelect.value)} Warning ${state.standard.deltaE.warning}, Fail ${state.standard.deltaE.fail}</p>
     <p>G7: ${g7.enabled === false ? "关闭" : "启用"} / NPDC wΔL* ${g7.npdcAverage}/${g7.npdcMax} / 灰平衡 wΔCh ${g7.grayAverage}/${g7.grayMax}</p>
-    ${state.iccProfile && !state.iccProfile.error ? `<p>ICC 参考: ${escapeHtml(state.iccProfile.profileName)} / ${escapeHtml(state.iccProfile.colorSpace)} -> ${escapeHtml(state.iccProfile.pcs)}</p>` : ""}
+    ${renderIccPairSummary(pair)}
   `;
   renderIccProfileSummary(state, els);
   els.targetCurveBody.innerHTML = target.map((point) => `
@@ -97,6 +104,36 @@ export function renderStandard(state, els) {
       <td>${fmt(item.lab.b)}</td>
     </tr>
   `).join("");
+}
+
+function renderIccPairSummary(pair) {
+  const statusLabel = pair.status === "pass" ? "Ready" : "Check";
+  return `
+    <div class="icc-pair-summary ${pair.status}">
+      <div>
+        <span class="micro-label">Lab Reference</span>
+        <strong>${escapeHtml(pair.labReference.label)}</strong>
+        <p>${escapeHtml(labReferenceLine(pair.labReference))}</p>
+      </div>
+      <div>
+        <span class="micro-label">Tone Target</span>
+        <strong>${escapeHtml(pair.toneTarget.standardName)}</strong>
+        <p>${escapeHtml(`${pair.toneTarget.targetName} / G7 ${pair.toneTarget.g7Enabled ? "启用" : "关闭"}`)}</p>
+      </div>
+      <div class="icc-pair-status">
+        <span class="status ${pair.status === "pass" ? "pass" : "warning"}">${statusLabel}</span>
+      </div>
+      <p class="icc-pair-message">${escapeHtml(pair.messages[0] || "")}</p>
+    </div>
+  `;
+}
+
+function labReferenceLine(reference) {
+  if (reference.source === "imported-icc") {
+    return `${reference.colorSpace || "unknown"} -> ${reference.pcs || "unknown"} / sampled ${reference.sampledCount || 0}/${reference.patchCount || 0}`;
+  }
+  if (reference.source === "built-in-standard") return `built-in standard / Lab patches ${reference.sampledCount || 0}`;
+  return "missing";
 }
 
 function renderIccProfileSummary(state, els) {
