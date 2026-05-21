@@ -75,7 +75,9 @@ export function renderStandard(state, els) {
     <p>Lab 色块: ${state.standardPatchMap.size || 0} 个${loading}${warning ? ` / ${escapeHtml(warning)}` : ""}</p>
     <p>ΔE 阈值: ${deltaFormulaLabel(els.deltaFormulaSelect.value)} Warning ${state.standard.deltaE.warning}, Fail ${state.standard.deltaE.fail}</p>
     <p>G7: ${g7.enabled === false ? "关闭" : "启用"} / NPDC wΔL* ${g7.npdcAverage}/${g7.npdcMax} / 灰平衡 wΔCh ${g7.grayAverage}/${g7.grayMax}</p>
+    ${state.iccProfile && !state.iccProfile.error ? `<p>ICC 参考: ${escapeHtml(state.iccProfile.profileName)} / ${escapeHtml(state.iccProfile.colorSpace)} -> ${escapeHtml(state.iccProfile.pcs)}</p>` : ""}
   `;
+  renderIccProfileSummary(state, els);
   els.targetCurveBody.innerHTML = target.map((point) => `
     <tr>
       <td>${fmt(point.tone)}%</td>
@@ -95,6 +97,37 @@ export function renderStandard(state, els) {
       <td>${fmt(item.lab.b)}</td>
     </tr>
   `).join("");
+}
+
+function renderIccProfileSummary(state, els) {
+  if (!els.iccProfileSummary) return;
+  const profile = state.iccProfile;
+  if (!profile) {
+    els.iccProfileSummary.innerHTML = `
+      <strong>ICC 颜色参考</strong>
+      <p>未导入 ICC。ICC 可作为 Lab/色彩参考，不能单独生成 TVI/G7 补偿曲线。</p>
+    `;
+    return;
+  }
+  if (profile.error) {
+    els.iccProfileSummary.innerHTML = `
+      <strong>ICC 导入失败</strong>
+      <p>${escapeHtml(profile.fileName || "")}</p>
+      <p><span class="status fail">${escapeHtml(profile.error)}</span></p>
+    `;
+    return;
+  }
+  els.iccProfileSummary.innerHTML = `
+    <strong>ICC 颜色参考</strong>
+    <p>${escapeHtml(profile.profileName)}${profile.fileName ? ` / ${escapeHtml(profile.fileName)}` : ""}</p>
+    <p>类型: ${escapeHtml(profile.deviceClass)} / 色彩空间: ${escapeHtml(profile.colorSpace)} -> ${escapeHtml(profile.pcs)} / 版本 ${escapeHtml(profile.version)}</p>
+    <p>白点: ${profile.mediaWhitePoint ? labSummary(profile.mediaWhitePoint) : "未提供"} / Intent: ${escapeHtml(profile.renderingIntent || "")}</p>
+    <p>Tags: ${profile.tagCount || 0} 个。当前仅作为颜色参考元数据，TVI/CTV/G7 目标仍需单独选择。</p>
+  `;
+}
+
+function labSummary(lab) {
+  return `L* ${fmt(lab.l)} / a* ${fmt(lab.a)} / b* ${fmt(lab.b)}`;
 }
 
 function syncG7ToleranceInputs(els, g7) {

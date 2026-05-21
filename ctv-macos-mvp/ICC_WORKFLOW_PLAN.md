@@ -129,6 +129,8 @@ type IccGenerationResult = {
 
 Goal: import `.icc` / `.icm` and show what it is.
 
+Status: implemented for browser/Tauri file input metadata parsing. Color conversion and sampled Lab preview remain P2.
+
 Tasks:
 
 - Add file picker support for `.icc` and `.icm` in the Standard page.

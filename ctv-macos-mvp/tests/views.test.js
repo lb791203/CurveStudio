@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { renderCurve, statusText } from "../src/views/analysis.js";
-import { renderMeasurement, visibleWarnings } from "../src/views/data.js";
+import { renderMeasurement, renderStandard, visibleWarnings } from "../src/views/data.js";
 import { renderInstrument } from "../src/views/instrument.js";
 import { renderExport, renderReport, renderRuns, renderShell } from "../src/views/shell.js";
 
@@ -19,6 +19,10 @@ function els(overrides = {}) {
     jobMeta: { textContent: "" },
     diagnosisBadge: { textContent: "", className: "" },
     measurementSummary: { innerHTML: "" },
+    standardSummary: { innerHTML: "" },
+    targetCurveBody: { innerHTML: "" },
+    standardPatchBody: { innerHTML: "" },
+    iccProfileSummary: { innerHTML: "" },
     measurementPatchPreview: { innerHTML: "" },
     importAuditSummary: { innerHTML: "" },
     manualHealthSummary: { innerHTML: "" },
@@ -49,6 +53,7 @@ function els(overrides = {}) {
 function state(overrides = {}) {
   return {
     standard: { name: "GRACoL2013 CRPC6" },
+    standardPatchMap: new Map(),
     importInfo: { warnings: ["import warning"], metadata: {} },
     manualDirty: false,
     manualRows: [],
@@ -174,6 +179,34 @@ test("renderMeasurement marks selected patch and shows inspector values", () => 
   assert.match(localEls.measurementPatchPreview.innerHTML, /当前色块 B1/);
   assert.match(localEls.measurementPatchPreview.innerHTML, /50.00 \/ 25.00 \/ 0.00 \/ 0.00/);
   assert.match(localEls.measurementPatchPreview.innerHTML, /70.00 \/ -25.00 \/ -35.00/);
+});
+
+test("renderStandard shows imported ICC metadata as color reference", () => {
+  const localEls = els({ targetSelect: { value: "isoA" } });
+  renderStandard(state({
+    standard: {
+      name: "GRACoL2013 CRPC6",
+      printCondition: "CGATS21-2 CRPC6",
+      target: "isoA",
+      deltaE: { warning: 3.5, fail: 4.2 },
+      g7: { enabled: true, npdcAverage: 1.5, npdcMax: 3, grayAverage: 1.5, grayMax: 3 },
+    },
+    iccProfile: {
+      profileName: "Mock Press Profile",
+      fileName: "mock.icc",
+      deviceClass: "output",
+      colorSpace: "CMYK",
+      pcs: "Lab",
+      version: "4.3.0",
+      renderingIntent: "relative",
+      mediaWhitePoint: { l: 95.2, a: 0.1, b: -2.1 },
+      tagCount: 3,
+    },
+  }), localEls);
+
+  assert.match(localEls.standardSummary.innerHTML, /ICC 参考/);
+  assert.match(localEls.iccProfileSummary.innerHTML, /Mock Press Profile/);
+  assert.match(localEls.iccProfileSummary.innerHTML, /TVI\/CTV\/G7 目标仍需单独选择/);
 });
 
 test("renderShell keeps workflow context in the bottom status bar", () => {

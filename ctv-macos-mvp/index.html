@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CTV Curve MVP</title>
-    <link rel="stylesheet" href="./src/styles.css?v=20260521-prepack-ui" />
+    <link rel="stylesheet" href="./src/styles.css?v=20260521-icc-p1" />
   </head>
   <body>
     <main class="app-shell">
@@ -121,9 +121,15 @@
             <div class="table-title">
               <div>
                 <h2>Standard Library</h2>
-                <span>选择印刷标准，查看 TVI 目标和 Lab 参考色块。</span>
+                <span>选择印刷标准，查看 TVI 目标和 Lab 参考色块；可导入 ICC 作为颜色参考。</span>
               </div>
-              <button id="reloadStandardButton" type="button">重新加载标准</button>
+              <div class="inline-actions">
+                <label class="file-button secondary-file-button">
+                  <input id="standardIccInput" type="file" accept=".icc,.icm" />
+                  <span>导入 ICC</span>
+                </label>
+                <button id="reloadStandardButton" type="button">重新加载标准</button>
+              </div>
             </div>
             <div class="split-grid">
               <div class="stack">
@@ -132,6 +138,7 @@
                   <select id="standardSelect"></select>
                 </label>
                 <div class="summary-box" id="standardSummary"></div>
+                <div class="summary-box" id="iccProfileSummary"></div>
               </div>
               <div class="table-wrap compact">
                 <table>
@@ -882,6 +889,6 @@
       </section>
     </div>
 
-    <script type="module" src="./src/app.js?v=20260521-prepack-ui"></script>
+    <script type="module" src="./src/app.js?v=20260521-icc-p1"></script>
   </body>
 </html>

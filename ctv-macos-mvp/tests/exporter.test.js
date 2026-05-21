@@ -10,6 +10,7 @@ test("projectArchive persists curve overrides for JSON restore", () => {
     suggestedArchivePath: "jobs/job-1/runs/run-1.json",
     job: { customer: "Demo", press: "KBA" },
     standard: { id: "gracol2013_crpc6", name: "GRACoL2013 CRPC6" },
+    iccProfile: { id: "icc-1", profileName: "Mock Press Profile", colorSpace: "CMYK", pcs: "Lab" },
     targetSnapshot: { name: "ISO B", points: [[50, 14]] },
     settings: { mode: "tvi" },
     diagnosis: { title: "Ready" },
@@ -31,6 +32,7 @@ test("projectArchive persists curve overrides for JSON restore", () => {
   assert.equal(archive.results[0].autoOutputTone, "46.00");
   assert.equal(archive.curveQuality.status, "Warning");
   assert.equal(archive.curveSafety[0].type, "折点突变");
+  assert.equal(archive.iccProfile.profileName, "Mock Press Profile");
 });
 
 test("RIP exports include curve quality metadata and row comments", () => {

@@ -16,6 +16,8 @@ Use `http://127.0.0.1:4173/` for acceptance. Do not use `file://` when checking 
 
 - Open `Standard`.
 - Select `GRACoL2013 CRPC1` through `GRACoL2013 CRPC7`, `FOGRA39`, and ISO TVI curves.
+- Import an `.icc` / `.icm` file and confirm profile name, type, color space, PCS, version, media white, intent, and tag count are shown.
+- Confirm ICC import is labeled as Lab/color reference and does not silently change TVI/CTV/G7 target settings.
 - Confirm 25/50/75 target values are visible.
 - Confirm paper, solids, overprints, and 25/50/75 Lab rows are listed when the standard file contains them.
 - Enter custom 25/50/75 TVI values and click `应用自定义目标`.
@@ -55,9 +57,6 @@ Use `http://127.0.0.1:4173/` for acceptance. Do not use `file://` when checking 
 
 ## 6. ICC Workflow Future Acceptance
 
-- Import `.icc` / `.icm` from the Standard page and confirm metadata is shown.
-- Confirm ICC import is labeled as Lab/color reference, not a TVI/G7 measurement file.
-- Confirm importing ICC does not silently change the selected TVI/CTV/G7 target curve.
 - Confirm measured Lab can be compared against ICC-derived reference patches after ICC sampling is implemented.
 - Confirm ICC generation is disabled for the first measurement run.
 - Confirm ICC generation is disabled when no compensated re-measurement run exists.
