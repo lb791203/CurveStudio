@@ -20,6 +20,9 @@ Use `http://127.0.0.1:4173/` for acceptance. Do not use `file://` when checking 
 - If the ICC contains a supported CMYK -> Lab `mft1` / `mft2` A2B table, confirm `ICC Characterization Preview` shows sampled paper, solids, overprints, 25/50/75 ramps, and gray candidates.
 - If the ICC uses an unsupported `mAB` / missing A2B structure, confirm the preview explains that LittleCMS/CMM sampling is still required instead of showing fake Lab values.
 - Confirm ICC import is labeled as Lab/color reference and does not silently change TVI/CTV/G7 target settings.
+- Confirm `Lab Reference` and `Tone Target` are displayed separately after ICC import.
+- Confirm obvious ICC/standard aim mismatches, such as CRPC number conflicts, show a warning.
+- Confirm exported files and JSON project archives include the ICC Lab reference plus explicit tone target metadata.
 - Confirm 25/50/75 target values are visible.
 - Confirm paper, solids, overprints, and 25/50/75 Lab rows are listed when the standard file contains them.
 - Enter custom 25/50/75 TVI values and click `应用自定义目标`.

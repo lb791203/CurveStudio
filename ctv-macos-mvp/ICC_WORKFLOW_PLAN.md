@@ -178,6 +178,8 @@ Acceptance:
 
 Goal: pair an imported ICC with an explicit tone/G7 standard.
 
+Status: implemented in `0.1.1` for Standard page pairing, mismatch warnings, project archive metadata, and export headers.
+
 Tasks:
 
 - Add UI: `ICC Lab reference + TVI/CTV/G7 target preset`.

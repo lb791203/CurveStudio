@@ -7,18 +7,19 @@ import {
   toCsv,
   toHarmonyCsv,
   upsertTarget,
-} from "./curve-engine.js?v=20260521-icc-p2";
-import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260521-icc-p2";
+} from "./curve-engine.js?v=20260521-icc-p3";
+import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260521-icc-p3";
 import { applyCurveOverrides, curveRowKey, pruneCurveOverrides } from "./curve-overrides.js";
-import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260521-icc-p2";
-import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260521-icc-p2";
-import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260521-icc-p2";
-import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260521-icc-p2";
-import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260521-icc-p2";
+import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260521-icc-p3";
+import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260521-icc-p3";
+import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260521-icc-p3";
+import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260521-icc-p3";
+import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260521-icc-p3";
 import { buildG7Compensation } from "./g7-compensation.js";
 import { DEVICE_ADAPTERS, buildMeasurementQueue, calibrateDeviceState, changeDeviceAdapterState, connectDeviceState, disconnectDeviceState, readDevicePatchState } from "./device-adapter.js";
 import { inspectImport } from "./import-inspector.js";
-import { parseIccProfile } from "./icc-profile.js?v=20260521-icc-p2";
+import { buildIccStandardPair } from "./icc-pairing.js?v=20260521-icc-p3";
+import { parseIccProfile } from "./icc-profile.js?v=20260521-icc-p3";
 import { openTextFileDesktop, saveTextFileDesktop } from "./desktop-io.js";
 import {
   canCalculateCurve,
@@ -38,7 +39,7 @@ import {
   updateManualRowFromEvent,
 } from "./manual-table.js";
 import { clearStoredRuns, loadStoredRuns, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js";
-import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p2";
+import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p3";
 import { STANDARD_LIBRARY, buildPatchMap, cmykKey, standardById, targetOptions } from "./standards.js";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 
@@ -846,6 +847,7 @@ function exportContext() {
     standard: state.standard,
     iccProfile: state.iccProfile,
     labReferenceSource: labReferenceSource(),
+    iccStandardPair: currentIccStandardPair(),
     targetSnapshot: {
       name: targetName(els.targetSelect.value),
       points: targetSeries(els.targetSelect.value).map((point) => [point.tone, point.value]),
@@ -1329,6 +1331,15 @@ function labReferenceSource() {
   if (sampled > 0) return `ICC sampled reference (${sampled} patches)`;
   if (state.standardPatchMap.size) return "built-in standard reference";
   return "none";
+}
+
+function currentIccStandardPair() {
+  return buildIccStandardPair({
+    iccProfile: state.iccProfile,
+    standard: state.standard,
+    targetName: targetName(els.targetSelect.value),
+    standardPatchCount: state.standardPatchMap.size || 0,
+  });
 }
 
 function currentG7Preview() {
