@@ -26,3 +26,52 @@ Use the same `src-tauri` project and JavaScript core. Build on Windows after the
 - Add open-project dialog for JSON archives.
 - Store recent jobs in a local application data directory.
 - Keep SDK/device integration behind `DeviceAdapter` so Techkon/X-Rite support can be added without changing curve logic.
+
+## ICC workflow roadmap
+
+The production workflow should become:
+
+`Standard / ICC Import -> Measurement -> Compensation Curve -> Re-measure Verification -> ICC Generation`
+
+### Phase 1: ICC import as a reference source
+
+- Add `ICC` as a standard-library import type.
+- Read ICC profile metadata: profile name, version, device class, PCS, color space, rendering intents, media white point, copyright/description tags.
+- For CMYK output profiles, sample a fixed CMYK grid through the profile to get reference Lab values.
+- Show ICC-derived paper white, CMYK solids, overprints, and sampled gray/neutral patches in the Standard page.
+- Clearly label ICC data as color-reference data. Do not infer ISO TVI A/B/C or G7 target curves from ICC alone.
+- Allow the user to pair an imported ICC with a TVI/CTV/G7 target preset.
+
+### Phase 2: measurement and curve correction
+
+- Keep current CGATS/IT8/P2P/CSV/manual measurement routes as the main calculation input.
+- Use ICC only as a Lab/Delta E reference unless the file is paired with measured characterization data.
+- Generate TVI/CTV/G7 compensation curves from actual measured tone, density, Lab, XYZ, or spectral data.
+- Continue to export Harmony/Prinergy/RIP manual-entry curves before ICC generation.
+
+### Phase 3: compensation simulation and re-measure verification
+
+- Use the first measurement run to simulate whether the calculated compensation curve moves tone values toward target.
+- Mark simulation as a preflight estimate, not a final validation.
+- Require a second printed/measured run after applying the compensation curve for production validation.
+- Compare Run 1 vs Run 2: TVI/CTV residuals, Lab/Delta E, G7 wDeltaL/wDeltaCh, gray balance, and curve safety.
+- Only unlock ICC generation when the re-measured run has enough characterization patches and passes the selected validation rules.
+
+### Phase 4: ICC generation
+
+- Generate ICC from the compensated, re-measured, stable press condition.
+- Do not generate a formal ICC directly from a theoretical compensation curve.
+- First implementation should call a proven color engine instead of hand-writing ICC internals:
+  - LittleCMS for profile creation/conversion APIs.
+  - ArgyllCMS as a possible command-line workflow if licensing and packaging are acceptable.
+- Store ICC generation metadata in the Job/Run archive: standard, measurement condition, instrument, compensation curve id, validation status, profile engine, and generation timestamp.
+- Export generated ICC beside the Run archive and link it back to the measurement data used to build it.
+
+### Phase 5: acceptance criteria
+
+- Imported ICC must show readable profile metadata and sampled Lab preview.
+- ICC-derived references must be usable in Lab/Delta E comparison.
+- ICC import must not create fake TVI/CTV/G7 pass states without measurement data.
+- ICC generation must be blocked when no compensated re-measurement exists.
+- ICC generation must be blocked when required characterization patches are missing.
+- Generated ICC must be traceable to one validated Run and its compensation curve.
