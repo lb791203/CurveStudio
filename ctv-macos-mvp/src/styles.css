@@ -286,7 +286,10 @@ strong {
 
 #calculateButton,
 #parseButton,
+#desktopOpenFileButton,
+#loadSampleButton,
 #applyManualButton,
+#addManualRowButton,
 #saveRunButton,
 #exportJsonButton {
   background: var(--teal);
@@ -297,8 +300,6 @@ strong {
   background: #6b7280;
 }
 
-#loadSampleButton,
-#addManualRowButton,
 #exportCsvButton,
 #exportHarmonyButton,
 #exportSimpleRipButton,
@@ -970,7 +971,7 @@ textarea {
 }
 
 .manual-commit-actions #addManualRowButton {
-  background: var(--blue);
+  background: var(--teal);
 }
 
 .manual-commit-actions #applyManualButton {
