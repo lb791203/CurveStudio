@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5 - 2026-05-22
+
+- Clarified that Harmony belongs to the Kodak Prinergy workflow rather than a separate RIP family.
+- Renamed export labels and filenames to `Kodak Prinergy Harmony` and `Kodak Prinergy CSV`.
+- Updated RIP compatibility metadata and documentation wording.
+
 ## 0.1.4 - 2026-05-22
 
 - Reworked Export into grouped sections for RIP/curve delivery, verification reports, project archives, and ICC/characterization handoff.
