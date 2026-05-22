@@ -48,10 +48,10 @@ test("classifyP2PPatch identifies gray balance candidates", () => {
 // ─── G7 NPDC Target ───
 
 test("g7NpdcLTarget returns targets at defined points", () => {
-  assert.ok(g7NpdcLTarget(50) > 25 && g7NpdcLTarget(50) < 30);
-  assert.ok(g7NpdcLTarget(100) < 6);
-  assert.ok(g7NpdcLTarget(10) > 75 && g7NpdcLTarget(10) < 80);
-  assert.ok(Number.isFinite(g7NpdcLTarget(2))); // 0% not defined for paper
+  assert.ok(g7NpdcLTarget(50) > 59 && g7NpdcLTarget(50) < 62);
+  assert.ok(g7NpdcLTarget(100) > 15 && g7NpdcLTarget(100) < 17);
+  assert.ok(g7NpdcLTarget(10) > 87 && g7NpdcLTarget(10) < 89);
+  assert.ok(Number.isFinite(g7NpdcLTarget(2)));
 });
 
 test("g7NpdcLTarget interpolates between defined points", () => {
@@ -81,7 +81,22 @@ test("buildNpdcVerification also exposes NPDC density values", () => {
   ], { paperL: 95 });
   assert.ok(Number.isFinite(row.measuredNpdc));
   assert.ok(Number.isFinite(row.targetNpdc));
-  assert.ok(row.targetNpdc > 1 && row.targetNpdc < 1.4);
+  assert.ok(row.targetNpdc > 0.45 && row.targetNpdc < 0.55);
+});
+
+test("buildNpdcVerification can use selected standard K-only Lab as target", () => {
+  const standardPatchMap = new Map([
+    ["0.00/0.00/0.00/0.00", { cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: 0 } }],
+    ["0.00/0.00/0.00/40.00", { cmyk: { c: 0, m: 0, y: 0, k: 40 }, lab: { l: 67, a: 0, b: 0 } }],
+    ["0.00/0.00/0.00/60.00", { cmyk: { c: 0, m: 0, y: 0, k: 60 }, lab: { l: 53, a: 0, b: 0 } }],
+  ]);
+  const [row] = buildNpdcVerification([
+    { channel: "K", tone: 50, lab: { l: 61, a: 0, b: 0 } },
+  ], { paperL: 95, standardPatchMap });
+
+  assert.equal(row.targetSource, "standard");
+  assert.equal(row.targetL, 60);
+  assert.equal(row.deltaL, 1);
 });
 
 test("neutralPrintDensityFromL converts L* to print density relative to paper", () => {

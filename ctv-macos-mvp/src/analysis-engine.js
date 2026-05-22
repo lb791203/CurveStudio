@@ -412,8 +412,14 @@ export function g7Preview(options = {}) {
     deltaE: row.deltaE,
   })).sort((a, b) => a.tone - b.tone || a.label.localeCompare(b.label));
   const paperL = measuredPaperLab(g7LabRows)?.l;
-  const npdcVerification = buildNpdcVerification(actualKOnly, { paperL });
-  const grayVerification = buildGrayVerification(grayRows, { paperL });
+  const npdcVerification = buildNpdcVerification(actualKOnly, {
+    paperL,
+    standardPatchMap: options.standardPatchMap,
+  });
+  const grayVerification = buildGrayVerification(grayRows, {
+    paperL,
+    standardPatchMap: options.standardPatchMap,
+  });
   const npdcSummary = summarizeNpdc(npdcVerification, tolerances);
   const graySummary = summarizeGrayBalance(grayVerification, tolerances);
   const grayNpdcSummary = summarizeWeightedDeltaL(grayVerification, tolerances);

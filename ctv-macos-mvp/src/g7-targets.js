@@ -28,14 +28,16 @@ export function classifyP2PPatch(c, m, y, k) {
 }
 
 // ─── G7 NPDC Target Curve ───
-// L* targets for K-only NPDC (GRACoL 2013 / ISO 12647-2:2013 coated).
+// Fallback L* targets from the bundled GRACoL2013 CRPC6 characterization data.
+// When a selected standard provides exact or interpolated K-only / CMY gray Lab,
+// buildNpdcVerification and buildGrayVerification use that standard data instead.
 
 const G7_NPDC_L_TARGET = new Map([
-  [2, 92.1], [4, 88.3], [6, 84.3], [8, 80.5], [10, 76.7],
-  [15, 68.8], [20, 61.8], [25, 55.3], [30, 49.3], [35, 43.6],
-  [40, 38.3], [45, 33.2], [50, 28.4], [55, 23.9], [60, 20.1],
-  [65, 17.2], [70, 14.8], [75, 12.7], [80, 10.9], [85, 9.3],
-  [90, 7.7], [95, 6.2], [98, 5.2], [100, 4.5],
+  [0, 95.0], [2, 93.55], [3, 92.81], [5, 91.41], [7, 89.99],
+  [10, 87.87], [15, 84.46], [20, 81.17], [25, 77.66],
+  [30, 74.3], [40, 67.4], [50, 60.4], [60, 52.81],
+  [70, 44.71], [75, 40.37], [80, 35.68], [85, 30.82],
+  [90, 25.78], [95, 20.62], [98, 17.69], [100, 16.0],
 ]);
 
 const DEFAULT_G7_PAPER_L = 95;
@@ -62,7 +64,8 @@ export function buildNpdcVerification(kRows, options = {}) {
   return kRows
     .filter((row) => Number.isFinite(row.tone))
     .map((row) => {
-      const targetL = g7NpdcLTarget(row.tone);
+      const targetLab = targetKOnlyLab(row, options.standardPatchMap);
+      const targetL = targetLab?.l ?? g7NpdcLTarget(row.tone);
       const measuredL = Number.isFinite(row.lab?.l) ? row.lab.l : NaN;
       const deltaL = Number.isFinite(measuredL) ? measuredL - targetL : NaN;
       const weight = g7ToneWeight(row.tone);
@@ -73,6 +76,8 @@ export function buildNpdcVerification(kRows, options = {}) {
         tone: row.tone,
         measuredL,
         targetL,
+        targetLab,
+        targetSource: targetLab ? "standard" : "fallback",
         measuredNpdc,
         targetNpdc,
         deltaNpdc: Number.isFinite(measuredNpdc) && Number.isFinite(targetNpdc) ? measuredNpdc - targetNpdc : NaN,
@@ -122,7 +127,8 @@ export function buildGrayVerification(grayRows, options = {}) {
     .filter((row) => row.lab)
     .map((row) => {
       const tone = neutralGrayTone(row);
-      const targetL = Number.isFinite(tone) ? g7NpdcLTarget(tone) : NaN;
+      const targetLab = targetGrayLab(row, options.standardPatchMap);
+      const targetL = targetLab?.l ?? (Number.isFinite(tone) ? g7NpdcLTarget(tone) : NaN);
       const deltaL = Number.isFinite(row.lab.l) && Number.isFinite(targetL) ? row.lab.l - targetL : NaN;
       const chroma = Math.sqrt((row.lab.a || 0) ** 2 + (row.lab.b || 0) ** 2);
       const weight = g7ToneWeight(tone);
@@ -135,6 +141,8 @@ export function buildGrayVerification(grayRows, options = {}) {
         cmyk: row.cmyk,
         measuredL: row.lab.l,
         targetL,
+        targetLab,
+        targetSource: targetLab ? "standard" : "fallback",
         measuredNpdc,
         targetNpdc,
         deltaNpdc: Number.isFinite(measuredNpdc) && Number.isFinite(targetNpdc) ? measuredNpdc - targetNpdc : NaN,
@@ -202,6 +210,80 @@ export function neutralPrintDensityFromL(sampleL, paperL = DEFAULT_G7_PAPER_L) {
   const paperY = labLToRelativeY(paperL);
   if (!Number.isFinite(sampleY) || !Number.isFinite(paperY) || sampleY <= 0 || paperY <= 0) return NaN;
   return Math.max(0, Math.log10(paperY / sampleY));
+}
+
+function targetKOnlyLab(row, standardPatchMap) {
+  if (!standardPatchMap?.size) return null;
+  const tone = number(row.tone ?? row.cmyk?.k);
+  if (!Number.isFinite(tone)) return null;
+  const exact = standardPatchMap.get(localCmykKey({ c: 0, m: 0, y: 0, k: tone }))?.lab;
+  if (isLab(exact)) return exact;
+  return interpolateTargetLab(standardTargetRows(standardPatchMap, isKOnlyTarget), tone);
+}
+
+function targetGrayLab(row, standardPatchMap) {
+  if (!standardPatchMap?.size) return null;
+  const exact = row.cmyk ? standardPatchMap.get(localCmykKey(row.cmyk))?.lab : null;
+  if (isLab(exact)) return exact;
+  const tone = neutralGrayTone(row);
+  if (!Number.isFinite(tone)) return null;
+  const grayRows = standardTargetRows(standardPatchMap, isGrayTarget)
+    .map((item) => ({ tone: neutralGrayTone({ cmyk: item.cmyk }), lab: item.lab }))
+    .filter((item) => Number.isFinite(item.tone) && isLab(item.lab));
+  return interpolateTargetLab(grayRows, tone);
+}
+
+function standardTargetRows(standardPatchMap, predicate) {
+  return [...standardPatchMap.values()]
+    .filter((item) => item?.cmyk && isLab(item.lab) && predicate(item.cmyk))
+    .map((item) => ({ tone: item.cmyk.k, cmyk: item.cmyk, lab: item.lab }))
+    .sort((a, b) => a.tone - b.tone);
+}
+
+function interpolateTargetLab(rows, toneValue) {
+  const rowsWithTone = rows
+    .map((row) => ({ ...row, tone: number(row.tone) }))
+    .filter((row) => Number.isFinite(row.tone) && isLab(row.lab))
+    .sort((a, b) => a.tone - b.tone);
+  if (!rowsWithTone.length) return null;
+  const tone = number(toneValue);
+  if (!Number.isFinite(tone)) return null;
+  const exact = rowsWithTone.find((row) => Math.abs(row.tone - tone) < 0.01);
+  if (exact) return exact.lab;
+  let lower = rowsWithTone[0];
+  let upper = rowsWithTone[rowsWithTone.length - 1];
+  for (const row of rowsWithTone) {
+    if (row.tone <= tone) lower = row;
+    if (row.tone >= tone) { upper = row; break; }
+  }
+  if (Math.abs(upper.tone - lower.tone) < 0.01) return lower.lab;
+  const ratio = (tone - lower.tone) / (upper.tone - lower.tone);
+  return {
+    l: lower.lab.l + (upper.lab.l - lower.lab.l) * ratio,
+    a: lower.lab.a + (upper.lab.a - lower.lab.a) * ratio,
+    b: lower.lab.b + (upper.lab.b - lower.lab.b) * ratio,
+  };
+}
+
+function isKOnlyTarget(cmyk) {
+  return nearZero(cmyk.c) && nearZero(cmyk.m) && nearZero(cmyk.y);
+}
+
+function isGrayTarget(cmyk) {
+  return nearZero(cmyk.k) && cmyk.c > 0.01 && cmyk.m > 0.01 && cmyk.y > 0.01
+    && Math.abs(cmyk.m - cmyk.y) <= 2.5 && cmyk.c >= cmyk.m - 3 && cmyk.c <= cmyk.m + 10;
+}
+
+function localCmykKey(cmyk) {
+  return ["c", "m", "y", "k"].map((key) => Number(cmyk[key]).toFixed(2)).join("/");
+}
+
+function isLab(lab) {
+  return lab && [lab.l, lab.a, lab.b].every(Number.isFinite);
+}
+
+function nearZero(value) {
+  return Math.abs(number(value)) < 0.01;
 }
 
 function labLToRelativeY(lValue) {
