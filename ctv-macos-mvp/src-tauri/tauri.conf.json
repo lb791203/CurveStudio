@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "CTV Curve",
-  "version": "0.1.5",
-  "identifier": "com.fmprint.ctvcurve",
+  "productName": "CurveStudio",
+  "version": "0.1.6",
+  "identifier": "com.fmprint.curvestudio",
   "build": {
     "beforeDevCommand": "python3 -m http.server 4173",
     "beforeBuildCommand": "npm run build:dist",
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "CTV Curve",
+        "title": "CurveStudio",
         "width": 1320,
         "height": 880,
         "minWidth": 1100,

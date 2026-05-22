@@ -163,6 +163,12 @@ strong {
   color: #64748b;
 }
 
+.nav-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
 .nav-button.active .nav-icon {
   color: #1d4ed8;
 }

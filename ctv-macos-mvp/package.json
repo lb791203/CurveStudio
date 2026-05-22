@@ -1,6 +1,6 @@
 {
-  "name": "ctv-curve-mvp",
-  "version": "0.1.5",
+  "name": "curvestudio-mvp",
+  "version": "0.1.6",
   "private": true,
   "type": "module",
   "scripts": {

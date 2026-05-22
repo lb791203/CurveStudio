@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>CTV Curve MVP</title>
+    <title>CurveStudio</title>
     <link rel="stylesheet" href="./src/styles.css?v=20260521-icc-p4" />
   </head>
   <body>
@@ -11,7 +11,7 @@
       <aside class="sidebar">
         <div class="sidebar-header">
           <div>
-            <h1 class="brand-logo" data-translate="brand_logo">CTV 曲线工具</h1>
+            <h1 class="brand-logo" data-translate="brand_logo">CurveStudio</h1>
             <p class="subtle">TVI / CTV / G7 compensation MVP</p>
           </div>
           <button id="themeToggle" class="theme-toggle-btn" type="button" aria-label="切换深色模式">
@@ -23,11 +23,11 @@
         </div>
 
         <nav class="nav-list" aria-label="主要页面">
-          <button class="nav-button active" type="button" data-step-button="setup" data-translate="nav_setup"><span class="nav-icon">&#x25A3;</span>任务配置</button>
-          <button class="nav-button" type="button" data-step-button="acquisition" data-translate="nav_acquisition"><span class="nav-icon">&#x25AD;</span>数据采集</button>
-          <button class="nav-button" type="button" data-step-button="diagnose" data-translate="nav_diagnose"><span class="nav-icon">&#x25C9;</span>分析诊断</button>
-          <button class="nav-button" type="button" data-step-button="curves" data-translate="nav_curves"><span class="nav-icon">&#x2308;</span>曲线生成</button>
-          <button class="nav-button" type="button" data-step-button="delivery" data-translate="nav_delivery"><span class="nav-icon">&#x21E7;</span>交付归档</button>
+          <button class="nav-button active" type="button" data-step-button="setup" data-translate="nav_setup"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>任务配置</button>
+          <button class="nav-button" type="button" data-step-button="acquisition" data-translate="nav_acquisition"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line><circle cx="12" cy="12" r="3"></circle></svg></span>数据采集</button>
+          <button class="nav-button" type="button" data-step-button="diagnose" data-translate="nav_diagnose"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line><path d="M3 20h18"></path></svg></span>分析诊断</button>
+          <button class="nav-button" type="button" data-step-button="curves" data-translate="nav_curves"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"></path><circle cx="18.7" cy="8" r="1.5" fill="currentColor"></circle><circle cx="13.6" cy="13.2" r="1.5" fill="currentColor"></circle><circle cx="10.8" cy="10.5" r="1.5" fill="currentColor"></circle></svg></span>曲线生成</button>
+          <button class="nav-button" type="button" data-step-button="delivery" data-translate="nav_delivery"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></span>交付归档</button>
         </nav>
 
         <section class="panel control-panel-widget">
