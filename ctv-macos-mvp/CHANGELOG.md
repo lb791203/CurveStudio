@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.11 - 2026-05-22
+
+- Reworked G7 charts toward a report-style layout with fixed, readable NPDC, gray balance, and wDeltaL scales.
+- Bound G7 NPDC and gray target L* values to the selected standard patch Lab data before falling back to the built-in CRPC6 target table.
+- Added G7 tolerance background bands and removed extra target dots so the charts focus on measured-vs-target trends.
+- Added chart tests for the G7 report scales.
+
 ## 0.1.10 - 2026-05-22
 
 - Unified primary workflow button colors so loading, opening, parsing, adding, applying, saving, and calculating use the same brand action color.

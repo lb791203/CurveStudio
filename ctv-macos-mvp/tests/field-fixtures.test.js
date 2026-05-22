@@ -54,6 +54,8 @@ test("KBA162 Curve5 P2P51 field scans can contribute raw Lab rows to G7 preview"
   assert.ok(preview.labPatchCount > 0);
   assert.ok(preview.grayPatchCount >= 3);
   assert.ok(preview.colorspaceRows.some((row) => row.status !== "Missing"));
+  assert.equal(preview.npdcVerification.find((row) => row.tone === 50)?.targetSource, "standard");
+  assert.ok(preview.npdcVerification.find((row) => row.tone === 50)?.targetL > 55);
 });
 
 async function parseFixture(fixture) {

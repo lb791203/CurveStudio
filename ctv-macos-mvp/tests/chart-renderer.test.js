@@ -81,3 +81,31 @@ test("renderG7Charts labels positive and negative gray tolerances distinctly", (
   assert.match(grayChart.innerHTML, />-Ch 6</);
   assert.match(grayChart.innerHTML, /stroke-dasharray="3 5"/);
 });
+
+test("renderG7Charts uses report-style G7 scales", () => {
+  const npdcChart = { innerHTML: "" };
+  const grayChart = { innerHTML: "" };
+  const cmyNpdcChart = { innerHTML: "" };
+  const weightedChart = { innerHTML: "" };
+
+  renderG7Charts({
+    npdcChart,
+    grayChart,
+    cmyNpdcChart,
+    weightedChart,
+  }, {
+    npdcVerification: [
+      { tone: 50, measuredNpdc: 0.72, targetNpdc: 0.62, deltaL: -1.2, signedWeightedDeltaL: -1.2 },
+    ],
+    grayVerification: [
+      { tone: 50, measuredNpdc: 0.68, targetNpdc: 0.62, a: 1.5, b: -2.5, chroma: 2.9, signedWeightedDeltaL: 0.8 },
+    ],
+  }, []);
+
+  assert.match(npdcChart.innerHTML, />0\.4</);
+  assert.match(npdcChart.innerHTML, />1\.6</);
+  assert.match(grayChart.innerHTML, />-3</);
+  assert.match(grayChart.innerHTML, />3</);
+  assert.match(weightedChart.innerHTML, />-6</);
+  assert.match(weightedChart.innerHTML, />6</);
+});

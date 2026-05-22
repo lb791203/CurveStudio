@@ -139,16 +139,20 @@ export function renderG7Charts({ npdcChart, grayChart, cmyNpdcChart, weightedCha
     y: point.value / 10,
     tooltip: `G7 target ${point.tone}%: ${fmt(point.value / 10)}`,
   }));
-  const kNpdcMax = niceCeil(Math.max(2, ...[...kNpdcRows, ...kTargetRows].flatMap((row) => [row.measuredNpdc, row.targetNpdc]).filter(Number.isFinite)) * 1.08);
+  const kNpdcMax = g7NpdcLimit([...kNpdcRows, ...kTargetRows].flatMap((row) => [row.measuredNpdc, row.targetNpdc]));
   drawChart(npdcChart, npdcSeries, {
     yMin: 0,
     yMax: kNpdcMax,
     yLabel: "K NPDC",
+    xTicks: g7ToneTicks(),
+    yTicks: npdcTicks(kNpdcMax),
+    yTickFormatter: (value) => value.toFixed(1),
+    referenceDots: false,
     reference: [{ name: "G7 target", points: npdcRef.length ? npdcRef : fallbackNpdcRef, color: "#64748b" }],
   });
 
   const grayRows = aggregateGrayRows(g7.grayVerification || []);
-  const cmyNpdcMax = niceCeil(Math.max(2, ...grayRows.flatMap((row) => [row.measuredNpdc, row.targetNpdc]).filter(Number.isFinite)) * 1.08);
+  const cmyNpdcMax = g7NpdcLimit(grayRows.flatMap((row) => [row.measuredNpdc, row.targetNpdc]));
   const cmySeries = {
     Gray: grayRows.map((row, index) => ({
       x: grayTone(row, index),
@@ -167,6 +171,10 @@ export function renderG7Charts({ npdcChart, grayChart, cmyNpdcChart, weightedCha
     yMin: 0,
     yMax: cmyNpdcMax,
     yLabel: "CMY NPDC",
+    xTicks: g7ToneTicks(),
+    yTicks: npdcTicks(cmyNpdcMax),
+    yTickFormatter: (value) => value.toFixed(1),
+    referenceDots: false,
     reference: [{ name: "G7 target", points: cmyTarget, color: "#22c55e", dasharray: "4 4" }],
   });
 
@@ -184,11 +192,15 @@ export function renderG7Charts({ npdcChart, grayChart, cmyNpdcChart, weightedCha
   };
   const grayComponentValues = grayRows.flatMap((row) => [row.a, row.b]).filter(Number.isFinite);
   const grayComponentMax = Math.max(6, ...grayComponentValues.map((value) => Math.abs(value)));
+  const grayLimit = g7SymmetricLimit(grayComponentMax, [8, 12, 15, 20, 30]);
   drawChart(grayChart, graySeries, {
-    yMin: -niceCeil(grayComponentMax * 1.08),
-    yMax: niceCeil(grayComponentMax * 1.08),
+    yMin: -grayLimit,
+    yMax: grayLimit,
     yLabel: "a* / b*",
-    connectLines: false,
+    xTicks: g7ToneTicks(),
+    yTicks: symmetricToleranceTicks(grayLimit),
+    referenceDots: false,
+    horizontalBands: toleranceBands(),
     reference: [
       { name: "Neutral", points: [{ x: 0, y: 0 }, { x: 100, y: 0 }], color: "#64748b" },
       { name: "+Ch 3", points: [{ x: 0, y: 3 }, { x: 100, y: 3 }], color: "#f59e0b" },
@@ -213,10 +225,15 @@ export function renderG7Charts({ npdcChart, grayChart, cmyNpdcChart, weightedCha
   };
   const deltaValues = Object.values(weightedSeries).flatMap((rows) => rows.map((row) => row.y)).filter(Number.isFinite);
   const deltaMax = Math.max(8, ...deltaValues.map((value) => Math.abs(value)));
+  const weightedLimit = g7SymmetricLimit(deltaMax, [8, 12, 15, 20, 35, 50]);
   drawChart(weightedChart, weightedSeries, {
-    yMin: -niceCeil(deltaMax * 1.08),
-    yMax: niceCeil(deltaMax * 1.08),
+    yMin: -weightedLimit,
+    yMax: weightedLimit,
     yLabel: "wΔL*",
+    xTicks: g7ToneTicks(),
+    yTicks: symmetricToleranceTicks(weightedLimit),
+    referenceDots: false,
+    horizontalBands: toleranceBands(),
     reference: [
       { name: "Target", points: [{ x: 0, y: 0 }, { x: 100, y: 0 }], color: "#64748b" },
       { name: "+3", points: [{ x: 0, y: 3 }, { x: 100, y: 3 }], color: "#f59e0b" },
@@ -246,14 +263,18 @@ function drawChart(svg, series, config) {
     Gray: "var(--chart-gray, #475569)"
   };
 
-  const grid = [0, 25, 50, 75, 100].map((x) => `
+  const xTicks = config.xTicks || [0, 25, 50, 75, 100];
+  const yTicks = config.yTicks || Array.from({ length: 6 }, (_, i) => config.yMin + ((config.yMax - config.yMin) / 5) * i);
+  const yTickFormatter = config.yTickFormatter || ((value) => Number.isInteger(value) ? String(value) : String(Math.round(value)));
+  const grid = xTicks.map((x) => `
     <line x1="${xScale(x)}" y1="${pad.top}" x2="${xScale(x)}" y2="${height - pad.bottom}" class="grid" />
     <text x="${xScale(x)}" y="${height - 18}" class="tick" text-anchor="middle">${x}</text>
   `).join("");
-  const yTicks = Array.from({ length: 6 }, (_, i) => config.yMin + ((config.yMax - config.yMin) / 5) * i).map((y) => `
+  const yGrid = yTicks.map((y) => `
     <line x1="${pad.left}" y1="${yScale(y)}" x2="${width - pad.right}" y2="${yScale(y)}" class="grid" />
-    <text x="${pad.left - 12}" y="${yScale(y) + 4}" class="tick" text-anchor="end">${Math.round(y)}</text>
+    <text x="${pad.left - 12}" y="${yScale(y) + 4}" class="tick" text-anchor="end">${escapeHtml(yTickFormatter(y))}</text>
   `).join("");
+  const horizontalBands = (config.horizontalBands || []).map((band) => horizontalBand(band, pad, width, yScale)).join("");
   const bands = (config.bands || []).map((item) => bandPath(item.points, xScale, yScale, item.color, item.name)).join("");
   const ref = (config.reference || []).map((item) => path(item.points, xScale, yScale, item.color, "reference", item.name, item.dasharray)).join("");
   const lines = config.connectLines === false
@@ -272,7 +293,7 @@ function drawChart(svg, series, config) {
       </circle>
     `;
   })).join("");
-  const refDots = (config.reference || []).flatMap((item) => item.points.map((point) => `
+  const refDots = config.referenceDots === false ? "" : (config.reference || []).flatMap((item) => item.points.map((point) => `
     <circle class="chart-dot reference-dot" cx="${xScale(point.x)}" cy="${yScale(point.y)}" r="3" fill="${item.color}">
       <title>${escapeHtml(point.tooltip || `${item.name} ${fmt(point.x)} / ${fmt(point.y)}`)}</title>
     </circle>
@@ -287,13 +308,21 @@ function drawChart(svg, series, config) {
   svg.innerHTML = `
     <rect x="0" y="0" width="${width}" height="${height}" class="chart-bg" />
     ${legend}
-    ${grid}${yTicks}
+    ${horizontalBands}${grid}${yGrid}
     <line x1="${pad.left}" y1="${height - pad.bottom}" x2="${width - pad.right}" y2="${height - pad.bottom}" class="axis" />
     <line x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${height - pad.bottom}" class="axis" />
     <text x="${width / 2}" y="${height - 4}" class="axis-label" text-anchor="middle">输入网点 %</text>
     <text x="18" y="${height / 2}" class="axis-label" transform="rotate(-90 18 ${height / 2})" text-anchor="middle">${config.yLabel}</text>
     ${bands}${ref}${lines}${refDots}${dots}
   `;
+}
+
+function horizontalBand(band, pad, width, yScale) {
+  const min = Math.min(band.min, band.max);
+  const max = Math.max(band.min, band.max);
+  const y = yScale(max);
+  const h = yScale(min) - yScale(max);
+  return `<rect x="${pad.left}" y="${y.toFixed(1)}" width="${width - pad.left - pad.right}" height="${h.toFixed(1)}" fill="${band.color}" opacity="${band.opacity ?? 0.12}" />`;
 }
 
 function bandPath(points, xScale, yScale, color, name = "") {
@@ -389,6 +418,44 @@ function niceFloor(value) {
   if (numeric < 0) return -niceCeil(Math.abs(numeric));
   if (numeric <= 10) return Math.floor(numeric);
   return Math.floor(numeric / 5) * 5;
+}
+
+function g7ToneTicks() {
+  return [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+}
+
+function npdcTicks(max) {
+  const limit = Math.max(2, Number(max) || 2);
+  if (limit <= 2) return [0, 0.4, 0.8, 1.2, 1.6, 2.0];
+  const step = limit <= 3 ? 0.5 : 1;
+  const ticks = [];
+  for (let value = 0; value <= limit + 0.0001; value += step) ticks.push(Number(value.toFixed(2)));
+  return ticks;
+}
+
+function g7NpdcLimit(values) {
+  const max = Math.max(0, ...values.filter(Number.isFinite));
+  if (max <= 2) return 2;
+  if (max <= 3) return 3;
+  return niceCeil(max * 1.08);
+}
+
+function g7SymmetricLimit(maxValue, allowedLimits) {
+  const target = Math.max(0, Number(maxValue) || 0) * 1.08;
+  return allowedLimits.find((limit) => target <= limit) || niceCeil(target);
+}
+
+function symmetricToleranceTicks(limit) {
+  const ticks = [-limit, -6, -3, 0, 3, 6, limit]
+    .filter((value) => value >= -limit && value <= limit);
+  return [...new Set(ticks)].sort((a, b) => a - b);
+}
+
+function toleranceBands() {
+  return [
+    { min: -6, max: 6, color: "#f59e0b", opacity: 0.08 },
+    { min: -3, max: 3, color: "#22c55e", opacity: 0.10 },
+  ];
 }
 
 function legendItems(series, references, colors) {
