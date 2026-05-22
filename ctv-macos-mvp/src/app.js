@@ -106,6 +106,13 @@ const els = {
   settingsLimitInput: document.querySelector("#settingsLimitInput"),
   settingsRatioInput: document.querySelector("#settingsRatioInput"),
   settingsDensityFilterSelect: document.querySelector("#settingsDensityFilterSelect"),
+  settingsSccaInput: document.querySelector("#settingsSccaInput"),
+  settingsMeasurementConditionSelect: document.querySelector("#settingsMeasurementConditionSelect"),
+  settingsIlluminantSelect: document.querySelector("#settingsIlluminantSelect"),
+  settingsObserverSelect: document.querySelector("#settingsObserverSelect"),
+  settingsDeviceAdapterSelect: document.querySelector("#settingsDeviceAdapterSelect"),
+  settingsQueueProfileSelect: document.querySelector("#settingsQueueProfileSelect"),
+  settingsRequireG7Input: document.querySelector("#settingsRequireG7Input"),
   applySettingsButton: document.querySelector("#applySettingsButton"),
   resetSettingsButton: document.querySelector("#resetSettingsButton"),
   manualBody: document.querySelector("#manualBody"),
@@ -224,6 +231,15 @@ const state = {
   activeCurveChannel: "all",
   selectedPatchIndex: null,
   selectedJobKey: "",
+  settings: {
+    densityFilter: "status_t",
+    measurementCondition: "auto",
+    illuminant: "D50",
+    observer: "2",
+    deviceAdapterId: "file",
+    queueProfile: "g7",
+    requireG7ForIcc: true,
+  },
   device: {
     adapterId: "file",
     connected: false,
@@ -388,7 +404,7 @@ function attachEvents() {
     try {
       const pkg = buildIccExportPackage(gate, state.runs, {
         standard: state.standard,
-        measurementCondition: state.runs?.[0]?.archive?.measurementCondition || state.importInfo?.metadata?.measurement_condition,
+        measurementCondition: state.runs?.[0]?.archive?.measurementCondition || measurementConditionForExport(),
         jobCustomer: els.jobCustomerInput.value,
         jobPress: els.jobPressInput.value,
         jobId: state.runs?.[0]?.jobId,
@@ -473,6 +489,7 @@ function populateSelects() {
   if (els.settingsTargetSelect) els.settingsTargetSelect.innerHTML = targetOptions().map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
   els.standardSelect.innerHTML = STANDARD_LIBRARY.map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
   if (els.deviceAdapterSelect) els.deviceAdapterSelect.innerHTML = DEVICE_ADAPTERS.map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
+  if (els.settingsDeviceAdapterSelect) els.settingsDeviceAdapterSelect.innerHTML = DEVICE_ADAPTERS.map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
 }
 
 function refreshTargetSelect(selected = els.targetSelect.value) {
@@ -954,6 +971,29 @@ function applySettingsToCalculation() {
   if (els.settingsSmoothInput) els.smoothInput.value = clampNumber(Number(els.settingsSmoothInput.value), 0, 4, 2);
   if (els.settingsLimitInput) els.limitInput.value = clampNumber(Number(els.settingsLimitInput.value), 1, 40, 18);
   if (els.settingsRatioInput) els.ratioInput.value = clampNumber(Number(els.settingsRatioInput.value), 0, 100, 50);
+  if (els.settingsSccaInput) els.sccaInput.checked = els.settingsSccaInput.checked;
+  state.settings = {
+    ...state.settings,
+    densityFilter: els.settingsDensityFilterSelect?.value || "status_t",
+    measurementCondition: els.settingsMeasurementConditionSelect?.value || "auto",
+    illuminant: els.settingsIlluminantSelect?.value || "D50",
+    observer: els.settingsObserverSelect?.value || "2",
+    deviceAdapterId: els.settingsDeviceAdapterSelect?.value || state.device.adapterId || "file",
+    queueProfile: els.settingsQueueProfileSelect?.value || state.device.queueProfile || "g7",
+    requireG7ForIcc: els.settingsRequireG7Input ? els.settingsRequireG7Input.checked : true,
+  };
+  if (state.device.adapterId !== state.settings.deviceAdapterId) {
+    state.device = changeDeviceAdapterState(state.device, state.settings.deviceAdapterId);
+  }
+  if (state.device.queueProfile !== state.settings.queueProfile) {
+    state.device = {
+      ...state.device,
+      queueProfile: state.settings.queueProfile,
+      queue: buildMeasurementQueue(state.settings.queueProfile),
+      queueIndex: 0,
+    };
+  }
+  if (els.deviceAdapterSelect) els.deviceAdapterSelect.value = state.device.adapterId;
   state.ratioAuto = false;
   renderControlValues();
   calculate({ preserveRatio: true });
@@ -966,6 +1006,14 @@ function resetSettingsDefaults() {
   if (els.settingsSmoothInput) els.settingsSmoothInput.value = 2;
   if (els.settingsLimitInput) els.settingsLimitInput.value = 18;
   if (els.settingsRatioInput) els.settingsRatioInput.value = 50;
+  if (els.settingsSccaInput) els.settingsSccaInput.checked = false;
+  if (els.settingsDensityFilterSelect) els.settingsDensityFilterSelect.value = "status_t";
+  if (els.settingsMeasurementConditionSelect) els.settingsMeasurementConditionSelect.value = "auto";
+  if (els.settingsIlluminantSelect) els.settingsIlluminantSelect.value = "D50";
+  if (els.settingsObserverSelect) els.settingsObserverSelect.value = "2";
+  if (els.settingsDeviceAdapterSelect) els.settingsDeviceAdapterSelect.value = "file";
+  if (els.settingsQueueProfileSelect) els.settingsQueueProfileSelect.value = "g7";
+  if (els.settingsRequireG7Input) els.settingsRequireG7Input.checked = true;
   if (els.deltaFormulaSelect) els.deltaFormulaSelect.value = "de76";
   applySettingsToCalculation();
 }
@@ -1073,6 +1121,15 @@ function exportContext() {
       compensationRatio: Number(els.ratioInput.value),
       deltaFormula: els.deltaFormulaSelect.value,
       calculationFormula: algorithmDescription(els.modeSelect.value),
+      scca: Boolean(els.sccaInput.checked),
+      densityFilter: state.settings.densityFilter,
+      measurementCondition: state.settings.measurementCondition,
+      effectiveMeasurementCondition: measurementConditionForExport(),
+      illuminant: state.settings.illuminant,
+      observer: state.settings.observer,
+      deviceAdapterId: state.device.adapterId,
+      queueProfile: state.device.queueProfile,
+      requireG7ForIcc: state.settings.requireG7ForIcc,
     },
     algorithm: els.modeSelect.value,
     calculationFormula: algorithmDescription(els.modeSelect.value),
@@ -1080,7 +1137,7 @@ function exportContext() {
     targetName: targetName(els.targetSelect.value),
     compensationRatio: els.ratioInput.value,
     ripCompatibility: t("rip_compatibility_value", "专用: Kodak Prinergy Harmony 手录表、Kodak Prinergy CSV；通用 CSV: SCREEN Trueflow、Heidelberg Prinect、Agfa Apogee、Harlequin、Founder Flow、Esko 等需按实际导入模板映射。"),
-    measurementCondition: state.importInfo?.metadata?.measurement_condition || "unspecified",
+    measurementCondition: measurementConditionForExport(),
     diagnosis: state.diagnosis,
     curveQuality: summarizeCurveSafety(state.safetyIssues),
     curveSafety: state.safetyIssues,
@@ -1568,6 +1625,24 @@ async function restoreProjectArchive(archive) {
     els.limitInput.value = archive.settings.limit ?? els.limitInput.value;
     els.ratioInput.value = archive.settings.compensationRatio ?? els.ratioInput.value;
     els.deltaFormulaSelect.value = archive.settings.deltaFormula || els.deltaFormulaSelect.value;
+    els.sccaInput.checked = Boolean(archive.settings.scca);
+    state.settings = {
+      ...state.settings,
+      densityFilter: archive.settings.densityFilter || state.settings.densityFilter,
+      measurementCondition: archive.settings.measurementCondition || state.settings.measurementCondition,
+      illuminant: archive.settings.illuminant || state.settings.illuminant,
+      observer: archive.settings.observer || state.settings.observer,
+      deviceAdapterId: archive.settings.deviceAdapterId || state.settings.deviceAdapterId,
+      queueProfile: archive.settings.queueProfile || state.settings.queueProfile,
+      requireG7ForIcc: archive.settings.requireG7ForIcc !== false,
+    };
+    state.device = {
+      ...state.device,
+      adapterId: state.settings.deviceAdapterId,
+      queueProfile: state.settings.queueProfile,
+      queue: buildMeasurementQueue(state.settings.queueProfile),
+      queueIndex: 0,
+    };
   }
   state.manualRows = Array.isArray(archive.manualRows) ? archive.manualRows : [];
   state.measurements = Array.isArray(archive.measurements) ? archive.measurements : [];
@@ -1641,7 +1716,14 @@ function currentIccGenerationGate(runs = state.runs) {
   return buildIccGenerationGate({
     runs,
     standard: state.standard,
+    requireG7: state.settings.requireG7ForIcc !== false,
   });
+}
+
+function measurementConditionForExport() {
+  const fileCondition = state.importInfo?.metadata?.measurement_condition;
+  if (fileCondition) return fileCondition;
+  return state.settings.measurementCondition === "auto" ? "unspecified" : state.settings.measurementCondition;
 }
 
 function currentG7Preview() {

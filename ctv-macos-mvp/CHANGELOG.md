@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.7 - 2026-05-22
+
+- Expanded System Settings with actionable defaults for calculation, SCCA, measurement condition, illuminant/observer metadata, device entry mode, queue profile, density filter, and ICC/G7 gate behavior.
+- Persisted the new settings into project archives and export metadata.
+- Shortened the sidebar product subtitle to `TVI / CTV / G7`.
+
 ## 0.1.6 - 2026-05-22
 
 - Renamed the desktop app and browser shell to `CurveStudio`.
