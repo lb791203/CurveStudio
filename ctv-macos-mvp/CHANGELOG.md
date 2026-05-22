@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.9 - 2026-05-22
+
+- Fixed the left calculation settings panel so longer production labels no longer overflow outside the card.
+- Increased the sidebar width slightly and constrained sidebar form controls to the available column.
+- Kept the disabled calculation button behavior when no measurement data is loaded, but made its layout consistent with the rest of the panel.
+- Replaced the desktop/app icon with the new CurveStudio tone-gain curve artwork.
+
 ## 0.1.8 - 2026-05-22
 
 - Made System Settings closer to the reference software: color analysis tolerance, Delta E formula labels, dot calculation mode labels, and density filter labels now use production-oriented wording.
