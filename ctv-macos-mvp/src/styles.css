@@ -1823,6 +1823,25 @@ svg {
   gap: 12px;
 }
 
+.settings-form-grid.two-col {
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+}
+
+.settings-check-row {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: end;
+  color: #374151;
+  font-size: 14px;
+}
+
+.settings-check-row input {
+  width: 18px;
+  height: 18px;
+}
+
 .export-grid button {
   min-height: 52px;
 }
