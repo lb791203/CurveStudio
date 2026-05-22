@@ -33,15 +33,15 @@ export function parseMeasurementText(text) {
   return parseImportText(text).measurements;
 }
 
-export function parseImportText(text) {
+export function parseImportText(text, options = {}) {
   const normalized = normalizeLineEndings(text);
   if (!normalized.trim()) return emptyImport("Empty", ["No input text."]);
 
   if (/\bBEGIN_DATA_FORMAT\b/i.test(normalized) && /\bBEGIN_DATA\b/i.test(normalized)) {
-    return parseCgatsText(normalized);
+    return parseCgatsText(normalized, options);
   }
 
-  return parseDelimitedImport(normalized);
+  return parseDelimitedImport(normalized, options);
 }
 
 export function calculateCompensation(measurements, options) {
@@ -287,7 +287,7 @@ export function channelsPresent(rows) {
   return CHANNELS.filter((channel) => rows.some((row) => row.channel === channel));
 }
 
-function parseCgatsText(text) {
+function parseCgatsText(text, options = {}) {
   const metadata = {};
   const fields = [];
   const dataRows = [];
@@ -334,6 +334,7 @@ function parseCgatsText(text) {
   const measurements = buildMeasurementsFromObjects(rawRows, {
     sourceFormat: "CGATS/IT8",
     metadata,
+    densityFilter: options.densityFilter || "status_t",
   });
 
   const warnings = [];
@@ -342,6 +343,7 @@ function parseCgatsText(text) {
   if (measurements.length && !measurements.some(hasUsableMetric)) {
     warnings.push("Imported patches do not contain TVI, measured tone, density, or usable spectral data.");
   }
+  appendDensityFilterWarning(warnings, options.densityFilter);
 
   return {
     sourceFormat: "CGATS/IT8",
@@ -353,7 +355,7 @@ function parseCgatsText(text) {
   };
 }
 
-function parseDelimitedImport(text) {
+function parseDelimitedImport(text, options = {}) {
   const lines = text
     .split("\n")
     .map((line) => line.trim())
@@ -372,14 +374,17 @@ function parseDelimitedImport(text) {
     const measurements = buildMeasurementsFromObjects(rawRows, {
       sourceFormat: "Delimited",
       metadata: {},
+      densityFilter: options.densityFilter || "status_t",
     });
+    const warnings = measurements.length ? [] : ["No usable measurement rows found."];
+    appendDensityFilterWarning(warnings, options.densityFilter);
     return {
       sourceFormat: delimiter === "," ? "CSV" : "Delimited",
       metadata: {},
       fields: fields.map(normalizeHeader),
       rawRows,
       measurements,
-      warnings: measurements.length ? [] : ["No usable measurement rows found."],
+      warnings,
     };
   }
 
@@ -391,6 +396,7 @@ function parseDelimitedImport(text) {
   const warnings = [];
   if (!measurements.length) warnings.push("No usable measurement rows found.");
   if (usedChannelFallback) warnings.push("无通道列，已按 C/M/Y/K 轮替分配（可能不准确）。");
+  appendDensityFilterWarning(warnings, options.densityFilter);
 
   return {
     sourceFormat: delimiter === "," ? "CSV" : "Delimited",
@@ -475,15 +481,21 @@ function measurementMetrics(row, channel, tone, context) {
   let paperRelativeDensity = false;
 
   if (!Number.isFinite(density)) {
-    density = densityFromSpectralRow(row, context.paperRow, channel);
-    paperRelativeDensity = Number.isFinite(density);
-    densityMethod = Number.isFinite(density) ? "status_t_spectral" : undefined;
+    if (densityFilterAllowsSpectralDensity(context.densityFilter)) {
+      density = densityFromSpectralRow(row, context.paperRow, channel);
+      paperRelativeDensity = Number.isFinite(density);
+      densityMethod = Number.isFinite(density) ? "status_t_spectral" : undefined;
+    } else if (hasSpectralFields(row)) {
+      densityMethod = "spectral_density_disabled";
+    }
   }
 
   if (!Number.isFinite(measuredTone) && Number.isFinite(density) && context.solidRow) {
     if (!Number.isFinite(solidDensity)) {
-      solidDensity = densityFromSpectralRow(context.solidRow, context.paperRow, channel);
-      paperRelativeDensity = Number.isFinite(solidDensity);
+      if (densityFilterAllowsSpectralDensity(context.densityFilter)) {
+        solidDensity = densityFromSpectralRow(context.solidRow, context.paperRow, channel);
+        paperRelativeDensity = Number.isFinite(solidDensity);
+      }
     }
     measuredTone = murrayDaviesToneFromDensity(density, solidDensity, paperRelativeDensity ? 0 : paperDensity);
     if (Number.isFinite(measuredTone)) {
@@ -512,6 +524,22 @@ function measurementMetrics(row, channel, tone, context) {
     paperDensity: Number.isFinite(paperDensity) ? paperDensity : undefined,
     densityMethod,
   };
+}
+
+function densityFilterAllowsSpectralDensity(filter = "status_t") {
+  return !filter || filter === "status_t";
+}
+
+function appendDensityFilterWarning(warnings, filter = "status_t") {
+  if (filter === "none") {
+    warnings.push("密度滤色器设为 None：已禁用光谱密度 TVI 换算，只使用文件报告的网点/TVI/密度。");
+  } else if (filter && filter !== "status_t") {
+    warnings.push(`密度滤色器 ${filter} 尚未验证，当前不会用于正式光谱密度计算。`);
+  }
+}
+
+function hasSpectralFields(row = {}) {
+  return Object.keys(row).some((key) => /(?:spectral_nm|nm_?|spectrum_?)(\d{3})$/i.test(key));
 }
 
 function parseRow(row, headerMap, index) {

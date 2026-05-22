@@ -106,6 +106,8 @@ const els = {
   settingsLimitInput: document.querySelector("#settingsLimitInput"),
   settingsRatioInput: document.querySelector("#settingsRatioInput"),
   settingsDensityFilterSelect: document.querySelector("#settingsDensityFilterSelect"),
+  settingsDeltaWarningInput: document.querySelector("#settingsDeltaWarningInput"),
+  settingsDeltaFailInput: document.querySelector("#settingsDeltaFailInput"),
   settingsSccaInput: document.querySelector("#settingsSccaInput"),
   settingsMeasurementConditionSelect: document.querySelector("#settingsMeasurementConditionSelect"),
   settingsIlluminantSelect: document.querySelector("#settingsIlluminantSelect"),
@@ -604,7 +606,7 @@ function cloneData(value) {
 
 function parseAndCalculate(options = {}) {
   if (!options.skipConfirm && !confirmDataOverwrite("解析文本数据会覆盖当前手动表、导入数据和曲线结果，是否继续？")) return;
-  state.importInfo = parseImportText(els.rawInput.value);
+  state.importInfo = parseImportText(els.rawInput.value, { densityFilter: state.settings.densityFilter });
   state.measurements = state.importInfo.measurements;
   state.manualRows = [];
   state.manualDirty = false;
@@ -964,6 +966,7 @@ function applyCustomTarget() {
 }
 
 function applySettingsToCalculation() {
+  const previousDensityFilter = state.settings.densityFilter;
   if (els.settingsModeSelect) els.modeSelect.value = els.settingsModeSelect.value;
   if (els.settingsTargetSelect) els.targetSelect.value = els.settingsTargetSelect.value;
   if (els.modeSelect.value === "ctv") els.targetSelect.value = "linear";
@@ -972,6 +975,16 @@ function applySettingsToCalculation() {
   if (els.settingsLimitInput) els.limitInput.value = clampNumber(Number(els.settingsLimitInput.value), 1, 40, 18);
   if (els.settingsRatioInput) els.ratioInput.value = clampNumber(Number(els.settingsRatioInput.value), 0, 100, 50);
   if (els.settingsSccaInput) els.sccaInput.checked = els.settingsSccaInput.checked;
+  const deltaWarning = clampNumber(Number(els.settingsDeltaWarningInput?.value), 0, 20, 3.5);
+  const deltaFail = clampNumber(Number(els.settingsDeltaFailInput?.value), deltaWarning, 30, 4.2);
+  state.standard = {
+    ...state.standard,
+    deltaE: {
+      ...(state.standard.deltaE || {}),
+      warning: deltaWarning,
+      fail: deltaFail,
+    },
+  };
   state.settings = {
     ...state.settings,
     densityFilter: els.settingsDensityFilterSelect?.value || "status_t",
@@ -994,6 +1007,12 @@ function applySettingsToCalculation() {
     };
   }
   if (els.deviceAdapterSelect) els.deviceAdapterSelect.value = state.device.adapterId;
+  if (previousDensityFilter !== state.settings.densityFilter && els.rawInput.value.trim() && state.importInfo?.sourceFormat !== "Manual Table") {
+    state.importInfo = parseImportText(els.rawInput.value, { densityFilter: state.settings.densityFilter });
+    state.measurements = state.importInfo.measurements;
+    state.curveOverrides = {};
+    state.selectedPatchIndex = null;
+  }
   state.ratioAuto = false;
   renderControlValues();
   calculate({ preserveRatio: true });
@@ -1006,6 +1025,8 @@ function resetSettingsDefaults() {
   if (els.settingsSmoothInput) els.settingsSmoothInput.value = 2;
   if (els.settingsLimitInput) els.settingsLimitInput.value = 18;
   if (els.settingsRatioInput) els.settingsRatioInput.value = 50;
+  if (els.settingsDeltaWarningInput) els.settingsDeltaWarningInput.value = 3.5;
+  if (els.settingsDeltaFailInput) els.settingsDeltaFailInput.value = 4.2;
   if (els.settingsSccaInput) els.settingsSccaInput.checked = false;
   if (els.settingsDensityFilterSelect) els.settingsDensityFilterSelect.value = "status_t";
   if (els.settingsMeasurementConditionSelect) els.settingsMeasurementConditionSelect.value = "auto";
@@ -1120,6 +1141,8 @@ function exportContext() {
       limit: Number(els.limitInput.value),
       compensationRatio: Number(els.ratioInput.value),
       deltaFormula: els.deltaFormulaSelect.value,
+      deltaEWarning: state.standard.deltaE?.warning,
+      deltaEFail: state.standard.deltaE?.fail,
       calculationFormula: algorithmDescription(els.modeSelect.value),
       scca: Boolean(els.sccaInput.checked),
       densityFilter: state.settings.densityFilter,
@@ -1626,6 +1649,16 @@ async function restoreProjectArchive(archive) {
     els.ratioInput.value = archive.settings.compensationRatio ?? els.ratioInput.value;
     els.deltaFormulaSelect.value = archive.settings.deltaFormula || els.deltaFormulaSelect.value;
     els.sccaInput.checked = Boolean(archive.settings.scca);
+    if (archive.settings.deltaEWarning !== undefined || archive.settings.deltaEFail !== undefined) {
+      state.standard = {
+        ...state.standard,
+        deltaE: {
+          ...(state.standard.deltaE || {}),
+          warning: archive.settings.deltaEWarning ?? state.standard.deltaE?.warning ?? 3.5,
+          fail: archive.settings.deltaEFail ?? state.standard.deltaE?.fail ?? 4.2,
+        },
+      };
+    }
     state.settings = {
       ...state.settings,
       densityFilter: archive.settings.densityFilter || state.settings.densityFilter,

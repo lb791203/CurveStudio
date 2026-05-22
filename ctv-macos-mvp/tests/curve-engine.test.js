@@ -106,6 +106,22 @@ test("parseImportText converts spectral patches to Lab for colorimetric workflow
   assert.equal(parsed.measurements.length, 2);
   assert.ok(parsed.measurements.every((row) => row.lab && row.xyz));
   assert.ok(parsed.measurements.every((row) => Number.isFinite(row.colorimetricTone)));
+  assert.ok(parsed.measurements.some((row) => row.measuredToneMethod === "murray_davies_status_t_spectral" || row.densityMethod === "status_t_spectral"));
+});
+
+test("parseImportText density filter none disables spectral TVI conversion", () => {
+  const spectralFields = Array.from({ length: 36 }, (_, index) => `spectral_nm${380 + index * 10}`);
+  const header = ["sample_id", "cmyk_c", "cmyk_m", "cmyk_y", "cmyk_k", ...spectralFields].join(",");
+  const paper = ["P", 0, 0, 0, 0, ...spectralFields.map(() => 1)].join(",");
+  const cyan50 = ["C50", 50, 0, 0, 0, ...spectralFields.map(() => 0.45)].join(",");
+  const cyan100 = ["C100", 100, 0, 0, 0, ...spectralFields.map(() => 0.08)].join(",");
+  const parsed = parseImportText(`${header}\n${paper}\n${cyan50}\n${cyan100}`, { densityFilter: "none" });
+
+  assert.equal(parsed.measurements.length, 2);
+  assert.ok(parsed.measurements.every((row) => row.lab && row.xyz));
+  assert.ok(parsed.measurements.every((row) => !Number.isFinite(row.density)));
+  assert.ok(parsed.measurements.every((row) => row.densityMethod === "spectral_density_disabled"));
+  assert.ok(parsed.warnings.some((warning) => warning.includes("禁用光谱密度")));
 });
 
 test("parseImportText preserves instrument CTV fields for cross verification", () => {

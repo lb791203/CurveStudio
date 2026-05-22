@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8 - 2026-05-22
+
+- Made System Settings closer to the reference software: color analysis tolerance, Delta E formula labels, dot calculation mode labels, and density filter labels now use production-oriented wording.
+- Wired Delta E inner/outer tolerances into the actual Lab, G7, report, export, archive, and ICC gate calculations instead of leaving them as display-only text.
+- Added a real density-filter behavior: `None` disables spectral-density TVI conversion, while `ISO_T` remains the only enabled Status density algorithm; unverified DIN / ISO-I / ISO-E options stay disabled.
+
 ## 0.1.7 - 2026-05-22
 
 - Expanded System Settings with actionable defaults for calculation, SCCA, measurement condition, illuminant/observer metadata, device entry mode, queue profile, density filter, and ICC/G7 gate behavior.
