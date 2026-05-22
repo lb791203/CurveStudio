@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6 - 2026-05-22
+
+- Renamed the desktop app and browser shell to `CurveStudio`.
+- Updated bundle identifier, package names, desktop window title, app metadata, and export originator strings.
+- Replaced desktop app icons and added generated platform icon assets for future macOS/Windows packaging.
+- Replaced Unicode sidebar symbols with inline SVG navigation icons for more reliable rendering.
+
 ## 0.1.5 - 2026-05-22
 
 - Clarified that Harmony belongs to the Kodak Prinergy workflow rather than a separate RIP family.

@@ -220,7 +220,7 @@ export function toCgatsText(rows) {
   return [
     "CGATS.17",
     "",
-    'ORIGINATOR\t"CTV Curve MVP"',
+    'ORIGINATOR\t"CurveStudio"',
     'DESCRIPTOR\t"Compensation curve export"',
     `NUMBER_OF_FIELDS\t${fields.length}`,
     "BEGIN_DATA_FORMAT",
