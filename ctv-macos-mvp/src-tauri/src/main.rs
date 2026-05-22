@@ -125,5 +125,5 @@ fn main() {
             sdk_read_patch
         ])
         .run(tauri::generate_context!())
-        .expect("failed to run CTV Curve desktop app");
+        .expect("failed to run CurveStudio desktop app");
 }

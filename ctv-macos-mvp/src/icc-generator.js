@@ -343,7 +343,7 @@ export function exportMeasurementToCgats(run) {
   const scattered = getScatteredPoints(run);
   const lines = [
     "CGATS.17",
-    "ORIGINATOR \"CTV Curve Utility\"",
+    "ORIGINATOR \"CurveStudio\"",
     `DESCRIPTOR \"Characterization Data exported from ${run?.name || "CTV Run"}\"`,
     `CREATED \"${new Date().toISOString()}\"`,
     `NUMBER_OF_FIELDS 8`,

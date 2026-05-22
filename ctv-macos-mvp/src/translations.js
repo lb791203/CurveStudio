@@ -1,7 +1,7 @@
 export const TRANSLATIONS = {
   zh: {
     // Navigation & Sidebar
-    "brand_logo": "CTV 曲线工具",
+    "brand_logo": "CurveStudio",
     "nav_setup": "任务配置",
     "nav_acquisition": "数据采集",
     "nav_diagnose": "分析诊断",
@@ -335,7 +335,7 @@ export const TRANSLATIONS = {
   },
   en: {
     // Navigation & Sidebar
-    "brand_logo": "CTV Curve",
+    "brand_logo": "CurveStudio",
     "nav_setup": "Setup",
     "nav_acquisition": "Acquisition",
     "nav_diagnose": "Diagnostics",
@@ -814,7 +814,7 @@ export function updateDomTranslations(lang = currentLang) {
   translateSelectOptions(document.body, exactDictionary);
 
   // Handle document title
-  document.title = currentLang === "en" ? "CTV Curve Utility" : "CTV 曲线工具";
+  document.title = "CurveStudio";
 }
 
 function translateExactTextNodes(root, dictionary) {
