@@ -2,7 +2,7 @@
 
 macOS-first MVP for a print compensation curve tool. The first version is a local browser app so it can be used immediately on macOS and later wrapped with Tauri or SwiftUI.
 
-Current version: `0.1.4`. See [CHANGELOG.md](./CHANGELOG.md) for feature history.
+Current version: `0.1.5`. See [CHANGELOG.md](./CHANGELOG.md) for feature history.
 
 ## MVP scope
 
@@ -22,7 +22,7 @@ Current version: `0.1.4`. See [CHANGELOG.md](./CHANGELOG.md) for feature history
 - Diagnose press state from TVI deviation and recommend a default under-compensation ratio.
 - Compare measured Lab against standard Lab using selectable Delta E 76, Delta E 94, Delta E 2000, or CMC for available paper, solid, overprint, and gray patches.
 - Run first-stage G7 data-completeness checks, K-only NPDC preview, and gray-balance a*b* preview before reporting status.
-- Export compensation curve results as calculation CSV, Harmony/RIP manual-entry CSV, Prinergy CSV, simplified RIP CSV, CGATS text, or JSON project archive.
+- Export compensation curve results as calculation CSV, Kodak Prinergy Harmony manual-entry CSV, Kodak Prinergy CSV, generic RIP CSV, CGATS text, or JSON project archive.
 
 ## Run
 
@@ -100,9 +100,9 @@ The `数据接入` page compares software-calculated ISO 20654 CTV against vendo
 
 Curve validation starts from the generated compensation result. The Curve page now includes a compensation simulation table: it uses the first measured press response curve to estimate the printed tone after applying the current recommended output tone. This helps check whether the proposed TVI/CTV correction moves each point toward the target before making a second proof/press run. Formal validation still requires applying the curve, printing again, and remeasuring.
 
-The result table shows a manual-entry reference for Harmony, Prinergy, and other RIP tools:
+The result table shows a manual-entry reference for Kodak Prinergy Harmony, Kodak Prinergy, and other RIP tools:
 
-- `Harmony/RIP 调整`: reduce or increase percentage for the current input tone.
+- `Prinergy/RIP 调整`: reduce or increase percentage for the current input tone.
 - `建议录入网点`: the output tone to enter in the curve.
 - `锁定` / `人工输出` / `自动输出`: override a single curve point for production and still keep the algorithm-generated value visible.
 - `理论输出` / `生产输出` / `建议录入网点`: separate full correction, under-corrected production value, and final protected curve value.

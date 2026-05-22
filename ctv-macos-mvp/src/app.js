@@ -368,8 +368,8 @@ function attachEvents() {
   els.deviceCalibrateButton?.addEventListener("click", calibrateDevice);
   els.deviceReadPatchButton?.addEventListener("click", readDevicePatch);
   els.exportCsvButton.addEventListener("click", () => download("ctv-compensation-curve.csv", withExportHeader(toCsv(state.results), exportContext()), "text/csv"));
-  els.exportHarmonyButton.addEventListener("click", () => download("harmony-manual-entry.csv", withExportHeader(toHarmonyCsv(state.results), exportContext()), "text/csv"));
-  els.exportPrinergyButton.addEventListener("click", () => download("prinergy-input-output.csv", toPrinergyCsv(state.results, exportContext()), "text/csv"));
+  els.exportHarmonyButton.addEventListener("click", () => download("kodak-prinergy-harmony-manual-entry.csv", withExportHeader(toHarmonyCsv(state.results), exportContext()), "text/csv"));
+  els.exportPrinergyButton.addEventListener("click", () => download("kodak-prinergy-input-output.csv", toPrinergyCsv(state.results, exportContext()), "text/csv"));
   els.exportSimpleRipButton.addEventListener("click", () => download("rip-simple-input-output.csv", toSimpleRipCsv(state.results, exportContext()), "text/csv"));
   els.exportCgatsButton.addEventListener("click", () => download("ctv-compensation-curve.cgats.txt", withExportHeader(toCgatsText(state.results), exportContext()), "text/plain"));
   els.exportG7CsvButton.addEventListener("click", () => download("g7-verification-report.csv", toG7VerificationCsv(exportContext()), "text/csv"));
@@ -1079,7 +1079,7 @@ function exportContext() {
     deltaFormula: deltaFormulaLabel(els.deltaFormulaSelect.value),
     targetName: targetName(els.targetSelect.value),
     compensationRatio: els.ratioInput.value,
-    ripCompatibility: t("rip_compatibility_value", "专用: Harmony、Kodak Prinergy；通用 CSV: SCREEN Trueflow、Heidelberg Prinect、Agfa Apogee、Harlequin、Founder Flow、Esko 等需按实际导入模板映射。"),
+    ripCompatibility: t("rip_compatibility_value", "专用: Kodak Prinergy Harmony 手录表、Kodak Prinergy CSV；通用 CSV: SCREEN Trueflow、Heidelberg Prinect、Agfa Apogee、Harlequin、Founder Flow、Esko 等需按实际导入模板映射。"),
     measurementCondition: state.importInfo?.metadata?.measurement_condition || "unspecified",
     diagnosis: state.diagnosis,
     curveQuality: summarizeCurveSafety(state.safetyIssues),
