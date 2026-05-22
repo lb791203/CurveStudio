@@ -41,7 +41,7 @@ export function renderShell(state, els) {
   ].forEach((el) => { if (el) el.disabled = disabled; });
   if (els.exportJobArchiveButton) els.exportJobArchiveButton.disabled = !state.runs.length;
   if (els.exportJobLibraryButton) els.exportJobLibraryButton.disabled = !state.runs.length;
-  const iccGate = buildIccGenerationGate({ runs: state.runs || [], standard: state.standard });
+  const iccGate = buildIccGenerationGate({ runs: state.runs || [], standard: state.standard, requireG7: state.settings?.requireG7ForIcc !== false });
   if (els.generateIccProfileButton) {
     els.generateIccProfileButton.disabled = iccGate.status !== "Ready";
     els.generateIccProfileButton.title = iccGate.status === "Ready" ? t("icc_ready_title", "ICC Gate passed; generate an experimental draft.") : iccGate.summary;
@@ -202,7 +202,7 @@ function changeClass(change) {
 export function renderExport(state, els) {
   const warnings = visibleWarnings(state, els);
   const quality = summarizeCurveSafety(state.safetyIssues || []);
-  const iccGate = buildIccGenerationGate({ runs: state.runs || [], standard: state.standard });
+  const iccGate = buildIccGenerationGate({ runs: state.runs || [], standard: state.standard, requireG7: state.settings?.requireG7ForIcc !== false });
   const jobs = groupJobRuns(state.runs || []);
   const selectedJob = jobs.find((job) => job.key === state.selectedJobKey) || jobs[0];
   const suggestedPath = buildSuggestedArchivePath({
@@ -238,7 +238,7 @@ export function renderReport(state, els) {
   const conclusion = g7.conclusion || {};
   const tvi = tviDeltaSummary(state.results || []);
   const compare = state.runs.length >= 2 ? compareRuns(state.runs[0], state.runs[1]) : null;
-  const iccGate = buildIccGenerationGate({ runs: state.runs || [], standard: state.standard });
+  const iccGate = buildIccGenerationGate({ runs: state.runs || [], standard: state.standard, requireG7: state.settings?.requireG7ForIcc !== false });
   const generatedAt = new Date().toLocaleString();
   const jobs = groupJobRuns(state.runs || []);
 
@@ -341,12 +341,19 @@ export function renderSettings(state, els) {
   if (els.settingsSmoothInput) els.settingsSmoothInput.value = els.smoothInput.value;
   if (els.settingsLimitInput) els.settingsLimitInput.value = els.limitInput.value;
   if (els.settingsRatioInput) els.settingsRatioInput.value = els.ratioInput.value;
-  if (els.settingsDensityFilterSelect) els.settingsDensityFilterSelect.value = "status_t";
+  if (els.settingsSccaInput) els.settingsSccaInput.checked = Boolean(els.sccaInput?.checked);
+  if (els.settingsDensityFilterSelect) els.settingsDensityFilterSelect.value = state.settings?.densityFilter || "status_t";
+  if (els.settingsMeasurementConditionSelect) els.settingsMeasurementConditionSelect.value = state.settings?.measurementCondition || "auto";
+  if (els.settingsIlluminantSelect) els.settingsIlluminantSelect.value = state.settings?.illuminant || "D50";
+  if (els.settingsObserverSelect) els.settingsObserverSelect.value = state.settings?.observer || "2";
+  if (els.settingsDeviceAdapterSelect) els.settingsDeviceAdapterSelect.value = state.device?.adapterId || state.settings?.deviceAdapterId || "file";
+  if (els.settingsQueueProfileSelect) els.settingsQueueProfileSelect.value = state.device?.queueProfile || state.settings?.queueProfile || "g7";
+  if (els.settingsRequireG7Input) els.settingsRequireG7Input.checked = state.settings?.requireG7ForIcc !== false;
   els.desktopSummary.innerHTML = `
     <p>目标路线：Web MVP -> Tauri macOS .app -> 同项目编译 Windows。</p>
     <p>项目档案结构：jobs/客户-机器-日期/runs/时间.json。</p>
     <p>运行环境：${isTauri ? "Tauri 桌面容器" : "浏览器预览 / 静态 Web MVP"}</p>
-    <p>桌面骨架：已准备 src-tauri，后续安装 Rust 与 Tauri CLI 后可打包。</p>
+    <p>桌面包：CurveStudio / ${isTauri ? "已在桌面容器中运行" : "可通过 npm run tauri:build 打包"}。</p>
   `;
 }
 

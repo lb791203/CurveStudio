@@ -12,7 +12,7 @@
         <div class="sidebar-header">
           <div>
             <h1 class="brand-logo" data-translate="brand_logo">CurveStudio</h1>
-            <p class="subtle">TVI / CTV / G7 compensation MVP</p>
+            <p class="subtle">TVI / CTV / G7</p>
           </div>
           <button id="themeToggle" class="theme-toggle-btn" type="button" aria-label="切换深色模式">
             <span class="theme-icon" id="themeIcon">&#x263E;</span>
@@ -897,22 +897,53 @@
                 </div>
               </div>
               <div class="summary-box">
-                <strong>ΔE Formula</strong>
-                <label class="field-label">
-                  校验公式
-                  <select id="deltaFormulaSelect">
-                    <option value="de76">ΔE76</option>
-                    <option value="de94">ΔE94</option>
-                    <option value="de2000">ΔE2000</option>
-                    <option value="cmc">CMC (2:1)</option>
-                  </select>
-                </label>
-                <p>Lab 表、G7 预检和 Run 最大 ΔE 使用当前选择的公式判定。</p>
+                <strong>色差 / SCCA</strong>
+                <div class="settings-form-grid two-col">
+                  <label class="field-label">
+                    ΔE 校验公式
+                    <select id="deltaFormulaSelect">
+                      <option value="de76">ΔE76</option>
+                      <option value="de94">ΔE94</option>
+                      <option value="de2000">ΔE2000</option>
+                      <option value="cmc">CMC (2:1)</option>
+                    </select>
+                  </label>
+                  <label class="settings-check-row">
+                    <input id="settingsSccaInput" type="checkbox" />
+                    <span>默认启用 SCCA 纸白校正</span>
+                  </label>
+                </div>
+                <p>Lab 表、G7 预检和 Run 最大 ΔE 使用当前公式；SCCA 只有在测量文件含纸白 Lab 时才会生效。</p>
               </div>
               <div class="summary-box">
-                <strong>DeviceAdapter</strong>
-                <p>预留 connect / disconnect / calibrateWhite / readPatch / readStrip / getDeviceInfo。</p>
-                <p>当前状态：未接入 Techkon / X-Rite SDK。</p>
+                <strong>测量条件默认值</strong>
+                <div class="settings-form-grid two-col">
+                  <label class="field-label">
+                    测量条件
+                    <select id="settingsMeasurementConditionSelect">
+                      <option value="auto">自动读取文件</option>
+                      <option value="M0">M0</option>
+                      <option value="M1">M1</option>
+                      <option value="M2">M2</option>
+                      <option value="M3">M3</option>
+                    </select>
+                  </label>
+                  <label class="field-label">
+                    光源
+                    <select id="settingsIlluminantSelect">
+                      <option value="D50">D50</option>
+                      <option value="D65">D65（仅记录）</option>
+                    </select>
+                  </label>
+                  <label class="field-label">
+                    观察者
+                    <select id="settingsObserverSelect">
+                      <option value="2">2°</option>
+                      <option value="10">10°（仅记录）</option>
+                    </select>
+                  </label>
+                </div>
+                <p>导出和 Run 档案会记录这些条件；文件内已有 M0/M1/M2 时优先使用文件记录。</p>
               </div>
               <div class="summary-box">
                 <strong>光谱密度</strong>
@@ -926,11 +957,36 @@
                 <p>用于光谱文件的 Murray-Davies TVI。Status-E 尚未开放切换，避免误出正式 Status-E 报告。</p>
               </div>
               <div class="summary-box">
-                <strong>Desktop App</strong>
+                <strong>仪器 / 测量队列</strong>
+                <div class="settings-form-grid two-col">
+                  <label class="field-label">
+                    默认数据入口
+                    <select id="settingsDeviceAdapterSelect"></select>
+                  </label>
+                  <label class="field-label">
+                    默认测量队列
+                    <select id="settingsQueueProfileSelect">
+                      <option value="press-basic">纸白 + CMYK 实地 + 25/50/75</option>
+                      <option value="g7">生产 + G7 灰平衡 / 叠印</option>
+                    </select>
+                  </label>
+                </div>
+                <p>真实 SDK 未接入前，推荐默认使用文件导入；模拟设备只用于流程演示。</p>
+              </div>
+              <div class="summary-box">
+                <strong>ICC / 复测门禁</strong>
+                <label class="settings-check-row">
+                  <input id="settingsRequireG7Input" type="checkbox" checked />
+                  <span>生成 ICC 前要求 G7 校验通过</span>
+                </label>
+                <p>关闭后仍会检查复测 Run、Lab、特性化色块和曲线质量，但不把 G7 作为硬性阻断项。</p>
+              </div>
+              <div class="summary-box">
+                <strong>桌面 App</strong>
                 <div id="desktopSummary"></div>
               </div>
               <div class="summary-box">
-                <strong>Known Limits</strong>
+                <strong>当前限制</strong>
                 <p>完整 G7 认证级补偿、RWXF/CxF 和真实设备 SDK 仍是下一阶段实现项。</p>
               </div>
             </div>
