@@ -2,7 +2,7 @@
 
 macOS-first MVP for a print compensation curve tool. The first version is a local browser app so it can be used immediately on macOS and later wrapped with Tauri or SwiftUI.
 
-Current version: `0.1.7`. See [CHANGELOG.md](./CHANGELOG.md) for feature history.
+Current version: `0.1.8`. See [CHANGELOG.md](./CHANGELOG.md) for feature history.
 
 ## MVP scope
 
@@ -94,7 +94,7 @@ The RIP adjustment is clamped by the configured single-point limit and then smoo
 
 For CTV mode, the same compensation pipeline uses `measured_ctv - target_ctv` as the deviation. CTV is calculated with ISO 20654 Vx/Vy/Vz normalization from Lab when Lab is present, or XYZ/D50 when XYZ is present. If CTV data is missing, the result is marked as a TVI fallback instead of silently pretending it is CTV.
 
-When spectral-only measurement files are used, the current density estimate is visibly marked as `status_t_spectral` / `ISO Status-T 密度`. Status-E remains a planned, disabled option.
+When spectral-only measurement files are used, the current density estimate is visibly marked as `status_t_spectral` / `ISO Status-T 密度`. The Settings page can disable spectral density conversion with `None`; DIN / ISO-I / Status-E remain planned, disabled options until their weighting data is validated against official/vendor references.
 
 The `数据接入` page compares software-calculated ISO 20654 CTV against vendor/instrument CTV fields when present. X-Rite i1Pro workflows should first export CGATS/IT8/CSV from X-Rite/i1Profiler/ColorPort with Lab, XYZ, or spectral data. If the file also contains `CTV`, `SCTV`, `instrument_ctv`, `measured_ctv`, or similar columns, the page reports software CTV, instrument CTV, ΔCTV, and Pass/Warning/Fail. This is a data/vendor cross-check only; it does not validate the compensation curve.
 

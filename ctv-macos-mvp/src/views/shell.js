@@ -341,6 +341,8 @@ export function renderSettings(state, els) {
   if (els.settingsSmoothInput) els.settingsSmoothInput.value = els.smoothInput.value;
   if (els.settingsLimitInput) els.settingsLimitInput.value = els.limitInput.value;
   if (els.settingsRatioInput) els.settingsRatioInput.value = els.ratioInput.value;
+  if (els.settingsDeltaWarningInput) els.settingsDeltaWarningInput.value = state.standard?.deltaE?.warning ?? 3.5;
+  if (els.settingsDeltaFailInput) els.settingsDeltaFailInput.value = state.standard?.deltaE?.fail ?? 4.2;
   if (els.settingsSccaInput) els.settingsSccaInput.checked = Boolean(els.sccaInput?.checked);
   if (els.settingsDensityFilterSelect) els.settingsDensityFilterSelect.value = state.settings?.densityFilter || "status_t";
   if (els.settingsMeasurementConditionSelect) els.settingsMeasurementConditionSelect.value = state.settings?.measurementCondition || "auto";

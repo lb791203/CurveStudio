@@ -35,9 +35,10 @@
           <label>
             曲线模式
             <select id="modeSelect">
-              <option value="tvi">TVI 补偿</option>
-              <option value="ctv">CTV 线性化</option>
-              <option value="g7">G7 近似灰平衡 / NPDC</option>
+              <option value="tvi">TVI — Murray-Davies 密度法</option>
+              <option value="ctv">CTV — SCTV 色度法 (ISO 20654)</option>
+              <option value="g7">G7 — NPDC 灰平衡 (TR015)</option>
+              <option value="g7plus" disabled>G7+ — NPDC + SCTV 扩展（后续）</option>
             </select>
           </label>
           <label>
@@ -869,9 +870,10 @@
                   <label class="field-label">
                     默认曲线模式
                     <select id="settingsModeSelect">
-                      <option value="tvi">TVI 补偿</option>
-                      <option value="ctv">CTV / ISO 20654</option>
-                      <option value="g7">G7 近似灰平衡 / NPDC</option>
+                      <option value="tvi">TVI — Murray-Davies 密度法</option>
+                      <option value="ctv">CTV — SCTV 色度法 (ISO 20654)</option>
+                      <option value="g7">G7 — NPDC 灰平衡 (TR015)</option>
+                      <option value="g7plus" disabled>G7+ — NPDC + SCTV 扩展（后续）</option>
                     </select>
                   </label>
                   <label class="field-label">
@@ -897,15 +899,26 @@
                 </div>
               </div>
               <div class="summary-box">
-                <strong>色差 / SCCA</strong>
+                <strong>色度分析容差 / ΔE / SCCA</strong>
+                <p>a*b* 色度图、Lab 表、G7 预检和 ICC 门禁共用这些容差。</p>
                 <div class="settings-form-grid two-col">
+                  <label class="field-label">
+                    内圈容差 ΔE（Warning）
+                    <input id="settingsDeltaWarningInput" type="number" min="0" max="20" step="0.1" value="3.5" />
+                    <span>绿色椭圆半径，默认 3.5。</span>
+                  </label>
+                  <label class="field-label">
+                    外圈容差 ΔE（Fail）
+                    <input id="settingsDeltaFailInput" type="number" min="0" max="30" step="0.1" value="4.2" />
+                    <span>黄色椭圆半径，默认 4.2。</span>
+                  </label>
                   <label class="field-label">
                     ΔE 校验公式
                     <select id="deltaFormulaSelect">
-                      <option value="de76">ΔE76</option>
-                      <option value="de94">ΔE94</option>
-                      <option value="de2000">ΔE2000</option>
-                      <option value="cmc">CMC (2:1)</option>
+                      <option value="de76">ΔE*ab — CIE 1976（默认）</option>
+                      <option value="de94">ΔE94 — CIE 1994</option>
+                      <option value="de2000">ΔE2000 — CIEDE2000</option>
+                      <option value="cmc">ΔE CMC — CMC (l:c)</option>
                     </select>
                   </label>
                   <label class="settings-check-row">
@@ -913,7 +926,7 @@
                     <span>默认启用 SCCA 纸白校正</span>
                   </label>
                 </div>
-                <p>Lab 表、G7 预检和 Run 最大 ΔE 使用当前公式；SCCA 只有在测量文件含纸白 Lab 时才会生效。</p>
+                <p>ΔE 公式、内外圈容差和 SCCA 会立即参与 Lab 状态、G7 色彩空间检查、报告和 ICC 生成闸门。</p>
               </div>
               <div class="summary-box">
                 <strong>测量条件默认值</strong>
@@ -950,11 +963,15 @@
                 <label class="field-label">
                   密度滤色器
                   <select id="settingsDensityFilterSelect">
-                    <option value="status_t">ISO 5-3 Status-T（当前启用）</option>
-                    <option value="status_e" disabled>Status-E（待厂商样本验证）</option>
+                    <option value="none">None — 无滤光 / 禁用光谱密度 TVI</option>
+                    <option value="din_16536" disabled>DIN 16536 — DIN 标准（待权重验证）</option>
+                    <option value="din_16536_nb" disabled>DIN 16536-NB — DIN 无黑版（待权重验证）</option>
+                    <option value="iso_i" disabled>ISO_I — ISO 13655 I 条件（待权重验证）</option>
+                    <option value="status_t">ISO_T — ISO 13655 T 条件（当前启用）</option>
+                    <option value="status_e" disabled>ISO_E — ISO 13655 E 条件（待厂商样本验证）</option>
                   </select>
                 </label>
-                <p>用于光谱文件的 Murray-Davies TVI。Status-E 尚未开放切换，避免误出正式 Status-E 报告。</p>
+                <p>Status-T 已接入 Murray-Davies TVI；None 会禁用光谱密度换算。DIN / ISO-I / Status-E 暂不开放，避免误出未验证报告。</p>
               </div>
               <div class="summary-box">
                 <strong>仪器 / 测量队列</strong>
