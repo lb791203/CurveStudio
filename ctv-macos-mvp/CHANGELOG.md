@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.10 - 2026-05-22
+
+- Unified primary workflow button colors so loading, opening, parsing, adding, applying, saving, and calculating use the same brand action color.
+- Kept blue for selection, tabs, and visual emphasis instead of mixing it into primary action buttons.
+
 ## 0.1.9 - 2026-05-22
 
 - Fixed the left calculation settings panel so longer production labels no longer overflow outside the card.
