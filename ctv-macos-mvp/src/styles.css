@@ -112,7 +112,7 @@ strong {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 304px minmax(0, 1fr);
+  grid-template-columns: 344px minmax(0, 1fr);
 }
 
 .sidebar {
@@ -2206,13 +2206,35 @@ body.dark-theme .status-bar-diagnosis.danger {
 }
 
 .sidebar .control-panel-widget label {
+  min-width: 0;
   color: var(--text-muted);
+}
+
+.sidebar .control-panel-widget input,
+.sidebar .control-panel-widget select,
+.sidebar .control-panel-widget button {
+  width: 100%;
+  min-width: 0;
+}
+
+.sidebar .control-panel-widget select {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar .control-panel-widget .range-row {
+  grid-template-columns: minmax(0, 1fr) 44px;
 }
 
 .sidebar .control-panel-widget .range-value {
   background: var(--surface-soft) !important;
   border: 1px solid var(--line) !important;
   color: var(--ink) !important;
+}
+
+.sidebar .control-panel-widget #calculateButton {
+  min-height: 44px;
+  margin-top: 2px;
 }
 
 /* Premium Dark Theme Sidebar overrides */
