@@ -1,7 +1,7 @@
 import { cmykFromManualRow, cmykKey, labFromRow } from "./standards.js";
 import { average, groupByChannel, number } from "./shared.js";
 import { labFromSpectralRow } from "./spectral-color.js";
-import { buildNpdcVerification, summarizeNpdc, buildGrayVerification, summarizeGrayBalance, summarizeWeightedDeltaL, buildColorspaceVerification, classifyColorspacePatches } from "./g7-targets.js?v=20260520-patchmap";
+import { buildNpdcVerification, summarizeNpdc, buildGrayVerification, summarizeGrayBalance, summarizeWeightedDeltaL, buildColorspaceVerification, classifyColorspacePatches } from "./g7-targets.js?v=20260522-g7-verify";
 
 const MID_TONES = new Set([40, 45, 50, 55, 60]);
 
@@ -100,25 +100,85 @@ export function deltaE2000(sample, target) {
   return Math.sqrt(lTerm ** 2 + cTerm ** 2 + hTerm ** 2 + rT * cTerm * hTerm);
 }
 
-export function buildLabVerificationRows({ manualRows, measurements, standardPatchMap, warning = 3.5, fail = 4.2, scca = false, formula = "de76" }) {
-  const candidates = [];
+export function buildLabVerificationRows({ manualRows, measurements, rawRows = [], standardPatchMap, warning = 3.5, fail = 4.2, scca = false, formula = "de76" }) {
+  const candidates = new Map();
+  const addCandidate = (item) => {
+    if (!item?.lab || !item.cmyk) return;
+    const key = cmykKey(item.cmyk);
+    if (!candidates.has(key)) candidates.set(key, item);
+  };
+
+  const getDensity = (row, cmyk) => {
+    if (row.density !== undefined && Number.isFinite(row.density)) return row.density;
+    if (!cmyk) return undefined;
+
+    const readVal = (obj, ...keys) => {
+      for (const k of keys) {
+        if (obj[k] !== undefined && obj[k] !== null && obj[k] !== "") return obj[k];
+      }
+      return undefined;
+    };
+
+    const activeChannels = ["c", "m", "y", "k"].filter(ch => cmyk[ch] > 0);
+    if (activeChannels.length === 1) {
+      const channel = activeChannels[0].toUpperCase();
+      const lower = channel.toLowerCase();
+      const val = number(readVal(row, "density", `density_${lower}`, `d_${lower}`, "status_density", "density_status"));
+      if (Number.isFinite(val)) return val;
+    } else {
+      const val = number(readVal(row, "density", "status_density", "density_status"));
+      if (Number.isFinite(val)) return val;
+    }
+    return undefined;
+  };
 
   for (const row of manualRows || []) {
     const lab = labFromRow({ lab_l: row.labL, lab_a: row.labA, lab_b: row.labB });
     const cmyk = cmykFromManualRow(row);
-    if (lab && cmyk) candidates.push({ label: manualLabel(row, cmyk), cmyk, lab, source: row.source || "Manual" });
+    if (lab && cmyk) {
+      addCandidate({
+        label: manualLabel(row, cmyk),
+        cmyk,
+        lab,
+        density: Number.isFinite(row.density) ? row.density : undefined,
+        source: row.source || "Manual"
+      });
+    }
+  }
+
+  for (const row of rawRows || []) {
+    const cmyk = rawCmyk(row);
+    const lab = labFromRow(row) || labFromSpectralRow(row);
+    if (lab && cmyk) {
+      addCandidate({
+        label: rawPatchLabel(row, cmyk),
+        cmyk,
+        lab,
+        density: getDensity(row, cmyk),
+        source: row.sourceFormat || row.source || "Raw Lab"
+      });
+    }
   }
 
   for (const row of measurements || []) {
     if (!row.lab) continue;
     const cmyk = measurementCmyk(row);
-    if (cmyk) candidates.push({ label: `${row.channel} ${row.tone}%`, cmyk, lab: row.lab, source: row.sourceFormat || row.source || "Measurement" });
+    if (cmyk) {
+      addCandidate({
+        label: `${row.channel} ${row.tone}%`,
+        cmyk,
+        lab: row.lab,
+        density: row.density,
+        source: row.sourceFormat || row.source || "Measurement"
+      });
+    }
   }
 
   const paperReference = standardPatchMap.get("0.00/0.00/0.00/0.00")?.lab;
-  const paperMeasured = candidates.find((item) => cmykKey(item.cmyk) === "0.00/0.00/0.00/0.00")?.lab;
+  const rows = [...candidates.values()];
+  const paperMeasured = rows.find((item) => cmykKey(item.cmyk) === "0.00/0.00/0.00/0.00")?.lab;
 
-  return candidates.map((item) => {
+  return rows.map((item) => {
     const reference = standardPatchMap.get(cmykKey(item.cmyk));
     const referenceLab = scca && reference && paperReference && paperMeasured
       ? sccaReferenceLab(reference.lab, paperReference, paperMeasured)
@@ -979,8 +1039,8 @@ function isLikelyG7GrayCmyk(cmyk) {
   const { c, m, y, k } = cmyk;
   if (k > 0.01 || c <= 0 || m <= 0 || y <= 0) return false;
   const myClose = Math.abs(m - y) <= 2.5;
-  const cLower = c <= m + 2.5 && c <= y + 2.5;
-  return myClose && cLower;
+  const cInRange = c >= m - 3 && c <= m + 10 && c >= y - 3 && c <= y + 10;
+  return myClose && cInRange;
 }
 
 function neutralGrayTone(row) {

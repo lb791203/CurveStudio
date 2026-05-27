@@ -130,7 +130,14 @@ export function buildGrayVerification(grayRows, options = {}) {
       const targetLab = targetGrayLab(row, options.standardPatchMap);
       const targetL = targetLab?.l ?? (Number.isFinite(tone) ? g7NpdcLTarget(tone) : NaN);
       const deltaL = Number.isFinite(row.lab.l) && Number.isFinite(targetL) ? row.lab.l - targetL : NaN;
-      const chroma = Math.sqrt((row.lab.a || 0) ** 2 + (row.lab.b || 0) ** 2);
+      const measuredA = number(row.lab.a);
+      const measuredB = number(row.lab.b);
+      const targetA = Number.isFinite(number(targetLab?.a)) ? number(targetLab.a) : 0;
+      const targetB = Number.isFinite(number(targetLab?.b)) ? number(targetLab.b) : 0;
+      const deltaA = Number.isFinite(measuredA) ? measuredA - targetA : NaN;
+      const deltaB = Number.isFinite(measuredB) ? measuredB - targetB : NaN;
+      const chroma = Number.isFinite(deltaA) && Number.isFinite(deltaB) ? Math.sqrt(deltaA ** 2 + deltaB ** 2) : NaN;
+      const measuredChroma = Number.isFinite(measuredA) && Number.isFinite(measuredB) ? Math.sqrt(measuredA ** 2 + measuredB ** 2) : NaN;
       const weight = g7ToneWeight(tone);
       const signedWeightedDeltaL = Number.isFinite(deltaL) ? deltaL * weight : NaN;
       const measuredNpdc = neutralPrintDensityFromL(row.lab.l, paperL);
@@ -148,9 +155,14 @@ export function buildGrayVerification(grayRows, options = {}) {
         deltaNpdc: Number.isFinite(measuredNpdc) && Number.isFinite(targetNpdc) ? measuredNpdc - targetNpdc : NaN,
         deltaL,
         absDeltaL: Number.isFinite(deltaL) ? Math.abs(deltaL) : NaN,
-        a: row.lab.a,
-        b: row.lab.b,
+        a: measuredA,
+        b: measuredB,
+        targetA,
+        targetB,
+        deltaA,
+        deltaB,
         chroma,
+        measuredChroma,
         weight,
         signedWeightedDeltaL,
         weightedDeltaL: Number.isFinite(signedWeightedDeltaL) ? Math.abs(signedWeightedDeltaL) : NaN,

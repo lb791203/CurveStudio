@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "CurveStudio",
+  "version": "0.1.12",
+  "identifier": "com.fmprint.curvestudio",
+  "build": {
+    "beforeDevCommand": "npm run dev:node",
+    "beforeBuildCommand": "npm run build:dist",
+    "devUrl": "http://localhost:4173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "CurveStudio",
+        "width": 1320,
+        "height": 880,
+        "minWidth": 1100,
+        "minHeight": 720
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi"],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico",
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png"
+    ],
+    "category": "Business",
+    "shortDescription": "TVI / CTV / G7 compensation curve tool",
+    "longDescription": "Print compensation curve tool for TVI, ISO 20654 CTV, G7 verification, Lab comparison, and RIP export."
+  }
+}
