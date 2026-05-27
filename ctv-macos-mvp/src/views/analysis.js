@@ -1,80 +1,215 @@
 import { targetSeries, toExportRows } from "../curve-engine.js?v=20260521-icc-p4";
-import { summarizeLabVerification } from "../analysis-engine.js?v=20260521-icc-p4";
-import { buildCurveAcceptance } from "../curve-acceptance.js?v=20260521-icc-p4";
+import { summarizeLabVerification } from "../analysis-engine.js?v=20260522-g7-verify";
 import { buildCompensationSimulation, summarizeCompensationSimulation } from "../compensation-simulation.js?v=20260521-icc-p4";
-import { renderCurveChart, renderG7Charts, renderLabChromaticityChart, renderMeasurementChart } from "../chart-renderer.js?v=20260521-icc-p4";
+import { renderCompensationSimulationChart, renderCurveChart, renderG7Charts, renderLabChromaticityChart, renderMeasurementChart } from "../chart-renderer.js?v=20260523-sim-drag";
 import { curveRowKey } from "../curve-overrides.js?v=20260521-icc-p4";
 import { escapeAttr, escapeHtml } from "../shared.js?v=20260521-icc-p4";
 import { deltaFormulaLabel, methodLabel } from "../ui-labels.js?v=20260521-icc-p4";
-import { fmt, num, signed, kpiCard, statusClass, labText, renderCurveAcceptanceSummary } from "./helpers.js?v=20260521-icc-p4";
-import { visibleWarnings } from "./data.js?v=20260521-icc-p4";
+import { t, translateDynamicText } from "../translations.js?v=20260525-statusbar-pass-1";
+import { fmt, num, signed, kpiCard, statusClass, labText } from "./helpers.js?v=20260525-statusbar-pass-1";
+import { visibleWarnings } from "./data.js?v=20260525-statusbar-pass-1";
 
 export function renderAnalyze(state, els) {
-  const diagnosis = state.diagnosis || { level: "empty", title: "未诊断", ratio: 50, messages: [] };
+  const diagnosis = state.diagnosis || { level: "empty", title: t("awaiting_diagnosis", "等待诊断"), ratio: 50, messages: [] };
   const labSummary = summarizeLabVerification(state.labRows);
   const verificationRows = buildVerificationChecklist(state, els);
-  const hasPaperLab = state.manualRows.some((row) => row.patchType === "paper" && [row.labL, row.labA, row.labB].every((v) => v !== "" && Number.isFinite(Number(v))));
+  const keySummary = summarizeKeyPatches(state.labRows);
+  const hasPaperLab = state.labRows.some((row) => isPaperCmyk(row.cmyk) && row.lab);
+  const sccaBlocked = els.sccaInput.checked && !hasPaperLab;
   els.diagnosisCards.innerHTML = [
-    kpiCard("诊断", diagnosis.title, diagnosis.level),
-    kpiCard("建议欠补偿", `${diagnosis.ratio}%`, "neutral"),
-    kpiCard(`${deltaFormulaLabel(els.deltaFormulaSelect.value)} 状态`, labSummary.status, labSummary.status === "Pass" ? "pass" : labSummary.status === "Fail" ? "danger" : labSummary.status === "Warning" ? "warning" : "neutral"),
-    kpiCard("可比 Lab", `${labSummary.comparable}/${labSummary.total}`, labSummary.comparable ? "pass" : "warning"),
-    kpiCard("最大 ΔE", num(labSummary.maxDeltaE), labSummary.fail ? "danger" : labSummary.warning ? "warning" : "neutral"),
-    kpiCard("曲线安全问题", state.safetyIssues.length, state.safetyIssues.length ? "warning" : "pass"),
+    kpiCard(t("diagnosis_label", "诊断"), translateDynamicText(diagnosis.title), diagnosis.level),
+    kpiCard(t("ratio_label", "建议欠补偿"), `${diagnosis.ratio}%`, "neutral"),
+    kpiCard(`${deltaFormulaLabel(els.deltaFormulaSelect.value)} ${t("status_label", "Status")}`, labSummary.status, labSummary.status === "Pass" ? "pass" : labSummary.status === "Fail" ? "danger" : labSummary.status === "Warning" ? "warning" : "neutral"),
+    kpiCard(t("comparable_lab_label", "可比 Lab"), `${labSummary.comparable}/${labSummary.total}`, labSummary.comparable ? "pass" : "warning"),
+    kpiCard(t("max_delta_e_label", "最大 ΔE"), num(labSummary.maxDeltaE), labSummary.fail ? "danger" : labSummary.warning ? "warning" : "neutral"),
+    kpiCard(t("curve_safety_issues_label", "曲线安全问题"), state.safetyIssues.length, state.safetyIssues.length ? "warning" : "pass"),
   ].join("");
 
-  const messages = diagnosis.messages?.map((item) => `<p>${escapeHtml(item)}</p>`).join("") || "";
+  const messages = diagnosis.messages?.map((item) => `<p>${escapeHtml(translateDynamicText(item))}</p>`).join("") || "";
   const sccaMessage = els.sccaInput.checked
     ? hasPaperLab
-      ? "<p>SCCA 已启用：参考 Lab 已按纸白差异做 MVP 级平移校正。</p>"
-      : "<p>SCCA 已勾选，但缺少纸白 Lab，不能执行纸白校正。</p>"
+      ? `<p>${escapeHtml(t("scca_enabled_message", "SCCA 已启用：参考 Lab 已按纸白差异做 MVP 级平移校正。"))}</p>`
+      : `<p>${escapeHtml(t("scca_missing_paper_message", "SCCA 已勾选，但缺少纸白 Lab，不能执行纸白校正。"))}</p>`
     : "";
   els.diagnosisCards.insertAdjacentHTML("beforeend", `<div class="kpi-card span-card">${messages}${sccaMessage}</div>`);
 
-  const passCount = verificationRows.filter((row) => row.status === "Pass").length;
-  const failCount = verificationRows.filter((row) => row.status === "Fail").length;
-  const warningCount = verificationRows.filter((row) => row.status === "Warning").length;
-  els.verificationChecklistSummary.textContent = verificationRows.length
-    ? `${passCount} / ${verificationRows.length} 项通过${failCount ? `，${failCount} 项失败` : warningCount ? `，${warningCount} 项警告` : ""}`
-    : "等待可校验数据";
-  els.verificationChecklistBody.innerHTML = verificationRows.length
-    ? verificationRows.map((row) => `
-      <tr class="verify-row ${statusClass(row.status)}">
-        <td><strong>${escapeHtml(row.label)}</strong><div class="cell-note">${escapeHtml(row.note || "")}</div></td>
-        <td>${escapeHtml(row.measured)}</td>
-        <td>${escapeHtml(row.target)}</td>
-        <td><span class="status ${statusClass(row.status)}">${escapeHtml(row.status)}</span></td>
-      </tr>
-    `).join("")
-    : "<tr><td colspan=\"4\">导入测量数据并选择标准后显示校验清单。</td></tr>";
+  els.verificationChecklistSummary.textContent = verificationRows.length || keySummary.available
+    ? t("key_patch_summary", "关键 9 项：Pass {pass} / Warning {warning} / Fail {fail}")
+      .replace("{pass}", keySummary.pass).replace("{warning}", keySummary.warning).replace("{fail}", keySummary.fail)
+    : t("waiting_verifiable_data", "等待可校验数据");
+  if (els.labDetailSummary) {
+    els.labDetailSummary.textContent = state.labRows.length
+      ? t("comparable_lab_summary", "可比 {comparable}/{total}，最大 ΔE {max}")
+        .replace("{comparable}", labSummary.comparable).replace("{total}", labSummary.total).replace("{max}", num(labSummary.maxDeltaE))
+      : t("waiting_data", "等待数据");
+  }
+  if (els.labDetailBody) {
+    els.labDetailBody.innerHTML = renderLabDetailRows(state.labRows, sccaBlocked);
+  }
   renderLabChromaticityChart(els.labChromaticityChart, state.labRows);
 
-  const sccaBlocked = els.sccaInput.checked && !hasPaperLab;
   els.labBody.innerHTML = state.labRows.length
-    ? state.labRows.map((row) => `
+    ? renderKeyPatchRows(state.labRows, state.standard?.deltaE)
+    : `<tr><td colspan="4">${sccaBlocked ? t("scca_needs_paper_lab", "SCCA requires paper-white Lab; current measurement is missing paper white.") : t("no_lab_compare_data", "No Lab/ΔE comparison data is available.")}</td></tr>`;
+}
+
+function isPaperCmyk(cmyk) {
+  return cmyk && ["c", "m", "y", "k"].every((channel) => Math.abs(Number(cmyk[channel]) || 0) < 0.01);
+}
+
+function renderLabDetailRows(labRows = [], sccaBlocked = false) {
+  if (!labRows.length) {
+    return `<tr><td colspan="11">${sccaBlocked ? t("scca_needs_paper_lab", "SCCA requires paper-white Lab; current measurement is missing paper white.") : t("no_lab_compare_data", "No Lab/ΔE comparison data is available.")}</td></tr>`;
+  }
+  return labRows.map((row) => `
+    <tr>
+      <td>${escapeHtml(row.label)}</td>
+      <td>${labText(row.lab)}</td>
+      <td>${row.referenceLab ? `${labText(row.referenceLab)}${row.referenceWasSccaCorrected ? " / SCCA" : ""}` : t("missing_target", "Missing target")}</td>
+      <td>${num(row.deltaL)}</td>
+      <td>${num(row.deltaA)}</td>
+      <td>${num(row.deltaB)}</td>
+      <td>${num(row.deltaE76)}</td>
+      <td>${num(row.deltaE94)}</td>
+      <td>${num(row.deltaE00)}</td>
+      <td>${num(row.deltaECMC)}</td>
+      <td><span class="status ${statusClass(row.status)}">${escapeHtml(row.status)}</span></td>
+    </tr>
+  `).join("");
+}
+
+function renderKeyPatchRows(labRows = [], thresholds = {}) {
+  return keyPatchRows(labRows).map(({ slot, row }) => {
+    const sampleColor = cmykToRgb(slot.cmyk);
+    if (!row) {
+      return `
+        <tr>
+          <td><strong>${escapeHtml(slot.name)}</strong></td>
+          <td>${renderKeyPatchLabCell(sampleColor, null)}</td>
+          <td>${renderKeyPatchLabCell(sampleColor, null, { muted: true })}</td>
+          <td>-</td>
+        </tr>
+      `;
+    }
+    const targetColor = row.referenceLab ? sampleColor : "#e2e8f0";
+    const deClass = deColorClass(row.deltaE, thresholds.warning || 3.5, thresholds.fail || 4.2);
+    return `
       <tr>
-        <td>${escapeHtml(row.label)}</td>
-        <td>${labText(row.lab)}</td>
-        <td>${row.referenceLab ? `${labText(row.referenceLab)}${row.referenceWasSccaCorrected ? " / SCCA" : ""}` : "缺目标"}</td>
-        <td>${num(row.deltaL)}</td>
-        <td>${num(row.deltaA)}</td>
-        <td>${num(row.deltaB)}</td>
-        <td>${num(row.deltaE76)}</td>
-        <td>${num(row.deltaE94)}</td>
-        <td>${num(row.deltaE00)}</td>
-        <td>${num(row.deltaECMC)}</td>
-        <td><span class="status ${statusClass(row.status)}">${row.status}</span></td>
+        <td>
+          <strong>${escapeHtml(slot.name)}</strong>
+          <div class="cell-note">${escapeHtml(row.label || "")}</div>
+        </td>
+        <td>${renderKeyPatchLabCell(sampleColor, row.lab, { note: `D ${Number.isFinite(row.density) ? num(row.density) : "-"}` })}</td>
+          <td>${renderKeyPatchLabCell(targetColor, row.referenceLab, { missing: t("missing_target", "Missing target") })}</td>
+        <td>
+          <strong class="${deClass}">${Number.isFinite(row.deltaE) ? num(row.deltaE) : "-"}</strong>
+          <div class="cell-note"><span class="status ${statusClass(row.status)}">${escapeHtml(row.status || (row.referenceLab ? "Pass" : "Missing Target"))}</span></div>
+        </td>
       </tr>
-    `).join("")
-    : `<tr><td colspan="11">${sccaBlocked ? "SCCA 需要纸白 Lab；当前缺少纸白测量。" : "当前没有可做 Lab/ΔE 比对的数据。"}</td></tr>`;
+    `;
+  }).join("");
+}
+
+function renderKeyPatchLabCell(color, lab, options = {}) {
+  const swatchClass = options.muted ? "color-swatch muted" : "color-swatch";
+  const note = options.note ? `<div class="cell-note key-patch-note">${escapeHtml(options.note)}</div>` : "";
+  const value = lab
+    ? `
+      <span class="lab-triplet" aria-label="L ${num(lab.l)} a ${num(lab.a)} b ${num(lab.b)}">
+        <span>${num(lab.l)}</span>
+        <span>${num(lab.a)}</span>
+        <span>${num(lab.b)}</span>
+      </span>
+    `
+    : `<span class="lab-missing">${escapeHtml(options.missing || "-")}</span>`;
+  return `
+    <div class="key-patch-value">
+      <span class="${swatchClass}" style="background-color: ${color};"></span>
+      ${value}
+    </div>
+    ${note}
+  `;
+}
+
+function keyPatchRows(labRows = []) {
+  return keyPatchSlots().map((slot) => ({
+    slot,
+    row: labRows.find((item) => item.cmyk && keyCmyk(item.cmyk) === slot.key),
+  }));
+}
+
+function summarizeKeyPatches(labRows = []) {
+  return keyPatchRows(labRows).reduce(
+    (acc, { row }) => {
+      if (!row) {
+        acc.warning += 1;
+        return acc;
+      }
+      acc.available += 1;
+      if (!row.referenceLab) {
+        acc.warning += 1;
+      } else if (row.status === "Fail") {
+        acc.fail += 1;
+      } else if (row.status === "Warning") {
+        acc.warning += 1;
+      } else {
+        acc.pass += 1;
+      }
+      return acc;
+    },
+    { pass: 0, warning: 0, fail: 0, available: 0 }
+  );
+}
+
+function keyPatchSlots() {
+  return [
+    { name: t("paper_prefix", "纸张"), cmyk: { c: 0, m: 0, y: 0, k: 0 } },
+    { name: t("patch_c_solid", "C 实地"), cmyk: { c: 100, m: 0, y: 0, k: 0 } },
+    { name: t("patch_m_solid", "M 实地"), cmyk: { c: 0, m: 100, y: 0, k: 0 } },
+    { name: t("patch_y_solid", "Y 实地"), cmyk: { c: 0, m: 0, y: 100, k: 0 } },
+    { name: t("patch_k_solid", "K 实地"), cmyk: { c: 0, m: 0, y: 0, k: 100 } },
+    { name: t("patch_cm_overprint", "CM 叠印"), cmyk: { c: 100, m: 100, y: 0, k: 0 } },
+    { name: t("patch_cy_overprint", "CY 叠印"), cmyk: { c: 100, m: 0, y: 100, k: 0 } },
+    { name: t("patch_my_overprint", "MY 叠印"), cmyk: { c: 0, m: 100, y: 100, k: 0 } },
+    { name: t("patch_cmy_overprint", "CMY 叠印"), cmyk: { c: 100, m: 100, y: 100, k: 0 } },
+  ].map((slot) => ({ ...slot, key: keyCmyk(slot.cmyk) }));
+}
+
+function keyCmyk(cmyk) {
+  return `${Number(cmyk?.c || 0).toFixed(2)}/${Number(cmyk?.m || 0).toFixed(2)}/${Number(cmyk?.y || 0).toFixed(2)}/${Number(cmyk?.k || 0).toFixed(2)}`;
+}
+
+function cmykToRgb(cmyk) {
+  const c = Math.max(0, Math.min(1, Number(cmyk.c || 0) / 100));
+  const m = Math.max(0, Math.min(1, Number(cmyk.m || 0) / 100));
+  const y = Math.max(0, Math.min(1, Number(cmyk.y || 0) / 100));
+  const k = Math.max(0, Math.min(1, Number(cmyk.k || 0) / 100));
+  const rgb = [c, m, y].map((ink) => Math.round(255 * (1 - ink) * (1 - k)));
+  return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+}
+
+function deColorClass(de, warning = 3.5, fail = 4.2) {
+  if (!Number.isFinite(de)) return "";
+  if (de >= fail) return "text-danger";
+  if (de >= warning) return "text-warning";
+  return "text-success";
 }
 
 export function statusText(state, els) {
   const warnings = visibleWarnings(state, els);
   const lockedCount = state.results.filter((row) => row.overrideLocked).length;
-  if (state.results.length) return `已生成 ${state.results.length} 个${els.modeSelect.value === "ctv" ? " CTV" : " TVI"}曲线点${lockedCount ? ` / 人工锁定 ${lockedCount} 点` : ""}${warnings.length ? ` / ${warnings.join(" / ")}` : ""}`;
-  if (state.measurements.length) return "已识别测量点，但缺少可计算指标";
-  return warnings[0] || "等待导入";
+  if (state.results.length) {
+    const mode = els.modeSelect.value === "ctv" ? "CTV" : "TVI";
+    const base = (lockedCount
+      ? t("generated_curve_with_locks_status", "已生成 {count} 个{mode}曲线点 / 人工锁定 {locked} 点")
+      : t("generated_curve_status", "已生成 {count} 个{mode}曲线点"))
+      .replace("{count}", state.results.length)
+      .replace("{mode}", mode)
+      .replace("{locked}", lockedCount);
+    return `${base}${warnings.length ? ` / ${warnings.map(translateDynamicText).join(" / ")}` : ""}`;
+  }
+  if (state.measurements.length) return t("measurement_recognized_missing_metric", "已识别测量点，但缺少可计算指标");
+  return warnings[0] ? translateDynamicText(warnings[0]) : t("waiting_import_status", "等待导入");
 }
 
 export function renderCurve(state, els) {
@@ -82,13 +217,11 @@ export function renderCurve(state, els) {
   const filtered = state.activeCurveChannel && state.activeCurveChannel !== "all"
     ? state.results.filter((row) => row.channel === state.activeCurveChannel)
     : state.results;
-  const acceptance = buildCurveAcceptance(filtered, state.safetyIssues);
   const qualityMap = curveQualityByPoint(state.safetyIssues);
   els.resultBody.innerHTML = toExportRows(filtered)
     .map((row, index) => {
       const sourceRow = filtered[index];
       const key = curveRowKey(sourceRow);
-      const autoOutputTone = Number.isFinite(sourceRow.autoOutputTone) ? sourceRow.autoOutputTone : sourceRow.outputTone;
       const locked = Boolean(sourceRow.overrideLocked);
       const quality = qualityMap.get(key) || { level: "pass", label: "安全", messages: [] };
       return `
@@ -99,59 +232,38 @@ export function renderCurve(state, els) {
         <td>${row.targetTone}%</td>
         <td class="${Number(row.tviDelta) > 0 ? "negative" : "positive"}">${signed(row.tviDelta)}%</td>
         <td class="zone-start">${row.theoreticalOutputTone}%</td>
-        <td>${row.productionOutputTone}%</td>
-        <td class="${Number(row.ripAdjustment) < 0 ? "negative" : "positive"}">${row.manualActionZh}</td>
-        <td><strong>${row.outputTone}%</strong></td>
-        <td><span class="status ${quality.level === "danger" ? "fail" : quality.level}">${escapeHtml(quality.label)}</span>${quality.messages.length ? `<div class="cell-note">${escapeHtml(quality.messages.join(" / "))}</div>` : ""}</td>
-        <td><input class="curve-lock-input" type="checkbox" data-curve-field="locked" data-curve-key="${escapeAttr(key)}" ${locked ? "checked" : ""} aria-label="锁定 ${escapeAttr(row.channel)} ${escapeAttr(row.inputTone)}% 输出" /></td>
-        <td><input class="curve-output-input" type="number" min="0" max="100" step="0.1" value="${escapeAttr(row.outputTone)}" data-curve-field="outputTone" data-curve-key="${escapeAttr(key)}" aria-label="人工输出 ${escapeAttr(row.channel)} ${escapeAttr(row.inputTone)}%" /></td>
-        <td>${num(autoOutputTone)}%</td>
-        <td class="cell-text">${row.pointSource === "interpolated" ? "插值" : "实测"}</td>
-        <td class="cell-text">${escapeHtml(row.metric)} / ${escapeHtml(methodLabel(row.measurementMethod))}${locked ? " / 人工锁定" : ""}</td>
+        <td class="${Number(row.ripAdjustment) < 0 ? "negative" : "positive"}">${escapeHtml(translateDynamicText(row.manualActionZh))}</td>
+        <td><input class="curve-output-input" type="number" min="0" max="100" step="0.1" value="${escapeAttr(row.outputTone)}" data-curve-field="outputTone" data-curve-key="${escapeAttr(key)}" aria-label="${escapeAttr(t("suggested_output_aria", "Suggested output tone"))} ${escapeAttr(row.channel)} ${escapeAttr(row.inputTone)}%" /></td>
+        <td><span class="status ${quality.level === "danger" ? "fail" : quality.level}">${escapeHtml(translateDynamicText(quality.label))}</span>${quality.messages.length ? `<div class="cell-note">${escapeHtml(quality.messages.map(translateDynamicText).join(" / "))}</div>` : ""}</td>
+        <td><input class="curve-lock-input" type="checkbox" data-curve-field="locked" data-curve-key="${escapeAttr(key)}" ${locked ? "checked" : ""} aria-label="${escapeAttr(t("lock_output_aria", "Lock output"))} ${escapeAttr(row.channel)} ${escapeAttr(row.inputTone)}%" /></td>
+        <td class="cell-text">${row.pointSource === "interpolated" ? t("interpolated", "插值") : t("measured_label", "实测")}</td>
+        <td class="cell-text">${escapeHtml(translateDynamicText(row.metric))} / ${escapeHtml(methodLabel(row.measurementMethod))}${locked ? ` / ${escapeHtml(t("manual_locked_label", "人工锁定"))}` : ""}</td>
       </tr>
     `;
     })
     .join("");
-  els.curveAcceptanceSummary.innerHTML = renderCurveAcceptanceSummary(acceptance);
   renderCompensationSimulation(filtered, els);
-  const reviewRows = acceptanceReviewRows(acceptance.rows, qualityMap);
-  els.ripEntryBody.innerHTML = reviewRows.length
-    ? reviewRows.map(({ row, quality }) => `
-      <tr>
-        <td><span class="channel ${row.channel}">${row.channel}</span></td>
-        <td>${row.inputTone}%</td>
-        <td class="zone-start"><span class="status ${row.level === "increase" ? "warning" : row.level === "reduce" ? "pass" : "neutral"}">${row.action}</span></td>
-        <td class="${row.adjustment < 0 ? "negative" : row.adjustment > 0 ? "positive" : ""}">${signed(row.adjustment)}%</td>
-        <td><strong>${row.outputTone}%</strong></td>
-        <td>${row.measuredTone}%</td>
-        <td>${row.targetTone}%</td>
-        <td>${reviewReason(row, quality)}</td>
-        <td class="cell-text">${escapeHtml(row.metric)} / ${escapeHtml(methodLabel(row.measurementMethod))}</td>
-      </tr>
-    `).join("")
-    : acceptance.rows.length
-      ? "<tr><td colspan=\"9\">没有需要单独复核的点；完整录入数据以上方主表和导出文件为准。</td></tr>"
-      : "<tr><td colspan=\"9\">尚未生成曲线。</td></tr>";
 
   renderMeasurementChart(els.measurementChart, state.results, targetSeries(els.targetSelect.value), els.modeSelect.value);
   renderCurveChart(els.curveChart, filtered, state.safetyIssues);
 
   els.safetySummary.innerHTML = state.safetyIssues.length
     ? renderSafetySummary(state.safetyIssues)
-    : "<p>未发现反折、异常跳变或高光/暗调保护问题。</p>";
+    : `<p>${escapeHtml(t("no_curve_safety_issue", "未发现反折、异常跳变或高光/暗调保护问题。"))}</p>`;
 }
 
 function renderCompensationSimulation(rows, els) {
   if (!els.compensationSimulationSummary || !els.compensationSimulationBody) return;
   const simulationRows = buildCompensationSimulation(rows);
   const summary = summarizeCompensationSimulation(simulationRows);
+  renderCompensationSimulationChart(els.compensationSimulationChart, simulationRows);
   els.compensationSimulationSummary.innerHTML = summary.total
     ? `
-      <p><strong>模拟验证</strong> <span class="status ${statusClass(summary.status)}">${escapeHtml(summary.status)}</span> 可模拟 ${summary.total} 点，Pass ${summary.pass} / Warning ${summary.warning} / Fail ${summary.fail}</p>
-      <p>平均 |偏差|：当前 ${num(summary.avgBefore)}% → 套用后 ${num(summary.avgAfter)}%；改善 ${summary.improved} 点，变差 ${summary.worsened} 点。</p>
-      <p>说明：这是按同一次测量得到的机器响应曲线做估算，用来判断补偿方向；正式验收仍需要输出补偿后样张并复测。</p>
+      <p><strong>${escapeHtml(t("simulation_check_label", "Simulation Check"))}</strong> <span class="status ${statusClass(summary.status)}">${escapeHtml(summary.status)}</span> ${escapeHtml(t("simulatable_label", "Simulatable"))} ${summary.total} ${escapeHtml(t("points_label", "points"))}, Pass ${summary.pass} / Warning ${summary.warning} / Fail ${summary.fail}</p>
+      <p>${escapeHtml(t("average_delta_summary_label", "Average |Delta|"))}: ${escapeHtml(t("current_label", "Current"))} ${num(summary.avgBefore)}% -> ${escapeHtml(t("after_simulation_label", "After Simulation"))} ${num(summary.avgAfter)}%; ${escapeHtml(t("improved_label", "Improved"))} ${summary.improved} ${escapeHtml(t("points_label", "points"))}, ${escapeHtml(t("worsened_label", "Worsened"))} ${summary.worsened} ${escapeHtml(t("points_label", "points"))}.</p>
+      <p>${escapeHtml(t("simulation_note_label", "Note"))}: ${escapeHtml(t("simulation_same_measurement_note", "This estimate uses the same measurement response curve to judge compensation direction. Formal acceptance still requires outputting the compensated target and remeasuring it."))}</p>
     `
-    : "<p>尚未生成可模拟的补偿曲线。先导入测量数据并计算曲线。</p>";
+    : `<p>${escapeHtml(t("simulation_not_ready_help", "No simulatable compensation curve has been generated yet. Import measurement data and calculate the curve first."))}</p>`;
 
   const reviewRows = simulationRows.filter((row) =>
     row.status !== "Pass"
@@ -167,18 +279,18 @@ function renderCompensationSimulation(rows, els) {
       <tr>
         <td><span class="channel ${escapeAttr(row.channel)}">${escapeHtml(row.channel)}</span></td>
         <td>${num(row.tone)}%</td>
-        <td>${num(row.measuredTone)}%<div class="cell-note">当前偏差 ${signed(row.beforeDelta)}%</div></td>
+        <td>${num(row.measuredTone)}%<div class="cell-note">${escapeHtml(t("current_delta_label", "Current Delta"))} ${signed(row.beforeDelta)}%</div></td>
         <td>${num(row.targetTone)}%</td>
         <td class="zone-start"><strong>${num(row.outputTone)}%</strong></td>
         <td>${num(row.simulatedTone)}%</td>
         <td class="${Math.abs(row.afterDelta) > row.tolerance ? "negative" : "positive"}">${signed(row.afterDelta)}%</td>
         <td class="${row.improvement < -0.05 ? "negative" : row.improvement > 0.05 ? "positive" : ""}">${signed(row.improvement)}%</td>
-        <td><span class="status ${statusClass(row.status)}">${escapeHtml(row.status)}</span><div class="cell-note">${escapeHtml(row.basis)} / 容差 ±${num(row.tolerance)}%</div></td>
+        <td><span class="status ${statusClass(row.status)}">${escapeHtml(row.status)}</span><div class="cell-note">${escapeHtml(translateDynamicText(row.basis))} / ${escapeHtml(t("threshold_label", "Tolerance"))} ±${num(row.tolerance)}%</div></td>
       </tr>
     `).join("")
     : summary.total
-      ? "<tr><td colspan=\"9\">模拟结果全部在容差内；完整点位以上方主表为准。</td></tr>"
-      : "<tr><td colspan=\"9\">尚未生成可模拟的补偿曲线。</td></tr>";
+      ? `<tr><td colspan="9">${escapeHtml(t("simulation_all_within_tolerance", "All simulation results are within tolerance; use the main table above for the full point list."))}</td></tr>`
+      : `<tr><td colspan="9">${escapeHtml(t("simulation_not_ready", "No simulatable compensation curve has been generated yet."))}</td></tr>`;
 }
 
 function renderSafetySummary(issues) {
@@ -186,34 +298,13 @@ function renderSafetySummary(issues) {
     acc[item.level] = (acc[item.level] || 0) + 1;
     return acc;
   }, {});
-  const headline = `<p><strong>曲线质量检查</strong> 警告 ${counts.warning || 0} / 严重 ${counts.danger || counts.fail || 0}</p>`;
+  const headline = `<p><strong>${escapeHtml(t("curve_quality_check_label", "Curve Quality Check"))}</strong> ${escapeHtml(t("curve_quality_warnings", "Warnings"))} ${counts.warning || 0} / ${escapeHtml(t("curve_quality_dangers", "Severe"))} ${counts.danger || counts.fail || 0}</p>`;
   const details = issues
     .slice(0, 12)
-    .map((item) => `<p><span class="status ${item.level === "danger" ? "fail" : item.level}">${escapeHtml(item.type)}</span> ${escapeHtml(item.message)}</p>`)
+    .map((item) => `<p><span class="status ${item.level === "danger" ? "fail" : item.level}">${escapeHtml(translateDynamicText(item.type))}</span> ${escapeHtml(translateDynamicText(item.message))}</p>`)
     .join("");
-  const more = issues.length > 12 ? `<p>还有 ${issues.length - 12} 条检查提示，详见曲线表“曲线检查”列。</p>` : "";
+  const more = issues.length > 12 ? `<p>${escapeHtml(t("more_label", "More"))} ${issues.length - 12} ${escapeHtml(t("curve_quality_more_help", "check warnings remain; see the Curve Check column in the curve table."))}</p>` : "";
   return `${headline}${details}${more}`;
-}
-
-function acceptanceReviewRows(rows, qualityMap) {
-  return (rows || [])
-    .map((row) => ({ row, quality: qualityMap.get(`${row.channel}:${Number(row.inputTone).toFixed(3)}`) }))
-    .filter(({ row, quality }) =>
-      row.level === "increase"
-      || quality?.level === "warning"
-      || quality?.level === "danger"
-      || quality?.level === "fail"
-      || row.metric?.includes("人工")
-      || row.measurementMethod?.includes("manual")
-    );
-}
-
-function reviewReason(row, quality) {
-  const reasons = [];
-  if (row.level === "increase") reasons.push("增加点");
-  if (quality?.level && quality.level !== "pass" && quality.level !== "neutral") reasons.push(quality.label || "曲线警告");
-  if (row.pointSource === "interpolated") reasons.push("插值");
-  return escapeHtml(reasons.join(" / ") || (row.pointSource === "interpolated" ? "插值" : "实测"));
 }
 
 function curveQualityByPoint(issues) {
@@ -262,30 +353,30 @@ export function renderG7(state, els) {
     const missingItems = [...new Set(g7.missing?.length ? g7.missing : ["K-only NPDC 阶调", "CMY gray 灰平衡 Lab", "纸白与 CMYK 实地 Lab"])];
     els.g7Cards.innerHTML = `
       <div class="kpi-card span-card g7-empty-card">
-        <p><strong>G7 数据不足</strong> <span class="status warning">不能作为正式 G7 验收</span></p>
-        <p>当前缺少 G7 所需的 K-only NPDC、CMY gray 灰平衡或可比 Lab 数据。</p>
-        <p><strong>需要补齐</strong> ${missingItems.map(escapeHtml).join(" / ")}</p>
-        <p>导入 P2P/TC1617 测量文件，或在手动表录入完整 G7 灰平衡数据后再运行 G7 校验。</p>
+        <p><strong>${escapeHtml(t("g7_insufficient_data", "Insufficient G7 Data"))}</strong> <span class="status warning">${escapeHtml(t("g7_not_formal_acceptance", "Not valid for formal G7 acceptance"))}</span></p>
+        <p>${escapeHtml(t("g7_missing_required_data", "Missing K-only NPDC, CMY gray-balance, or comparable Lab data required for G7."))}</p>
+        <p><strong>${escapeHtml(t("required_label", "Required"))}</strong> ${missingItems.map((item) => escapeHtml(translateDynamicText(item))).join(" / ")}</p>
+        <p>${escapeHtml(t("g7_import_instruction", "Import a P2P/TC1617 measurement file or enter complete G7 gray-balance data manually before running G7 verification."))}</p>
       </div>
     `;
   } else {
     els.g7Cards.innerHTML = [
-      kpiCard("G7 状态", g7.status, g7.status === "Pass" ? "pass" : g7.status === "Fail" ? "danger" : g7.status === "Disabled" ? "neutral" : "warning"),
-      kpiCard("K-only 点数", g7.kOnlyCount, g7.kOnlyCount >= 5 ? "pass" : "warning"),
-      kpiCard("Lab 可比色块", g7.labPatchCount, g7.labPatchCount ? "pass" : "warning"),
-      kpiCard("Gray 色块", g7.grayPatchCount, g7.grayPatchCount ? "pass" : "warning"),
-      kpiCard("P2P/灰候选", g7.grayCandidateCount || 0, g7.grayCandidateCount ? "pass" : "warning"),
-      kpiCard("纸白/实地", `${g7.patchClasses?.paper || 0}/${g7.patchClasses?.cmykSolids || 0}`, (g7.patchClasses?.paper && g7.patchClasses?.cmykSolids >= 4) ? "pass" : "warning"),
-      kpiCard(`平均 ${deltaFormulaLabel(els.deltaFormulaSelect.value)}`, num(g7.avgDeltaE), "neutral"),
-      kpiCard(`最大 ${deltaFormulaLabel(els.deltaFormulaSelect.value)}`, num(g7.maxDeltaE), "neutral"),
-      kpiCard("NPDC 平均 wΔL*", num(g7.weightedAverage), "neutral"),
-      kpiCard("NPDC 最大 wΔL*", num(g7.maxNpdcDelta), Number(g7.maxNpdcDelta) > Number(g7.tolerances?.npdcMax || 3) ? "warning" : "neutral"),
-      kpiCard("灰平衡平均 wΔCh", num(g7.weightedGrayAverage), "neutral"),
-      kpiCard("灰平衡最大 wΔCh", num(g7.weightedGrayMax), Number(g7.weightedGrayMax) > Number(g7.tolerances?.grayMax || 3) ? "warning" : "neutral"),
-      `<div class="kpi-card span-card"><p><strong>G7 结论</strong> <span class="status ${statusClass(g7.conclusion?.level || g7.status)}">${escapeHtml(g7.conclusion?.title || g7.status)}</span></p><p>${escapeHtml(g7.conclusion?.summary || "")}</p>${(g7.conclusion?.recommendations || []).map((item) => `<p>${escapeHtml(item)}</p>`).join("")}</div>`,
-      `<div class="kpi-card span-card"><p><strong>G7 数据完整性</strong></p>${(g7.completenessRows || []).map((row) => `<p>${row.status === "Pass" ? "Pass" : "Missing"} ${escapeHtml(row.item)}: ${row.count} / ${escapeHtml(row.required)}</p>`).join("")}</div>`,
-      `<div class="kpi-card span-card"><p><strong>G7 验证项目</strong></p>${(g7.verificationRows || []).map((row) => `<p><span class="status ${statusClass(row.status)}">${escapeHtml(row.status)}</span> ${escapeHtml(row.item)}: ${num(row.value)} / ${escapeHtml(row.tolerance)}${row.message ? ` / ${escapeHtml(row.message)}` : ""}</p>`).join("")}</div>`,
-      `<div class="kpi-card span-card">${g7.missing.length ? `<p><strong>主要问题</strong></p>${g7.missing.map((item) => `<p>${escapeHtml(item)}</p>`).join("")}` : "<p>数据完整性满足第一阶段 G7 预检。</p>"}</div>`,
+      kpiCard(t("g7_status_label", "G7 Status"), g7.status, g7.status === "Pass" ? "pass" : g7.status === "Fail" ? "danger" : g7.status === "Disabled" ? "neutral" : "warning"),
+      kpiCard(t("k_only_points_label", "K-only Points"), g7.kOnlyCount, g7.kOnlyCount >= 5 ? "pass" : "warning"),
+      kpiCard(t("lab_comparable_patches_label", "Comparable Lab Patches"), g7.labPatchCount, g7.labPatchCount ? "pass" : "warning"),
+      kpiCard(t("gray_patches_label", "Gray Patches"), g7.grayPatchCount, g7.grayPatchCount ? "pass" : "warning"),
+      kpiCard(t("p2p_gray_candidates_label", "P2P / Gray Candidates"), g7.grayCandidateCount || 0, g7.grayCandidateCount ? "pass" : "warning"),
+      kpiCard(t("paper_solids_label", "Paper / Solids"), `${g7.patchClasses?.paper || 0}/${g7.patchClasses?.cmykSolids || 0}`, (g7.patchClasses?.paper && g7.patchClasses?.cmykSolids >= 4) ? "pass" : "warning"),
+      kpiCard(`${t("avg_label", "Average")} ${deltaFormulaLabel(els.deltaFormulaSelect.value)}`, num(g7.avgDeltaE), "neutral"),
+      kpiCard(`${t("max_label", "Max")} ${deltaFormulaLabel(els.deltaFormulaSelect.value)}`, num(g7.maxDeltaE), "neutral"),
+      kpiCard(translateDynamicText("NPDC 平均 wΔL*"), num(g7.weightedAverage), "neutral"),
+      kpiCard(translateDynamicText("NPDC 最大 wΔL*"), num(g7.maxNpdcDelta), Number(g7.maxNpdcDelta) > Number(g7.tolerances?.npdcMax || 3) ? "warning" : "neutral"),
+      kpiCard(translateDynamicText("灰平衡平均 wΔCh"), num(g7.weightedGrayAverage), "neutral"),
+      kpiCard(translateDynamicText("灰平衡最大 wΔCh"), num(g7.weightedGrayMax), Number(g7.weightedGrayMax) > Number(g7.tolerances?.grayMax || 3) ? "warning" : "neutral"),
+      `<div class="kpi-card span-card"><p><strong>${escapeHtml(t("g7_conclusion_label", "G7 Conclusion"))}</strong> <span class="status ${statusClass(g7.conclusion?.level || g7.status)}">${escapeHtml(translateDynamicText(g7.conclusion?.title || g7.status))}</span></p><p>${escapeHtml(translateDynamicText(g7.conclusion?.summary || ""))}</p>${(g7.conclusion?.recommendations || []).map((item) => `<p>${escapeHtml(translateDynamicText(item))}</p>`).join("")}</div>`,
+      `<div class="kpi-card span-card"><p><strong>${escapeHtml(t("g7_completeness_label", "G7 Data Completeness"))}</strong></p>${(g7.completenessRows || []).map((row) => `<p>${row.status === "Pass" ? "Pass" : "Missing"} ${escapeHtml(translateDynamicText(row.item))}: ${row.count} / ${escapeHtml(translateDynamicText(row.required))}</p>`).join("")}</div>`,
+      `<div class="kpi-card span-card"><p><strong>${escapeHtml(t("g7_verification_items_label", "G7 Verification Items"))}</strong></p>${(g7.verificationRows || []).map((row) => `<p><span class="status ${statusClass(row.status)}">${escapeHtml(row.status)}</span> ${escapeHtml(translateDynamicText(row.item))}: ${num(row.value)} / ${escapeHtml(translateDynamicText(row.tolerance))}${row.message ? ` / ${escapeHtml(translateDynamicText(row.message))}` : ""}</p>`).join("")}</div>`,
+      `<div class="kpi-card span-card">${g7.missing.length ? `<p><strong>${escapeHtml(t("main_issues_label", "Main Issues"))}</strong></p>${g7.missing.map((item) => `<p>${escapeHtml(translateDynamicText(item))}</p>`).join("")}` : `<p>${escapeHtml(t("g7_completeness_pass_help", "Data completeness satisfies the first-stage G7 precheck."))}</p>`}</div>`,
     ].join("");
   }
   if (els.g7CmySummary) {
@@ -295,7 +386,7 @@ export function renderG7(state, els) {
         ["Max", g7.grayNpdcSummary.weightedMax, g7.grayNpdcSummary.status],
         [g7.grayNpdcSummary.status, "", g7.grayNpdcSummary.status],
       ])
-      : "CMY: 数据不足";
+      : `CMY: ${escapeHtml(t("insufficient_data_label", "Insufficient data"))}`;
   }
   if (els.g7KNpdcSummary) {
     const npdcStatus = g7.npdcSummary?.status;
@@ -305,7 +396,7 @@ export function renderG7(state, els) {
         ["Max", g7.npdcSummary.weightedMax, npdcStatus],
         [npdcStatus, "", npdcStatus],
       ])
-      : "K: 数据不足";
+      : `K: ${escapeHtml(t("insufficient_data_label", "Insufficient data"))}`;
   }
   if (els.g7GrayChartSummary) {
     els.g7GrayChartSummary.innerHTML = g7.graySummary?.count
@@ -314,17 +405,17 @@ export function renderG7(state, els) {
         ["Max", g7.graySummary.maxChroma, g7.graySummary.status],
         [g7.graySummary.status, "", g7.graySummary.status],
       ])
-      : "灰平衡: 数据不足";
+      : `${escapeHtml(t("gray_balance_label", "Gray Balance"))}: ${escapeHtml(t("insufficient_data_label", "Insufficient data"))}`;
   }
   if (els.g7WeightedSummary) {
     els.g7WeightedSummary.innerHTML = g7.weightedDeltaLSummary?.count
       ? metricStrip([
-        ["CMY Avg", g7.graySummary?.weightedAverage, g7.graySummary?.status],
-        ["CMY Max", g7.graySummary?.weightedMax, g7.graySummary?.status],
+        ["CMY Avg", g7.grayNpdcSummary?.weightedAverage, g7.grayNpdcSummary?.status],
+        ["CMY Max", g7.grayNpdcSummary?.weightedMax, g7.grayNpdcSummary?.status],
         ["K Avg", g7.npdcSummary?.weightedAverage, g7.npdcSummary?.status],
         ["K Max", g7.npdcSummary?.weightedMax, g7.npdcSummary?.status],
       ])
-      : "wΔL*: 数据不足";
+      : `wΔL*: ${escapeHtml(t("insufficient_data_label", "Insufficient data"))}`;
   }
   els.g7NpdcBody.innerHTML = g7.npdcRows?.length
     ? g7.npdcRows.map((row) => `
@@ -336,7 +427,7 @@ export function renderG7(state, els) {
         <td>${num(row.deltaL)}</td>
       </tr>
     `).join("")
-    : "<tr><td colspan=\"5\">缺少 K-only NPDC 阶调。</td></tr>";
+    : `<tr><td colspan="5">${escapeHtml(t("missing_k_only_npdc", "Missing K-only NPDC tone ramp."))}</td></tr>`;
   els.g7GrayBody.innerHTML = g7.grayBalanceRows?.length
     ? g7.grayBalanceRows.map((row) => `
       <tr>
@@ -347,7 +438,7 @@ export function renderG7(state, els) {
         <td>${num(row.deltaE)}</td>
       </tr>
     `).join("")
-    : "<tr><td colspan=\"5\">缺少 CMY gray / 灰平衡 Lab。</td></tr>";
+    : `<tr><td colspan="5">${escapeHtml(t("missing_cmy_gray_lab", "Missing CMY gray / gray-balance Lab."))}</td></tr>`;
 
   renderG7Compensation(state.g7Compensation, els);
 
@@ -361,10 +452,10 @@ export function renderG7(state, els) {
         <td class="${Math.abs(r.weightedDeltaL) > 3 ? "negative" : ""}">${signed(r.signedWeightedDeltaL ?? r.deltaL)}</td>
       </tr>
     `).join("")
-    : "<tr><td colspan=\"4\">缺少 K-only 光谱 Lab 数据。</td></tr>";
+    : `<tr><td colspan="4">${escapeHtml(t("missing_k_only_spectral_lab", "Missing K-only spectral Lab data."))}</td></tr>`;
   els.g7NpdcSummary.innerHTML = g7.npdcSummary?.count
-    ? `NPDC wΔL*: avg ${num(g7.weightedDeltaLSummary?.weightedAverage ?? g7.npdcSummary.weightedAverage)} / max ${num(g7.weightedDeltaLSummary?.weightedMax ?? g7.npdcSummary.weightedMax)} — ${statusClass(g7.weightedDeltaLSummary?.status || g7.npdcSummary.status)}`
-    : "NPDC L*: 数据不足";
+      ? `K NPDC wΔL*: avg ${num(g7.npdcSummary.weightedAverage)} / max ${num(g7.npdcSummary.weightedMax)} — ${statusClass(g7.npdcSummary.status)}`
+      : `NPDC L*: ${escapeHtml(t("insufficient_data_label", "Insufficient data"))}`;
 
   // ─── G7 Certification-level: Gray Balance ΔCh ───
   els.g7GrayVerificationBody.innerHTML = g7.grayVerification?.length
@@ -376,10 +467,10 @@ export function renderG7(state, els) {
         <td class="${r.weightedChroma > 3 ? "negative" : r.weightedChroma > 1.5 ? "warn" : ""}">${num(r.weightedChroma ?? r.chroma)}</td>
       </tr>
     `).join("")
-    : "<tr><td colspan=\"4\">缺少 CMY gray 灰平衡 Lab。</td></tr>";
+    : `<tr><td colspan="4">${escapeHtml(t("missing_cmy_gray_balance_lab", "Missing CMY gray-balance Lab."))}</td></tr>`;
   els.g7GraySummary.innerHTML = g7.graySummary?.count
-    ? `灰平衡 wΔCh: avg ${num(g7.graySummary.weightedAverage)} / max ${num(g7.graySummary.weightedMax)} — ${statusClass(g7.graySummary.status)}`
-    : "灰平衡 Ch: 数据不足";
+    ? `${escapeHtml(translateDynamicText("灰平衡 wΔCh"))}: avg ${num(g7.graySummary.weightedAverage)} / max ${num(g7.graySummary.weightedMax)} — ${statusClass(g7.graySummary.status)}`
+    : `${escapeHtml(t("gray_balance_label", "Gray Balance"))} Ch: ${escapeHtml(t("insufficient_data_label", "Insufficient data"))}`;
 
   // ─── G7 Certification-level: Colorspace Compliance ───
   els.g7ColorspaceBody.innerHTML = g7.colorspaceRows?.length
@@ -390,7 +481,7 @@ export function renderG7(state, els) {
         <td><span class="status ${statusClass(r.status)}">${escapeHtml(r.status)}</span></td>
       </tr>
     `).join("")
-    : "<tr><td colspan=\"3\">缺少标准参考数据或测量 Lab。</td></tr>";
+    : `<tr><td colspan="3">${escapeHtml(t("missing_standard_or_measured_lab", "Missing standard reference data or measured Lab."))}</td></tr>`;
 
   renderG7Charts({
     npdcChart: els.g7NpdcChart,
@@ -434,7 +525,7 @@ function renderG7Compensation(compensation, els) {
   if (!els.g7CompensationSummary || !els.g7CompensationBody) return;
   const preview = compensation || {
     status: "Blocked",
-    message: "运行 G7 校验并先生成 TVI/CTV 曲线后，可查看生产用 G7 修正参考。",
+    message: t("g7_compensation_preview_help", "Run G7 verification and generate the TVI/CTV curve first to view production G7 correction references."),
     rows: [],
     warnings: [],
   };
@@ -443,29 +534,29 @@ function renderG7Compensation(compensation, els) {
   const ratioText = Number.isFinite(ratio) ? `${num(ratio * 100)}%` : "-";
   const limitText = Number.isFinite(preview.limit) ? `${num(preview.limit)}%` : "-";
   els.g7CompensationSummary.innerHTML = `
-      <p><strong>状态</strong> <span class="status ${statusClass(level)}">${escapeHtml(preview.status)}</span> ${escapeHtml(preview.message || "")}</p>
+      <p><strong>${escapeHtml(t("status_label", "Status"))}</strong> <span class="status ${statusClass(level)}">${escapeHtml(preview.status)}</span> ${escapeHtml(translateDynamicText(preview.message || ""))}</p>
     ${preview.status === "Preview" ? `
-      <p><strong>生产原则</strong> 正式 C/M/Y/K 输出以 TVI/CTV 基础曲线为底；G7 不再生成 CMY 共同输出。当前单点最大修正 ${limitText}，欠补偿比例 ${ratioText}，G7 追加量会被进一步限制为小幅修正。</p>
-      <p><strong>灰平衡</strong> CMY gray 会拆成 C/M/Y 单通道小幅修正；方向冲突时保持 TVI/CTV 输出，只提示复查。</p>
+      <p><strong>${escapeHtml(t("production_principle_label", "Production Principle"))}</strong> ${escapeHtml(t("g7_production_principle_help", "Production C/M/Y/K output is based on the TVI/CTV base curve; G7 no longer generates shared CMY output."))} ${escapeHtml(t("current_max_single_point_label", "Current max single-point correction"))} ${limitText}, ${escapeHtml(t("undercomp_ratio_lower_label", "under-comp ratio"))} ${ratioText}, ${escapeHtml(t("g7_addon_limited_help", "G7 add-on correction is further limited to small adjustments."))}</p>
+      <p><strong>${escapeHtml(t("gray_balance_label", "Gray Balance"))}</strong> ${escapeHtml(t("g7_gray_split_help", "CMY gray is split into small C/M/Y single-channel corrections; when direction conflicts, TVI/CTV output is kept and only a review warning is shown."))}</p>
     ` : ""}
-    ${(preview.warnings || []).map((item) => `<p>${escapeHtml(item)}</p>`).join("")}
+    ${(preview.warnings || []).map((item) => `<p>${escapeHtml(translateDynamicText(item))}</p>`).join("")}
   `;
   els.g7CompensationBody.innerHTML = preview.rows?.length
     ? preview.rows.map((row) => `
       <tr>
         <td><span class="channel ${escapeAttr(row.channel)}">${escapeHtml(row.channel)}</span><div class="cell-note">${escapeHtml(row.source)}</div></td>
         <td>${num(row.tone)}%</td>
-        <td><strong>${num(row.baseOutputTone)}%</strong><div class="cell-note">${escapeHtml(row.metricName || "TVI/CTV")} / ${escapeHtml(row.pointSource === "interpolated" ? "插值" : "实测")}</div></td>
-        <td>${Number.isFinite(row.g7ReferenceOutput) ? `${num(row.g7ReferenceOutput)}%<div class="cell-note">K参考 ${signed(row.g7ReferenceAdjustment)}%</div>` : `拆分 ${signed(row.requestedG7Delta)}%`}
-          <div class="cell-note">${row.directionConflict ? "方向冲突，未叠加" : `已叠加 ${signed(row.g7Delta)}%`}</div>
+        <td><strong>${num(row.baseOutputTone)}%</strong><div class="cell-note">${escapeHtml(row.metricName || "TVI/CTV")} / ${escapeHtml(row.pointSource === "interpolated" ? t("interpolated", "Interpolated") : t("measured_label", "Measured"))}</div></td>
+        <td>${Number.isFinite(row.g7ReferenceOutput) ? `${num(row.g7ReferenceOutput)}%<div class="cell-note">${escapeHtml(t("k_reference_label", "K reference"))} ${signed(row.g7ReferenceAdjustment)}%</div>` : `${escapeHtml(t("split_label", "Split"))} ${signed(row.requestedG7Delta)}%`}
+          <div class="cell-note">${row.directionConflict ? t("direction_conflict_not_applied", "Direction conflict, not applied") : `${t("applied_label", "Applied")} ${signed(row.g7Delta)}%`}</div>
         </td>
         <td><strong>${num(row.outputTone)}%</strong></td>
-        <td class="${row.action === "增加" ? "negative" : row.action === "减少" ? "positive" : ""}">${escapeHtml(row.action)} ${num(Math.abs(row.adjustment))}%</td>
-        <td>${escapeHtml(row.channel === "K" ? "K NPDC 参考" : "CMY 灰平衡诊断")}</td>
-        <td>${escapeHtml(row.hint)}</td>
+        <td class="${row.action === "增加" ? "negative" : row.action === "减少" ? "positive" : ""}">${escapeHtml(translateDynamicText(row.action))} ${num(Math.abs(row.adjustment))}%</td>
+        <td>${escapeHtml(row.channel === "K" ? t("k_npdc_reference_label", "K NPDC Reference") : t("cmy_gray_diagnosis_label", "CMY Gray-Balance Diagnosis"))}</td>
+        <td>${escapeHtml(translateDynamicText(row.hint))}</td>
       </tr>
     `).join("")
-    : "<tr><td colspan=\"8\">尚未生成 G7 补偿建议。</td></tr>";
+    : `<tr><td colspan="8">${escapeHtml(t("no_g7_compensation_suggestion", "No G7 compensation suggestions generated yet."))}</td></tr>`;
 }
 
 function metricStrip(items) {
@@ -482,8 +573,8 @@ function buildVerificationChecklist(state, els) {
   for (const row of state.labRows || []) {
     rows.push({
       label: row.label,
-      measured: Number.isFinite(row.deltaE) ? `${deltaFormulaLabel(els.deltaFormulaSelect.value)} ${num(row.deltaE)}` : "缺少标准目标",
-      target: row.referenceLab ? `Warning ${state.standard.deltaE.warning} / Fail ${state.standard.deltaE.fail}` : "无匹配 Lab",
+      measured: Number.isFinite(row.deltaE) ? `ΔE ${num(row.deltaE)}` : t("missing_standard_target", "Missing standard target"),
+      target: row.referenceLab ? `< ${state.standard.deltaE.warning} / ${state.standard.deltaE.fail}` : t("no_matching_lab", "No matching Lab"),
       status: row.status === "Missing Target" ? "Warning" : row.status,
       note: row.lab ? `L* ${num(row.lab.l)}  a* ${num(row.lab.a)}  b* ${num(row.lab.b)}` : row.source,
     });
@@ -501,11 +592,11 @@ function buildVerificationChecklist(state, els) {
         ? "Warning"
         : "Pass";
     rows.push({
-      label: `${channel} 通道 TVI/CTV 偏差`,
+      label: `${channel} ${t("channel_tvi_ctv_delta_label", "Channel TVI/CTV Delta")}`,
       measured: toneRows.map((row) => `${num(row.tone)}% ${signed(row.tviDelta)}%`).join(" / "),
       target: toneRows.map((row) => `${num(row.tone)}% ±${toneTolerance(row.tone)}%`).join(" / "),
       status,
-      note: `最大 |偏差| ${num(worst)}%`,
+      note: `${t("max_abs_delta_label", "Max |Delta|")} ${num(worst)}%`,
     });
   }
   return rows;

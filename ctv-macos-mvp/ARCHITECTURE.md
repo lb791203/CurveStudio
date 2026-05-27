@@ -4,6 +4,17 @@
 
 The MVP is a static browser application. Core calculation code is pure JavaScript so the same modules can later run inside Tauri for macOS and Windows packaging.
 
+## Desktop Packaging Shape
+
+```text
+shared static frontend
+  -> npm run build:dist
+  -> macOS Tauri config: src-tauri/tauri.conf.json
+  -> Windows Tauri config: src-tauri/tauri.windows.conf.json
+```
+
+The macOS and Windows apps must share the same calculation modules. Platform differences should stay in the packaging config, native file dialogs, local storage location, and future `DeviceAdapter` implementations.
+
 ## Data Flow
 
 ```text
@@ -55,3 +66,13 @@ All production exports should carry:
 - metric and measurement method for each curve point.
 
 JSON project archives additionally store job metadata, settings, measurements, curve rows, Lab/G7 results, and `curveOverrides` for restore.
+
+## Release Gate
+
+Before a packaged build, run:
+
+```bash
+npm run verify:release
+```
+
+This checks release metadata, duplicate translation keys, English UI translation values, the full test suite, fixture import validation, and the static frontend build.

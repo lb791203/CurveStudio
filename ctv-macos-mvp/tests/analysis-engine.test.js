@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { analyzeCurveSafety, deltaE2000, deltaE76, deltaE94, deltaECMC, diagnosePress, g7Preview, summarizeLabVerification } from "../src/analysis-engine.js";
+import { analyzeCurveSafety, buildLabVerificationRows, deltaE2000, deltaE76, deltaE94, deltaECMC, diagnosePress, g7Preview, summarizeLabVerification } from "../src/analysis-engine.js";
 import { g7NpdcLTarget } from "../src/g7-targets.js";
 
 test("Delta E formulas return stable finite values", () => {
@@ -23,13 +23,14 @@ test("g7Preview classifies P2P patch completeness", () => {
     { cmyk_c: 0, cmyk_m: 0, cmyk_y: 0, cmyk_k: 100 },
     { cmyk_c: 0, cmyk_m: 0, cmyk_y: 0, cmyk_k: 25 },
     { cmyk_c: 20, cmyk_m: 22, cmyk_y: 22, cmyk_k: 0 },
+    { cmyk_c: 50, cmyk_m: 40, cmyk_y: 40, cmyk_k: 0 },
   ];
   const g7 = g7Preview({ rawRows });
 
   assert.equal(g7.patchClasses.paper, 1);
   assert.equal(g7.patchClasses.cmykSolids, 4);
   assert.equal(g7.patchClasses.kOnly, 1);
-  assert.equal(g7.patchClasses.cmyNeutralGray, 1);
+  assert.equal(g7.patchClasses.cmyNeutralGray, 2);
   assert.ok(g7.completenessRows.some((row) => row.item === "CMYK 实地" && row.status === "Pass"));
 });
 
@@ -92,6 +93,47 @@ test("summarizeLabVerification reports pass warning fail and missing counts", ()
   assert.equal(summary.missing, 1);
   assert.equal(summary.status, "Fail");
   assert.equal(summary.maxDeltaE, 8);
+});
+
+test("buildLabVerificationRows includes raw overprint Lab patches for a*b* gamut charts", () => {
+  const rows = buildLabVerificationRows({
+    measurements: [
+      { channel: "C", tone: 100, lab: { l: 55, a: -36, b: -48 } },
+    ],
+    rawRows: [
+      { cmyk_c: 0, cmyk_m: 100, cmyk_y: 100, cmyk_k: 0, lab_l: 48, lab_a: 70, lab_b: 45 },
+      { cmyk_c: 100, cmyk_m: 0, cmyk_y: 100, cmyk_k: 0, lab_l: 52, lab_a: -58, lab_b: 25 },
+      { cmyk_c: 100, cmyk_m: 100, cmyk_y: 0, cmyk_k: 0, lab_l: 35, lab_a: 20, lab_b: -50 },
+    ],
+    standardPatchMap: new Map(),
+  });
+
+  assert.ok(rows.some((row) => row.cmyk.m === 100 && row.cmyk.y === 100 && row.cmyk.c === 0));
+  assert.ok(rows.some((row) => row.cmyk.c === 100 && row.cmyk.y === 100 && row.cmyk.m === 0));
+  assert.ok(rows.some((row) => row.cmyk.c === 100 && row.cmyk.m === 100 && row.cmyk.y === 0));
+});
+
+test("buildLabVerificationRows extracts density for manualRows, rawRows, and measurements", () => {
+  const rows = buildLabVerificationRows({
+    manualRows: [
+      { channel: "C", tone: 100, patchType: "solid", labL: 50, labA: 0, labB: 0, density: 1.55 }
+    ],
+    measurements: [
+      { channel: "M", tone: 100, patchType: "solid", lab: { l: 50, a: 0, b: 0 }, density: 1.45 }
+    ],
+    rawRows: [
+      { cmyk_c: 0, cmyk_m: 0, cmyk_y: 100, cmyk_k: 0, lab_l: 50, lab_a: 0, lab_b: 0, density: 1.05 }
+    ],
+    standardPatchMap: new Map(),
+  });
+
+  const cRow = rows.find(r => r.cmyk.c === 100);
+  const mRow = rows.find(r => r.cmyk.m === 100);
+  const yRow = rows.find(r => r.cmyk.y === 100);
+
+  assert.equal(cRow?.density, 1.55);
+  assert.equal(mRow?.density, 1.45);
+  assert.equal(yRow?.density, 1.05);
 });
 
 test("g7Preview can validate complete manual-equivalent G7 data", () => {

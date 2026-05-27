@@ -18,7 +18,22 @@ This project keeps the calculation engine in plain JavaScript so the same code c
 
 ## Windows path
 
-Use the same `src-tauri` project and JavaScript core. Build on Windows after the macOS workflow is stable.
+Use the same `src-tauri` project and JavaScript core. Windows has its own overlay config so the macOS `.app/.dmg` targets do not get mixed with Windows installers:
+
+- Base macOS config: `src-tauri/tauri.conf.json`
+- Windows overlay config: `src-tauri/tauri.windows.conf.json`
+- Windows build script: `npm run tauri:build:windows`
+- Windows dev server: `npm run dev:node` so the workflow does not depend on `python3`.
+
+The first Windows milestone is installer architecture, not device SDK integration. Build on a Windows machine or Windows CI runner after the macOS workflow is stable; expected installer targets are NSIS and MSI.
+
+### Windows architecture checkpoints
+
+1. Keep calculation, import, standards, G7, ICC gate, and export logic in shared JavaScript modules.
+2. Keep desktop-only filesystem dialogs behind the existing Tauri bridge.
+3. Keep future Techkon/X-Rite SDK work behind `DeviceAdapter` so Windows SDK support does not change curve logic.
+4. Validate `npm run verify:release` before each Windows installer build.
+5. Build Windows installers with `npm run tauri:build:windows` on Windows hardware/CI.
 
 ## Next desktop tasks
 
@@ -26,6 +41,7 @@ Use the same `src-tauri` project and JavaScript core. Build on Windows after the
 - Add open-project dialog for JSON archives.
 - Store recent jobs in a local application data directory.
 - Keep SDK/device integration behind `DeviceAdapter` so Techkon/X-Rite support can be added without changing curve logic.
+- Add Windows signing, installer naming, and update-channel decisions after the first NSIS/MSI smoke test.
 
 ## ICC workflow roadmap
 

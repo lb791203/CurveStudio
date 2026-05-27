@@ -1,6 +1,7 @@
 import { buildInstrumentVerificationRows, summarizeInstrumentVerification } from "../instrument-verification.js?v=20260521-icc-p4";
 import { summarizeDeviceState } from "../device-adapter.js";
 import { escapeHtml } from "../shared.js?v=20260521-icc-p4";
+import { t, translateDynamicText } from "../translations.js?v=20260525-statusbar-pass-1";
 import { num, statusClass, signed } from "./helpers.js?v=20260521-icc-p4";
 
 export function renderInstrument(state, els) {
@@ -10,12 +11,12 @@ export function renderInstrument(state, els) {
   const sourceFormats = [...new Set((state.measurements || []).map((row) => row.sourceFormat || row.source || "").filter(Boolean))];
 
   els.instrumentVerificationSummary.innerHTML = `
-    <strong>仪器 / 厂商 CTV 对照</strong>
-    <p><span class="status ${statusClass(summary.status)}">${escapeHtml(summary.status)}</span> 可比 ${summary.comparable}/${summary.total}，Pass ${summary.pass} / Warning ${summary.warning} / Fail ${summary.fail}</p>
-    <p>平均 |ΔCTV|: ${num(summary.avgAbsDelta)} / 最大 |ΔCTV|: ${num(summary.maxAbsDelta)} / 缺仪器 CTV ${summary.missingInstrument} / 缺软件 CTV ${summary.missingSoftware}</p>
-    <p>来源: ${sourceFormats.length ? escapeHtml(sourceFormats.join(" / ")) : "未导入"}。容差: Pass <= 0.50 CTV，Warning <= 1.00 CTV。</p>
-    <p>用途: 检查原始测量文件或厂商软件导出的 CTV 字段是否与本软件计算一致；不判断补偿曲线是否有效。</p>
-    <p>i1Pro 建议流程: 测量测试样张后，从 X-Rite/i1Profiler/ColorPort 导出 CGATS/IT8/CSV；文件含 Lab/XYZ/光谱即可计算软件 CTV，若额外含 CTV/SCTV 字段则自动对比。</p>
+    <strong>${escapeHtml(t("instrument_vendor_ctv_check_title", "Instrument / Vendor CTV Check"))}</strong>
+    <p><span class="status ${statusClass(summary.status)}">${escapeHtml(summary.status)}</span> ${escapeHtml(t("comparable_label", "Comparable"))} ${summary.comparable}/${summary.total}, Pass ${summary.pass} / Warning ${summary.warning} / Fail ${summary.fail}</p>
+    <p>${escapeHtml(t("avg_abs_ctv_label", "Average |ΔCTV|"))}: ${num(summary.avgAbsDelta)} / ${escapeHtml(t("max_abs_ctv_label", "Max |ΔCTV|"))}: ${num(summary.maxAbsDelta)} / ${escapeHtml(t("missing_instrument_ctv_label", "Missing instrument CTV"))} ${summary.missingInstrument} / ${escapeHtml(t("missing_software_ctv_label", "Missing software CTV"))} ${summary.missingSoftware}</p>
+    <p>${escapeHtml(t("source_label", "Source"))}: ${sourceFormats.length ? escapeHtml(sourceFormats.join(" / ")) : t("not_imported_label", "Not imported")}. ${escapeHtml(t("threshold_label", "Tolerance"))}: Pass <= 0.50 CTV, Warning <= 1.00 CTV.</p>
+    <p>${escapeHtml(t("purpose_label", "Purpose"))}: ${escapeHtml(t("instrument_ctv_purpose", "Check whether CTV fields exported by the original measurement file or vendor software match this software's calculation; this does not judge whether the compensation curve is effective."))}</p>
+    <p>i1Pro ${escapeHtml(t("recommended_workflow_label", "Recommended workflow"))}: ${escapeHtml(t("i1pro_workflow_help", "After measuring the test chart, export CGATS/IT8/CSV from X-Rite/i1Profiler/ColorPort. Files with Lab/XYZ/spectral data can compute software CTV; files with extra CTV/SCTV fields are compared automatically."))}</p>
   `;
 
   els.instrumentVerificationBody.innerHTML = rows.length
@@ -26,14 +27,14 @@ export function renderInstrument(state, els) {
         <td>${escapeHtml(row.sampleId)}</td>
         <td>${escapeHtml(row.source)}</td>
         <td>${num(row.softwareCtv)}</td>
-        <td>${escapeHtml(row.softwareMethod || "缺 Lab/XYZ/光谱")}</td>
+        <td>${escapeHtml(translateDynamicText(row.softwareMethod || t("missing_lab_xyz_spectral", "Missing Lab/XYZ/spectral data")))}</td>
         <td>${num(row.instrumentCtv)}</td>
-        <td>${escapeHtml(row.instrumentMethod || "未提供")}</td>
+        <td>${escapeHtml(translateDynamicText(row.instrumentMethod || t("not_provided", "Not provided")))}</td>
         <td class="${Math.abs(row.delta) > 1 ? "negative" : Math.abs(row.delta) > 0.5 ? "warn" : ""}">${Number.isFinite(row.delta) ? signed(row.delta) : "N/A"}</td>
         <td><span class="status ${statusClass(row.status)}">${escapeHtml(row.status)}</span></td>
       </tr>
     `).join("")
-    : "<tr><td colspan=\"10\">导入 X-Rite / Techkon 的 CGATS、IT8 或 CSV 测量文件后显示厂商 CTV 对照。</td></tr>";
+    : `<tr><td colspan="10">${escapeHtml(t("instrument_ctv_empty_help", "Import an X-Rite / Techkon CGATS, IT8, or CSV measurement file to show vendor CTV comparison."))}</td></tr>`;
 }
 
 function renderDeviceAdapter(state, els) {
@@ -46,20 +47,20 @@ function renderDeviceAdapter(state, els) {
   if (els.deviceReadPatchButton) els.deviceReadPatchButton.disabled = !device.canReadPatch;
 
   els.deviceAdapterSummary.innerHTML = `
-    <strong>${escapeHtml(device.adapter.name)}</strong>
-    <p><span class="status ${device.adapter.status === "Ready" ? "pass" : "warning"}">${escapeHtml(device.adapter.status)}</span> ${escapeHtml(device.message)}</p>
-    <p>连接: ${device.connected ? "已连接" : "未连接"} / 白板校准: ${device.calibrated ? "已完成" : "未完成"} / 队列: ${device.measured}/${device.total}</p>
-    <p>能力: ${device.adapter.capabilities.map(escapeHtml).join(" / ")}</p>
-    <p>已写入手动表的仪器测量点: ${device.manualInstrumentRows}</p>
+    <strong>${escapeHtml(translateDynamicText(device.adapter.name))}</strong>
+    <p><span class="status ${device.adapter.status === "Ready" ? "pass" : "warning"}">${escapeHtml(device.adapter.status)}</span> ${escapeHtml(translateDynamicText(device.message))}</p>
+    <p>${escapeHtml(t("connect_label", "Connect"))}: ${device.connected ? t("connected_label", "Connected") : t("not_connected_label", "Not connected")} / ${escapeHtml(t("white_calibration_label", "White Calibration"))}: ${device.calibrated ? t("completed_label", "Completed") : t("not_completed_label", "Not completed")} / ${escapeHtml(t("queue_label", "Queue"))}: ${device.measured}/${device.total}</p>
+    <p>${escapeHtml(t("capabilities_label", "Capabilities"))}: ${device.adapter.capabilities.map(escapeHtml).join(" / ")}</p>
+    <p>${escapeHtml(t("manual_instrument_rows_label", "Instrument measurements written to the manual table"))}: ${device.manualInstrumentRows}</p>
   `;
 
   els.deviceQueueBody.innerHTML = device.queue.map((item, index) => {
-    const status = index < device.measured ? "已读取" : index === device.measured ? "当前" : "等待";
+    const status = index < device.measured ? t("read_label", "Read") : index === device.measured ? t("current_label", "Current") : t("waiting_label", "Waiting");
     const level = index < device.measured ? "pass" : index === device.measured ? "warning" : "neutral";
     return `
       <tr>
         <td>${index + 1}</td>
-        <td>${escapeHtml(item.label)}</td>
+        <td>${escapeHtml(translateDynamicText(item.label))}</td>
         <td>${escapeHtml(item.patchType)} / ${escapeHtml(item.channel)}${item.tone !== "" ? ` / ${num(Number(item.tone))}%` : ""}</td>
         <td><span class="status ${level}">${status}</span></td>
       </tr>

@@ -143,7 +143,7 @@ test("summarizeWeightedDeltaL uses per-patch weighted absolute errors", () => {
 
 // ─── Gray Balance ───
 
-test("buildGrayVerification computes chroma from a*/b*", () => {
+test("buildGrayVerification computes chroma from target-relative a*/b*", () => {
   const rows = [
     { label: "Gray 50", lab: { a: 1, b: -1 } },
     { label: "Gray 75", lab: { a: 2, b: 0.5 } },
@@ -152,6 +152,21 @@ test("buildGrayVerification computes chroma from a*/b*", () => {
   assert.equal(result.length, 2);
   assert.ok(result[0].chroma > 0);
   assert.ok(result[1].chroma > 0);
+});
+
+test("buildGrayVerification uses selected standard gray Lab for wDeltaCh", () => {
+  const standardPatchMap = new Map([
+    ["50.00/40.00/40.00/0.00", { cmyk: { c: 50, m: 40, y: 40, k: 0 }, lab: { l: 60, a: 2, b: -1 } }],
+  ]);
+  const [row] = buildGrayVerification([
+    { label: "Gray 50/40/40", cmyk: { c: 50, m: 40, y: 40, k: 0 }, lab: { l: 59, a: 3, b: -3 } },
+  ], { standardPatchMap });
+
+  assert.equal(row.targetSource, "standard");
+  assert.equal(row.deltaA, 1);
+  assert.equal(row.deltaB, -2);
+  assert.equal(row.chroma.toFixed(3), "2.236");
+  assert.ok(row.measuredChroma > row.chroma);
 });
 
 test("summarizeGrayBalance passes when within tolerances", () => {

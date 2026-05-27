@@ -15,7 +15,7 @@ export function inspectImport({ importInfo = null, measurements = [], results = 
   const densityCount = measurements.filter((row) => Number.isFinite(row.density)).length || rawRows.filter(hasRawDensity).length;
   const hasColorimetric = measurements.some((row) => Number.isFinite(row.colorimetricTone));
   const dataKind = classifyImportKind({ importInfo, measurements, rawRows, usable, rawClasses });
-  const missingMessages = buildMissingMessages({ coverageRows, measurements, usable, rawClasses, labCount, densityCount, mode });
+  const { messages: missingMessages, notes } = buildMissingMessages({ coverageRows, measurements, usable, rawClasses, labCount, densityCount, mode });
   const canCalculateCurve = usable.length > 0;
   const level = !importInfo
     ? "neutral"
@@ -43,6 +43,7 @@ export function inspectImport({ importInfo = null, measurements = [], results = 
     labCount,
     densityCount,
     warnings,
+    notes,
     messages: [...missingMessages, ...warnings],
   };
 }
@@ -82,6 +83,7 @@ function channelCoverage(measurements) {
 
 function buildMissingMessages({ coverageRows, measurements, usable, rawClasses, labCount, densityCount, mode }) {
   const messages = [];
+  const notes = [];
   if (!measurements.length && rawClasses.p2pTotal) {
     messages.push("检测到 P2P/CGATS 色块定义，但没有 TVI、实测网点、密度或可用光谱测量值。");
   }
@@ -93,7 +95,9 @@ function buildMissingMessages({ coverageRows, measurements, usable, rawClasses, 
     messages.push(`当前只有 ${activeChannels.map((row) => row.channel).join(" ") || "无"} 通道，正式 CMYK 曲线建议四通道齐全。`);
   }
   const incomplete2575 = activeChannels.filter((row) => row.missingRequired.length);
-  if (incomplete2575.length) {
+  if (incomplete2575.length && rawClasses.p2pTotal >= 25 && usable.length) {
+    notes.push(`${p2pProfileLabel(rawClasses)} 阶调点不是 25/50/75 手工模板；${incomplete2575.map((row) => `${row.channel} ${row.missingRequired.join("/")}`).join("，")} 将按测量曲线插值生成。`);
+  } else if (incomplete2575.length) {
     messages.push(`25/50/75 不完整: ${incomplete2575.map((row) => `${row.channel}缺${row.missingRequired.join("/")}`).join("，")}。`);
   }
   if (mode === "ctv" && usable.length && !coverageRows.some((row) => row.colorimetricCount)) {
@@ -103,7 +107,12 @@ function buildMissingMessages({ coverageRows, measurements, usable, rawClasses, 
   if (!densityCount && !measurements.some((row) => Number.isFinite(row.measuredTone) || Number.isFinite(row.measuredTvi))) {
     messages.push("没有密度或实测网点，不能做 TVI 曲线计算。");
   }
-  return messages;
+  return { messages, notes };
+}
+
+function p2pProfileLabel(rawClasses) {
+  if (rawClasses.p2pTotal === 300) return "P2P51";
+  return "P2P/CGATS";
 }
 
 function metricSourceLabels(measurements) {

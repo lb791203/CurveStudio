@@ -8,23 +8,23 @@ import {
   toHarmonyCsv,
   upsertTarget,
 } from "./curve-engine.js?v=20260521-icc-p4";
-import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260521-icc-p4";
+import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260522-g7-verify";
 import { applyCurveOverrides, curveRowKey, pruneCurveOverrides } from "./curve-overrides.js";
-import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260521-icc-p4";
-import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260521-icc-p4";
-import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260521-icc-p4";
+import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260524-standards-runs";
+import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260524-tone-tolerance-note";
+import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260525-statusbar-pass-1";
 import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260521-icc-p4";
-import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260521-icc-p4";
+import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260525-statusbar-pass-1";
 import { buildG7Compensation } from "./g7-compensation.js";
-import { renderCurveChart, renderMeasurementChart, renderLabChromaticityChart, renderG7Charts } from "./chart-renderer.js?v=20260521-icc-p4";
-import { buildIccGenerationGate } from "./icc-generation-gate.js";
+import { renderCurveChart, renderMeasurementChart, renderLabChromaticityChart, renderG7Charts, renderCompensationSimulationChart } from "./chart-renderer.js?v=20260523-lab-fill";
+import { buildIccGenerationGate } from "./icc-generation-gate.js?v=20260525-statusbar-pass-1";
 import { DEVICE_ADAPTERS, buildMeasurementQueue, calibrateDeviceState, changeDeviceAdapterState, connectDeviceState, disconnectDeviceState, readDevicePatchState, isTauriAvailable } from "./device-adapter.js";
-import { inspectImport } from "./import-inspector.js";
+import { inspectImport } from "./import-inspector.js?v=20260525-statusbar-pass-1";
 import { buildIccStandardPair } from "./icc-pairing.js?v=20260521-icc-p4";
 import { parseIccProfile } from "./icc-profile.js?v=20260521-icc-p4";
 import { openTextFileDesktop, saveTextFileDesktop, saveBinaryFileDesktop } from "./desktop-io.js";
 import { buildIccExportPackage, exportMeasurementToCgats } from "./icc-generator.js";
-import { t, updateDomTranslations, getLanguage, setLanguage } from "./translations.js";
+import { t, updateDomTranslations, getLanguage, setLanguage } from "./translations.js?v=20260525-statusbar-pass-1";
 import {
   canCalculateCurve,
   defaultManualRow,
@@ -42,10 +42,14 @@ import {
   solidDensityByChannel,
   updateManualRowFromEvent,
 } from "./manual-table.js";
-import { clearStoredRuns, loadStoredRuns, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js";
+import { clearStoredProject, compactProjectArchiveForRun, loadLastProject, loadStoredRuns, saveLastProject, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js?v=20260524-clear-current-run";
+import { buildCompensationSimulation } from "./compensation-simulation.js";
 import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
-import { STANDARD_LIBRARY, buildPatchMap, cmykKey, standardById, targetOptions } from "./standards.js";
+import { STANDARD_LIBRARY, addOrUpdateCustomStandard, buildPatchMap, cmykKey, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260524-standards-files";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
+
+const CUSTOM_STANDARDS_KEY = "ctv-custom-standards";
+const HIDDEN_STANDARDS_KEY = "ctv-hidden-standards";
 
 const els = {
   fileInput: document.querySelector("#fileInput"),
@@ -79,12 +83,18 @@ const els = {
   clearRunsButton: document.querySelector("#clearRunsButton"),
   reloadStandardButton: document.querySelector("#reloadStandardButton"),
   standardIccInput: document.querySelector("#standardIccInput"),
+  customStandardFileInput: document.querySelector("#customStandardFileInput"),
+  saveCustomStandardButton: document.querySelector("#saveCustomStandardButton"),
+  exportStandardButton: document.querySelector("#exportStandardButton"),
+  deleteCustomStandardButton: document.querySelector("#deleteCustomStandardButton"),
+  restoreStandardListButton: document.querySelector("#restoreStandardListButton"),
   applyCustomTargetButton: document.querySelector("#applyCustomTargetButton"),
   runG7Button: document.querySelector("#runG7Button"),
   generateG7CompensationButton: document.querySelector("#generateG7CompensationButton"),
   modeSelect: document.querySelector("#modeSelect"),
   targetSelect: document.querySelector("#targetSelect"),
   standardSelect: document.querySelector("#standardSelect"),
+  toneToleranceNote: document.querySelector("#toneToleranceNote"),
   smoothInput: document.querySelector("#smoothInput"),
   smoothValue: document.querySelector("#smoothValue"),
   limitInput: document.querySelector("#limitInput"),
@@ -127,9 +137,11 @@ const els = {
   g7WeightedChart: document.querySelector("#g7WeightedChart"),
   resultBody: document.querySelector("#resultBody"),
   compensationSimulationSummary: document.querySelector("#compensationSimulationSummary"),
+  compensationSimulationChart: document.querySelector("#compensationSimulationChart"),
   compensationSimulationBody: document.querySelector("#compensationSimulationBody"),
-  ripEntryBody: document.querySelector("#ripEntryBody"),
   labBody: document.querySelector("#labBody"),
+  labDetailBody: document.querySelector("#labDetailBody"),
+  labDetailSummary: document.querySelector("#labDetailSummary"),
   verificationChecklistSummary: document.querySelector("#verificationChecklistSummary"),
   verificationChecklistBody: document.querySelector("#verificationChecklistBody"),
   jobRunList: document.querySelector("#jobRunList"),
@@ -148,12 +160,12 @@ const els = {
   g7CompensationSummary: document.querySelector("#g7CompensationSummary"),
   g7CompensationBody: document.querySelector("#g7CompensationBody"),
   targetCurveBody: document.querySelector("#targetCurveBody"),
+  toneToleranceBody: document.querySelector("#toneToleranceBody"),
   standardPatchBody: document.querySelector("#standardPatchBody"),
   iccProfileSummary: document.querySelector("#iccProfileSummary"),
   diagnosisCards: document.querySelector("#diagnosisCards"),
   diagnosisBadge: document.querySelector("#diagnosisBadge"),
   safetySummary: document.querySelector("#safetySummary"),
-  curveAcceptanceSummary: document.querySelector("#curveAcceptanceSummary"),
   manualHealthSummary: document.querySelector("#manualHealthSummary"),
   importAuditSummary: document.querySelector("#importAuditSummary"),
   g7Cards: document.querySelector("#g7Cards"),
@@ -202,19 +214,31 @@ const els = {
   textPromptInput: document.querySelector("#textPromptInput"),
   textPromptOkButton: document.querySelector("#textPromptOkButton"),
   textPromptCancelButton: document.querySelector("#textPromptCancelButton"),
+  helpCenterButton: document.querySelector("#helpCenterButton"),
+  aboutButton: document.querySelector("#aboutButton"),
+  settingsUpdateButton: document.querySelector("#settingsUpdateButton"),
+  settingsHelpButton: document.querySelector("#settingsHelpButton"),
+  settingsAboutButton: document.querySelector("#settingsAboutButton"),
+  productInfoDialog: document.querySelector("#productInfoDialog"),
+  productInfoCloseButton: document.querySelector("#productInfoCloseButton"),
+  productInfoTabs: document.querySelectorAll("[data-product-info-tab]"),
+  productInfoPanels: document.querySelectorAll("[data-product-info-panel]"),
+  checkUpdateButton: document.querySelector("#checkUpdateButton"),
+  updateStatusText: document.querySelector("#updateStatusText"),
   generateIccProfileButton: document.querySelector("#generateIccProfileButton"),
   exportIccReferenceButton: document.querySelector("#exportIccReferenceButton"),
   langToggle: document.querySelector("#langToggle"),
 };
 
 const state = {
-  activeView: "job",
+  activeView: "measurement",
   importInfo: null,
   standardId: "gracol2013_crpc6",
   standard: standardById("gracol2013_crpc6"),
   standardImport: null,
   standardLoading: false,
   standardPatchMap: new Map(),
+  hiddenStandardIds: new Set(),
   iccProfile: null,
   manualRows: [],
   measurements: [],
@@ -233,6 +257,7 @@ const state = {
   activeCurveChannel: "all",
   selectedPatchIndex: null,
   selectedJobKey: "",
+  lastSavedRunSignature: "",
   settings: {
     densityFilter: "status_t",
     measurementCondition: "auto",
@@ -270,11 +295,15 @@ async function initialize() {
   const savedLang = localStorage.getItem("lang") || "zh";
   updateDomTranslations(savedLang);
 
+  loadCustomStandards();
+  loadHiddenStandards();
   populateSelects();
   loadRuns();
   attachEvents();
   await loadStandard("gracol2013_crpc6");
-  render();
+  if (!await restoreLastProjectDraft()) {
+    render();
+  }
 }
 
 function attachEvents() {
@@ -313,6 +342,7 @@ function attachEvents() {
 
   // Bind curve chart dragging events
   els.curveChart?.addEventListener("mousedown", handleCurveDragStart);
+  els.compensationSimulationChart?.addEventListener("mousedown", handleCurveDragStart);
   window.addEventListener("mousemove", handleCurveDragMove);
   window.addEventListener("mouseup", handleCurveDragEnd);
 
@@ -340,12 +370,7 @@ function attachEvents() {
       event.target.value = "";
       return;
     }
-    if (!confirmDataOverwrite("导入文件会覆盖当前手动表、导入数据和曲线结果，是否继续？")) {
-      event.target.value = "";
-      return;
-    }
-    els.rawInput.value = text;
-    parseAndCalculate({ skipConfirm: true });
+    importMeasurementText(text, { sourceName: file.name });
     event.target.value = "";
   });
 
@@ -365,6 +390,11 @@ function attachEvents() {
   els.clearRunsButton.addEventListener("click", clearRuns);
   els.reloadStandardButton.addEventListener("click", () => loadStandard(els.standardSelect.value));
   els.standardIccInput?.addEventListener("change", importStandardIcc);
+  els.customStandardFileInput?.addEventListener("change", importCustomStandardFile);
+  els.saveCustomStandardButton?.addEventListener("click", saveCustomStandard);
+  els.exportStandardButton?.addEventListener("click", exportCurrentStandard);
+  els.deleteCustomStandardButton?.addEventListener("click", deleteOrHideStandard);
+  els.restoreStandardListButton?.addEventListener("click", restoreStandardList);
   els.applyCustomTargetButton.addEventListener("click", applyCustomTarget);
   els.runG7Button.addEventListener("click", () => {
     state.g7 = currentG7Preview();
@@ -386,8 +416,8 @@ function attachEvents() {
   els.deviceCalibrateButton?.addEventListener("click", calibrateDevice);
   els.deviceReadPatchButton?.addEventListener("click", readDevicePatch);
   els.exportCsvButton.addEventListener("click", () => download("ctv-compensation-curve.csv", withExportHeader(toCsv(state.results), exportContext()), "text/csv"));
-  els.exportHarmonyButton.addEventListener("click", () => download("kodak-prinergy-harmony-manual-entry.csv", withExportHeader(toHarmonyCsv(state.results), exportContext()), "text/csv"));
-  els.exportPrinergyButton.addEventListener("click", () => download("kodak-prinergy-input-output.csv", toPrinergyCsv(state.results, exportContext()), "text/csv"));
+  els.exportHarmonyButton.addEventListener("click", () => download("rip-manual-entry.csv", withExportHeader(toHarmonyCsv(state.results), exportContext()), "text/csv"));
+  els.exportPrinergyButton.addEventListener("click", () => download("rip-input-output.csv", toPrinergyCsv(state.results, exportContext()), "text/csv"));
   els.exportSimpleRipButton.addEventListener("click", () => download("rip-simple-input-output.csv", toSimpleRipCsv(state.results, exportContext()), "text/csv"));
   els.exportCgatsButton.addEventListener("click", () => download("ctv-compensation-curve.cgats.txt", withExportHeader(toCgatsText(state.results), exportContext()), "text/plain"));
   els.exportG7CsvButton.addEventListener("click", () => download("g7-verification-report.csv", toG7VerificationCsv(exportContext()), "text/csv"));
@@ -438,6 +468,27 @@ function attachEvents() {
     populateSelects();
     render();
   });
+  els.helpCenterButton?.addEventListener("click", () => openProductInfo("help"));
+  els.aboutButton?.addEventListener("click", () => openProductInfo("about"));
+  els.settingsHelpButton?.addEventListener("click", () => openProductInfo("help"));
+  els.settingsAboutButton?.addEventListener("click", () => openProductInfo("about"));
+  els.settingsUpdateButton?.addEventListener("click", () => openProductInfo("updates"));
+  els.productInfoCloseButton?.addEventListener("click", closeProductInfo);
+  els.productInfoDialog?.addEventListener("click", (event) => {
+    if (event.target === els.productInfoDialog) closeProductInfo();
+  });
+  els.productInfoTabs?.forEach((button) => {
+    button.addEventListener("click", () => setProductInfoTab(button.dataset.productInfoTab));
+  });
+  els.checkUpdateButton?.addEventListener("click", () => {
+    setProductInfoTab("updates");
+    if (els.updateStatusText) {
+      els.updateStatusText.textContent = "当前版本 0.1.12；在线更新服务尚未启用。市场版将通过应用市场更新，官网版后续接入检查更新。";
+    }
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !els.productInfoDialog?.hidden) closeProductInfo();
+  });
   els.exportJobArchiveButton?.addEventListener("click", exportSelectedJobArchive);
   els.exportJobLibraryButton?.addEventListener("click", exportJobLibraryArchive);
   els.printReportButton.addEventListener("click", () => window.print());
@@ -447,6 +498,9 @@ function attachEvents() {
   els.manualBody.addEventListener("paste", pasteManualTable);
   els.resultBody.addEventListener("change", updateCurveOverride);
   els.resultBody.addEventListener("input", updateCurveOverride);
+  els.resultBody.addEventListener("keydown", handleCurveOutputKeydown);
+  els.toneToleranceBody?.addEventListener("input", updateStandardToleranceFromUi);
+  els.toneToleranceBody?.addEventListener("change", updateStandardToleranceFromUi);
   els.jobRunList.addEventListener("click", restoreRunFromList);
   els.runBody.addEventListener("click", restoreRunFromList);
   els.measurementPatchPreview?.addEventListener("click", selectMeasurementPatch);
@@ -486,12 +540,46 @@ function attachEvents() {
   });
 }
 
+function openProductInfo(tab = "help") {
+  setProductInfoTab(tab);
+  if (els.productInfoDialog) els.productInfoDialog.hidden = false;
+  setTimeout(() => {
+    const activeTab = [...(els.productInfoTabs || [])].find((button) => button.classList.contains("active"));
+    activeTab?.focus();
+  }, 0);
+}
+
+function closeProductInfo() {
+  if (els.productInfoDialog) els.productInfoDialog.hidden = true;
+}
+
+function setProductInfoTab(tab = "help") {
+  const selected = ["help", "updates", "about"].includes(tab) ? tab : "help";
+  els.productInfoTabs?.forEach((button) => {
+    const active = button.dataset.productInfoTab === selected;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  els.productInfoPanels?.forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.productInfoPanel === selected);
+  });
+}
+
 function populateSelects() {
   els.targetSelect.innerHTML = targetOptions().map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
   if (els.settingsTargetSelect) els.settingsTargetSelect.innerHTML = targetOptions().map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
-  els.standardSelect.innerHTML = STANDARD_LIBRARY.map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
+  els.standardSelect.innerHTML = visibleStandardLibrary().map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
   if (els.deviceAdapterSelect) els.deviceAdapterSelect.innerHTML = DEVICE_ADAPTERS.map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
   if (els.settingsDeviceAdapterSelect) els.settingsDeviceAdapterSelect.innerHTML = DEVICE_ADAPTERS.map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
+}
+
+function visibleStandardLibrary() {
+  const visible = STANDARD_LIBRARY.filter((item) => !state.hiddenStandardIds.has(item.id));
+  return visible.length ? visible : STANDARD_LIBRARY;
+}
+
+function firstVisibleStandardId(fallback = "gracol2013_crpc6") {
+  return visibleStandardLibrary()[0]?.id || fallback;
 }
 
 function refreshTargetSelect(selected = els.targetSelect.value) {
@@ -500,6 +588,44 @@ function refreshTargetSelect(selected = els.targetSelect.value) {
   if (els.settingsTargetSelect) {
     els.settingsTargetSelect.innerHTML = targetOptions().map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
     els.settingsTargetSelect.value = selected;
+  }
+}
+
+function loadCustomStandards() {
+  try {
+    const items = JSON.parse(localStorage.getItem(CUSTOM_STANDARDS_KEY) || "[]");
+    setCustomStandards(Array.isArray(items) ? items : []);
+  } catch {
+    setCustomStandards([]);
+  }
+}
+
+function loadHiddenStandards() {
+  try {
+    const ids = JSON.parse(localStorage.getItem(HIDDEN_STANDARDS_KEY) || "[]");
+    state.hiddenStandardIds = new Set(Array.isArray(ids) ? ids : []);
+  } catch {
+    state.hiddenStandardIds = new Set();
+  }
+}
+
+function persistHiddenStandards() {
+  try {
+    localStorage.setItem(HIDDEN_STANDARDS_KEY, JSON.stringify([...state.hiddenStandardIds]));
+    return true;
+  } catch (error) {
+    window.alert(`标准列表保存失败：${error.message || error}`);
+    return false;
+  }
+}
+
+function persistCustomStandards(items) {
+  try {
+    localStorage.setItem(CUSTOM_STANDARDS_KEY, JSON.stringify(items));
+    return true;
+  } catch (error) {
+    window.alert(`自定义标准保存失败：${error.message || error}`);
+    return false;
   }
 }
 
@@ -568,6 +694,125 @@ async function importStandardIcc(event) {
   }
 }
 
+async function saveCustomStandard() {
+  const id = isCustomStandard(state.standard?.id) ? state.standard.id : undefined;
+  const name = isCustomStandard(state.standard?.id) ? state.standard.name : `${state.standard.name} 自定义`;
+  const custom = makeCustomStandard(state.standard, {
+    id,
+    name,
+    printCondition: state.standard.printCondition,
+    target: els.targetSelect.value || state.standard.target,
+  });
+  const items = addOrUpdateCustomStandard(custom);
+  if (!persistCustomStandards(items)) return;
+  populateSelects();
+  await loadStandard(custom.id);
+}
+
+async function importCustomStandardFile(event) {
+  const [file] = event.target.files || [];
+  if (!file) return;
+  try {
+    const parsed = JSON.parse(await file.text());
+    const source = parsed?.standard && typeof parsed.standard === "object" ? parsed.standard : parsed;
+    if (!source || typeof source !== "object") throw new Error("文件内容不是有效的标准 JSON。");
+    const importedId = String(source.id || "").trim();
+    const keepImportedId = importedId.startsWith("custom_") && !STANDARD_LIBRARY.some((item) => item.id === importedId && !isCustomStandard(importedId));
+    const custom = makeCustomStandard(source, {
+      id: keepImportedId ? importedId : undefined,
+      name: source.name || file.name.replace(/\.json$/i, ""),
+      printCondition: source.printCondition,
+      target: source.target,
+    });
+    const items = addOrUpdateCustomStandard(custom);
+    if (!persistCustomStandards(items)) return;
+    populateSelects();
+    await loadStandard(custom.id);
+  } catch (error) {
+    window.alert(`标准文件导入失败：${error.message || error}`);
+  } finally {
+    event.target.value = "";
+  }
+}
+
+async function exportCurrentStandard() {
+  if (!state.standard?.id) return;
+  const exportStandard = {
+    ...state.standard,
+    exportedAt: new Date().toISOString(),
+    fileType: "CurveStudio standard",
+  };
+  const filename = `${slug(state.standard.name || "curvestudio-standard")}.standard.json`;
+  await download(filename, JSON.stringify(exportStandard, null, 2), "application/json", {
+    allowWithoutResults: true,
+    skipManualDirty: true,
+  });
+}
+
+async function deleteOrHideStandard() {
+  if (!state.standard?.id) return;
+  const name = state.standard.name;
+  if (isCustomStandard(state.standard.id)) {
+    if (!window.confirm(`删除自定义标准「${name}」？`)) return;
+    const items = removeCustomStandard(state.standard.id);
+    if (!persistCustomStandards(items)) return;
+  } else {
+    if (!window.confirm(`从列表隐藏内置标准「${name}」？可用「恢复标准列表」找回。`)) return;
+    state.hiddenStandardIds.add(state.standard.id);
+    if (!persistHiddenStandards()) return;
+  }
+  populateSelects();
+  await loadStandard(firstVisibleStandardId());
+}
+
+async function restoreStandardList() {
+  state.hiddenStandardIds = new Set();
+  if (!persistHiddenStandards()) return;
+  populateSelects();
+  await loadStandard(state.standard?.id || firstVisibleStandardId());
+}
+
+function updateStandardToleranceFromUi(event) {
+  const target = event.target;
+  if (target?.matches?.("[data-tone-tolerance]")) {
+    const channel = target.dataset.channel;
+    const metric = target.dataset.metric;
+    const tone = target.dataset.tone;
+    const value = Number(target.value);
+    if (!channel || !metric || !tone || !Number.isFinite(value)) return;
+    state.standard = {
+      ...state.standard,
+      toneTolerances: {
+        ...(state.standard.toneTolerances || {}),
+        [channel]: {
+          ...(state.standard.toneTolerances?.[channel] || {}),
+          [metric]: {
+            ...(state.standard.toneTolerances?.[channel]?.[metric] || {}),
+            [tone]: value,
+          },
+        },
+      },
+    };
+    renderExport();
+    renderReport();
+    return;
+  }
+  if (target?.matches?.("[data-channel-target]")) {
+    const channel = target.dataset.channelTarget;
+    if (!channel) return;
+    state.standard = {
+      ...state.standard,
+      channelTargets: {
+        ...(state.standard.channelTargets || {}),
+        [channel]: target.value,
+      },
+    };
+    renderStandard();
+    renderExport();
+    renderReport();
+  }
+}
+
 function g7ToleranceInputs() {
   return [
     els.g7EnabledInput,
@@ -605,7 +850,7 @@ function cloneData(value) {
 }
 
 function parseAndCalculate(options = {}) {
-  if (!options.skipConfirm && !confirmDataOverwrite("解析文本数据会覆盖当前手动表、导入数据和曲线结果，是否继续？")) return;
+  if (!options.skipConfirm && !confirmDataOverwrite(t("confirm_parse_overwrite", "解析文本数据会替换当前工作区数据。"))) return;
   state.importInfo = parseImportText(els.rawInput.value, { densityFilter: state.settings.densityFilter });
   state.measurements = state.importInfo.measurements;
   state.manualRows = [];
@@ -616,8 +861,34 @@ function parseAndCalculate(options = {}) {
   calculate();
 }
 
+function importMeasurementText(text) {
+  const incoming = parseImportText(text, { densityFilter: state.settings.densityFilter });
+  if (!incoming.measurements.length) {
+    window.alert(t("import_no_usable_measurements", "导入文件没有可计算测点，请检查文件格式或测量字段。"));
+    return false;
+  }
+  saveCurrentRun({ switchToJob: false, namePrefix: t("run_name_previous_import", "上一份测量"), skipIfUnchanged: true });
+  loadImportedMeasurement(incoming, text);
+  saveCurrentRun({ switchToJob: false, namePrefix: t("run_name_imported_measurement", "导入测量") });
+  render();
+  return true;
+}
+
+function loadImportedMeasurement(importInfo, text) {
+  state.importInfo = importInfo;
+  state.measurements = importInfo.measurements;
+  state.manualRows = [];
+  state.manualDirty = false;
+  state.curveOverrides = {};
+  state.selectedPatchIndex = null;
+  state.ratioAuto = true;
+  els.rawInput.value = text;
+  calculate();
+}
+
+
 async function loadSelectedSample() {
-  if (!confirmDataOverwrite("载入示例会覆盖当前手动表、导入数据和曲线结果，是否继续？")) return;
+  if (!confirmDataOverwrite(t("confirm_sample_overwrite", "载入示例会替换当前工作区数据。"))) return;
   const selected = els.sampleSelect.value;
   if (selected === "kba105" || selected === "kba162") {
     await loadManualPreset(selected);
@@ -839,7 +1110,7 @@ async function readDevicePatch() {
 }
 
 function clearManualRows() {
-  if (!confirmDataOverwrite("清空会删除当前手动表、导入数据和曲线结果，是否继续？")) return;
+  if (!confirmDataOverwrite(t("confirm_clear_current", "清空会删除当前工作区数据。"))) return;
   state.manualRows = [];
   state.importInfo = null;
   state.measurements = [];
@@ -920,6 +1191,7 @@ function calculate(options = {}) {
   state.labRows = buildLabVerificationRows({
     manualRows: state.manualRows,
     measurements: state.measurements,
+    rawRows: state.importInfo?.rawRows || [],
     standardPatchMap: labReferencePatchMap(),
     warning: state.standard.deltaE.warning,
     fail: state.standard.deltaE.fail,
@@ -1159,7 +1431,7 @@ function exportContext() {
     deltaFormula: deltaFormulaLabel(els.deltaFormulaSelect.value),
     targetName: targetName(els.targetSelect.value),
     compensationRatio: els.ratioInput.value,
-    ripCompatibility: t("rip_compatibility_value", "专用: Kodak Prinergy Harmony 手录表、Kodak Prinergy CSV；通用 CSV: SCREEN Trueflow、Heidelberg Prinect、Agfa Apogee、Harlequin、Founder Flow、Esko 等需按实际导入模板映射。"),
+    ripCompatibility: t("rip_compatibility_value", "RIP 手动录入表、RIP 导入 CSV；通用 CSV 可按 SCREEN Trueflow、Heidelberg Prinect、Agfa Apogee、Harlequin、Founder Flow、Esko 等系统的导入模板映射。"),
     measurementCondition: measurementConditionForExport(),
     diagnosis: state.diagnosis,
     curveQuality: summarizeCurveSafety(state.safetyIssues),
@@ -1224,9 +1496,7 @@ async function openWithDesktopDialog() {
     const result = await openTextFileDesktop();
     if (!result.handled || result.canceled) return;
     if (String(result.path || "").toLowerCase().endsWith(".json") && await restoreProjectFromText(result.contents)) return;
-    if (!confirmDataOverwrite("导入文件会覆盖当前手动表、导入数据和曲线结果，是否继续？")) return;
-    els.rawInput.value = result.contents;
-    parseAndCalculate({ skipConfirm: true });
+    importMeasurementText(result.contents, { sourceName: result.path || "" });
   } catch (error) {
     window.alert(`桌面打开文件失败：${error.message || error}`);
   }
@@ -1277,11 +1547,12 @@ function clampNumber(value, min, max, fallback) {
 
 function confirmDataOverwrite(message) {
   const hasExistingData = state.manualRows.length || state.measurements.length || state.results.length;
-  return !hasExistingData || window.confirm(message);
+  if (!hasExistingData) return true;
+  return window.confirm(`${message}\n\n${t("confirm_overwrite_detail", "当前工作区只保留一份测量数据；继续会替换当前手动表、导入数据、曲线结果和人工锁定点。已保存的 Job / Run 历史不会被覆盖。若要保留当前测量，请先取消并点击「保存当前作业 / Run」。")}`);
 }
 
 const viewToStepMap = {
-  job: "setup",
+  job: "acquisition",
   standard: "setup",
   settings: "setup",
   measurement: "acquisition",
@@ -1295,7 +1566,7 @@ const viewToStepMap = {
 };
 
 const stepDefaultViewMap = {
-  setup: "job",
+  setup: "standard",
   acquisition: "measurement",
   diagnose: "analyze",
   curves: "curve",
@@ -1316,11 +1587,11 @@ function switchView(view) {
   }
 
   const stepNames = {
-    setup: t("step_setup", "第 1 步：任务配置"),
-    acquisition: t("step_acquisition", "第 2 步：数据采集"),
-    diagnose: t("step_diagnose", "第 3 步：分析诊断"),
-    curves: t("step_curves", "第 4 步：曲线生成"),
-    delivery: t("step_delivery", "第 5 步：交付归档")
+    setup: t("step_setup", "标准设置"),
+    acquisition: t("step_acquisition", "第 1 步：导入测量"),
+    diagnose: t("step_diagnose", "第 2 步：分析诊断"),
+    curves: t("step_curves", "第 3 步：生成曲线"),
+    delivery: t("step_delivery", "第 4 步：复测归档")
   };
   const stepIndicator = document.getElementById("currentStepName");
   if (stepIndicator) {
@@ -1343,11 +1614,17 @@ function switchView(view) {
 }
 
 function saveRun() {
+  saveCurrentRun({ switchToJob: true });
+}
+
+function saveCurrentRun(options = {}) {
   if (!state.results.length) return;
   if (state.manualDirty) {
     window.alert("手动测量表已修改，请先点击「应用测量表」重新生成曲线后再保存 Run。");
-    return;
+    return null;
   }
+  const signature = currentRunSignature();
+  if (options.skipIfUnchanged && signature && signature === state.lastSavedRunSignature) return null;
   const context = exportContext();
   const archive = projectArchive(context);
   const metrics = buildRunMetrics({
@@ -1357,8 +1634,9 @@ function saveRun() {
     curveQuality: context.curveQuality,
   });
   const jobName = jobDisplayName(context);
+  const historyArchive = compactProjectArchiveForRun(archive);
   const run = {
-    name: context.runId,
+    name: options.namePrefix ? `${options.namePrefix} / ${context.runId}` : context.runId,
     jobKey: context.jobId,
     jobName,
     createdAt: new Date().toLocaleString(),
@@ -1386,36 +1664,105 @@ function saveRun() {
     curveWarnings: metrics.curveWarnings,
     curveDangers: metrics.curveDangers,
     metrics,
-    archive,
+    archive: historyArchive,
   };
-  const nextRuns = [run, ...state.runs].slice(0, 12);
+  const nextRuns = [run, ...state.runs].slice(0, 24);
   const gate = currentIccGenerationGate(nextRuns);
-  run.iccGenerationGate = gate;
-  run.archive = { ...run.archive, iccGenerationGate: gate };
-  const saved = saveRunsAndLastProject(nextRuns, run.archive);
+  const storableGate = storableIccGenerationGate(gate);
+  run.iccGenerationGate = storableGate;
+  run.archive = { ...run.archive, iccGenerationGate: storableGate };
+  const saved = saveRunsAndLastProject(nextRuns, { ...archive, iccGenerationGate: storableGate });
   if (!saved.ok) {
     state.storageWarning = saved.warning;
     if (typeof window !== "undefined" && typeof window.alert === "function") window.alert(saved.warning);
     _renderRuns(state, els);
     _renderReport(state, els);
-    return;
+    return null;
   }
   state.storageWarning = "";
   state.runs = nextRuns;
+  state.lastSavedRunSignature = signature;
   state.selectedJobKey = run.jobKey;
   _renderRuns(state, els);
   _renderReport(state, els);
-  switchView("job");
+  if (options.switchToJob !== false) switchView("job");
+  return run;
+}
+
+function storableIccGenerationGate(gate) {
+  if (!gate || typeof gate !== "object") return null;
+  return {
+    status: gate.status,
+    summary: gate.summary,
+    checks: Array.isArray(gate.checks)
+      ? gate.checks.map((check) => ({
+        id: check.id,
+        label: check.label,
+        status: check.status,
+        required: check.required,
+        message: check.message,
+      }))
+      : [],
+  };
+}
+
+function currentRunSignature() {
+  if (!state.measurements.length && !state.results.length) return "";
+  return JSON.stringify({
+    job: {
+      customer: els.jobCustomerInput.value,
+      press: els.jobPressInput.value,
+      paper: els.jobPaperInput.value,
+    },
+    settings: {
+      mode: els.modeSelect.value,
+      target: els.targetSelect.value,
+      ratio: els.ratioInput.value,
+      smooth: els.smoothInput.value,
+      limit: els.limitInput.value,
+    },
+    measurements: state.measurements.map((row) => [
+      row.channel,
+      Number(row.tone).toFixed(2),
+      finiteSignature(row.measuredTone),
+      finiteSignature(row.measuredTvi),
+      finiteSignature(row.colorimetricTone),
+      finiteSignature(row.density),
+    ]),
+    overrides: state.curveOverrides,
+  });
+}
+
+function finiteSignature(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Number(number.toFixed(4)) : "";
 }
 
 function clearRuns() {
-  if (state.runs.length && !window.confirm("清空全部 Job / Run 历史？如果只想删除一个作业，请用作业卡片上的“删除作业”。")) return;
-  state.runs = [];
-  state.selectedJobKey = "";
+  if (!window.confirm("清空当前 Run / 当前工作区？\n已保存的 Job / Run 历史不会删除。")) return;
+  clearCurrentWorkspace();
+  clearStoredProject();
   state.storageWarning = "";
-  clearStoredRuns();
-  _renderRuns(state, els);
-  _renderReport(state, els);
+  render();
+}
+
+function clearCurrentWorkspace() {
+  state.importInfo = null;
+  state.manualRows = [];
+  state.measurements = [];
+  state.results = [];
+  state.diagnosis = null;
+  state.labRows = [];
+  state.safetyIssues = [];
+  state.g7 = null;
+  state.g7Compensation = null;
+  state.curveOverrides = {};
+  state.manualDirty = false;
+  state.selectedPatchIndex = null;
+  state.lastSavedRunSignature = "";
+  state.activeCurveChannel = "all";
+  if (els.rawInput) els.rawInput.value = "";
+  if (els.fileInput) els.fileInput.value = "";
 }
 
 async function restoreRunFromList(event) {
@@ -1553,19 +1900,37 @@ function jobDisplayName(context) {
 }
 
 function persistRunsOnly() {
-  const saved = saveStoredRuns(state.runs);
+  const compactRuns = state.runs.map((run) => ({
+    ...run,
+    archive: run.archive ? compactProjectArchiveForRun(run.archive) : run.archive,
+  }));
+  const saved = saveStoredRuns(compactRuns);
   if (!saved.ok) {
     state.storageWarning = saved.warning;
     window.alert(saved.warning);
   } else {
     state.storageWarning = "";
+    state.runs = compactRuns;
   }
   _renderRuns(state, els);
   _renderReport(state, els);
 }
 
+function persistCurrentProjectDraft() {
+  if (!state.measurements.length && !state.results.length) return;
+  const saved = saveLastProject(projectArchive(exportContext()));
+  state.storageWarning = saved.ok ? "" : saved.warning;
+}
+
 function loadRuns() {
   state.runs = loadStoredRuns();
+}
+
+async function restoreLastProjectDraft() {
+  const archive = loadLastProject();
+  if (!archive || (!archive.measurements && !archive.results && !archive.manualRows)) return false;
+  await restoreProjectArchive(archive);
+  return true;
 }
 
 async function restoreProjectFromText(text) {
@@ -1580,7 +1945,7 @@ async function restoreProjectFromText(text) {
     return true;
   }
   if (!archive || (!archive.job && !archive.measurements && !archive.results)) return false;
-  if (!confirmDataOverwrite("导入 JSON 项目档案会覆盖当前手动表、导入数据和曲线结果，是否继续？")) return true;
+  if (!confirmDataOverwrite(t("confirm_json_overwrite", "导入 JSON 项目档案会替换当前工作区数据。"))) return true;
   await restoreProjectArchive(archive);
   return true;
 }
@@ -1619,6 +1984,11 @@ async function restoreProjectArchive(archive) {
     refreshTargetSelect(archive.settings.target);
   }
   if (archive.standard?.id) {
+    if (archive.standard.custom && !STANDARD_LIBRARY.some((item) => item.id === archive.standard.id)) {
+      const items = addOrUpdateCustomStandard(archive.standard);
+      persistCustomStandards(items);
+      populateSelects();
+    }
     await loadStandard(archive.standard.id);
   }
   state.iccProfile = archive.iccProfile || null;
@@ -1693,6 +2063,7 @@ async function restoreProjectArchive(archive) {
   state.ratioAuto = false;
   state.curveOverrides = archive.curveOverrides || {};
   calculate({ preserveRatio: true });
+  state.lastSavedRunSignature = currentRunSignature();
   switchView("job");
 }
 
@@ -1810,6 +2181,20 @@ function updateCurveOverride(event) {
   const key = target?.dataset?.curveKey;
   const field = target?.dataset?.curveField;
   if (!key || !field) return;
+  if (event.type === "input" && field === "outputTone") {
+    const lockInput = target.closest("tr")?.querySelector("[data-curve-field='locked']");
+    if (lockInput) lockInput.checked = true;
+    const numericValue = Number(target.value);
+    if (!Number.isFinite(numericValue)) return;
+    const row = state.results.find((item) => curveRowKey(item) === key);
+    if (!row) return;
+    const value = clampNumber(numericValue, 0, 100, row.outputTone);
+    state.curveOverrides[key] = { locked: true, outputTone: value };
+    state.curveOverrides = pruneCurveOverrides(state.results, state.curveOverrides);
+    state.results = applyCurveOverrides(state.results, state.curveOverrides);
+    persistCurrentProjectDraft();
+    return;
+  }
   const row = state.results.find((item) => curveRowKey(item) === key);
   if (!row) return;
   if (field === "locked") {
@@ -1839,6 +2224,29 @@ function updateCurveOverride(event) {
   _renderInstrument(state, els);
   _renderExport(state, els);
   _renderReport(state, els);
+  persistCurrentProjectDraft();
+}
+
+function handleCurveOutputKeydown(event) {
+  const target = event.target;
+  if (target?.dataset?.curveField !== "outputTone") return;
+  if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+  event.preventDefault();
+  const step = Number(target.step) || 0.1;
+  const direction = event.key === "ArrowUp" ? 1 : -1;
+  const min = Number.isFinite(Number(target.min)) ? Number(target.min) : 0;
+  const max = Number.isFinite(Number(target.max)) ? Number(target.max) : 100;
+  const current = Number(target.value);
+  const fallback = Number(target.getAttribute("value"));
+  const base = Number.isFinite(current) ? current : Number.isFinite(fallback) ? fallback : 0;
+  const next = clampNumber(base + direction * step, min, max, base);
+  target.value = next.toFixed(stepDecimals(step));
+  target.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function stepDecimals(step) {
+  const text = String(step);
+  return text.includes(".") ? text.split(".")[1].length : 0;
 }
 
 function updateManualCell(event) {
@@ -1909,8 +2317,15 @@ function handleCurveDragStart(event) {
   const channel = target.dataset.channel;
   const tone = Number(target.dataset.tone);
   const key = `${channel}:${tone.toFixed(3)}`;
+  const svg = target.ownerSVGElement || event.currentTarget || els.curveChart;
   
-  activeDragPoint = { channel, tone, key, svg: els.curveChart };
+  activeDragPoint = {
+    channel,
+    tone,
+    key,
+    svg,
+    dragKind: target.dataset.dragKind || "curve-output",
+  };
   target.classList.add("dragging");
   
   const tooltip = document.getElementById("chart-tooltip");
@@ -1923,17 +2338,12 @@ function handleCurveDragMove(event) {
   event.preventDefault();
   const svg = activeDragPoint.svg;
   
-  const pt = svg.createSVGPoint();
-  pt.x = event.clientX;
-  pt.y = event.clientY;
-  const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
-  
-  const pad = { top: 42, bottom: 48 };
-  const height = 420;
-  const plotH = height - pad.top - pad.bottom;
-  
-  let yVal = 100 - ((svgP.y - pad.top) / plotH) * 100;
-  yVal = Math.max(0, Math.min(100, yVal));
+  let yVal = chartYValueFromEvent(svg, event);
+  if (!Number.isFinite(yVal)) return;
+  if (activeDragPoint.dragKind === "compensation-simulation") {
+    yVal = outputToneForSimulatedGain(activeDragPoint.channel, activeDragPoint.tone, yVal);
+  }
+  yVal = clampNumber(yVal, 0, 100, 0);
   yVal = Math.round(yVal * 10) / 10;
   
   const key = activeDragPoint.key;
@@ -1951,14 +2361,13 @@ function handleCurveDragMove(event) {
     ? state.results.filter((row) => row.channel === state.activeCurveChannel)
     : state.results;
   
-  renderCurveChart(els.curveChart, filtered, state.safetyIssues);
+  renderCurveChartsOnly(filtered);
 }
 
 function handleCurveDragEnd(event) {
   if (!activeDragPoint) return;
   
-  const draggingDot = els.curveChart.querySelector(".dragging");
-  if (draggingDot) draggingDot.classList.remove("dragging");
+  document.querySelectorAll(".chart-dot.dragging").forEach((dot) => dot.classList.remove("dragging"));
   
   activeDragPoint = null;
   
@@ -1975,6 +2384,56 @@ function handleCurveDragEnd(event) {
   _renderInstrument(state, els);
   _renderExport(state, els);
   _renderReport(state, els);
+  persistCurrentProjectDraft();
+}
+
+function chartYValueFromEvent(svg, event) {
+  const pt = svg.createSVGPoint();
+  pt.x = event.clientX;
+  pt.y = event.clientY;
+  const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+  const padTop = Number(svg.dataset.chartPadTop) || 42;
+  const padBottom = Number(svg.dataset.chartPadBottom) || 48;
+  const height = Number(svg.dataset.chartHeight) || 420;
+  const yMin = Number(svg.dataset.chartYMin);
+  const yMax = Number(svg.dataset.chartYMax);
+  const min = Number.isFinite(yMin) ? yMin : 0;
+  const max = Number.isFinite(yMax) ? yMax : 100;
+  const plotH = height - padTop - padBottom;
+  if (plotH <= 0 || max <= min) return NaN;
+  const value = max - ((svgP.y - padTop) / plotH) * (max - min);
+  return Math.max(min, Math.min(max, value));
+}
+
+function outputToneForSimulatedGain(channel, tone, simulatedGain) {
+  const desiredSimulatedTone = Number(tone) + Number(simulatedGain);
+  const points = state.results
+    .filter((row) => row.channel === channel && Number.isFinite(Number(row.tone)) && Number.isFinite(Number(row.measuredTone)))
+    .map((row) => ({ tone: Number(row.tone), measuredTone: Number(row.measuredTone) }))
+    .sort((a, b) => a.tone - b.tone);
+  if (!points.length || !Number.isFinite(desiredSimulatedTone)) return Number(tone);
+  if (desiredSimulatedTone <= points[0].measuredTone) return points[0].tone;
+  const last = points[points.length - 1];
+  if (desiredSimulatedTone >= last.measuredTone) return last.tone;
+  for (let index = 1; index < points.length; index += 1) {
+    const left = points[index - 1];
+    const right = points[index];
+    if (desiredSimulatedTone <= right.measuredTone) {
+      const span = right.measuredTone - left.measuredTone;
+      if (Math.abs(span) < 0.001) return left.tone;
+      const ratio = (desiredSimulatedTone - left.measuredTone) / span;
+      return left.tone + ratio * (right.tone - left.tone);
+    }
+  }
+  return Number(tone);
+}
+
+function renderCurveChartsOnly(filtered) {
+  renderCurveChart(els.curveChart, filtered, state.safetyIssues);
+  if (els.compensationSimulationChart) {
+    renderCompensationSimulationChart(els.compensationSimulationChart, buildCompensationSimulation(filtered));
+  }
 }
 
 function handleMouseMove(event) {
@@ -2110,8 +2569,7 @@ function handleMouseMove(event) {
       
       tooltip.innerHTML = html;
       tooltip.hidden = false;
-      tooltip.style.left = (event.clientX + 15) + "px";
-      tooltip.style.top = (event.clientY + 15) + "px";
+      positionChartTooltip(tooltip, event);
     } else {
       tooltip.hidden = true;
     }
@@ -2128,6 +2586,30 @@ function hideHover() {
   const hoverHighlights = document.querySelectorAll(".hover-highlight");
   hoverLines.forEach(l => l.style.display = "none");
   hoverHighlights.forEach(h => h.style.display = "none");
+}
+
+function positionChartTooltip(tooltip, event) {
+  const offset = 14;
+  const margin = 8;
+  tooltip.style.left = "0px";
+  tooltip.style.top = "0px";
+  const rect = tooltip.getBoundingClientRect();
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  let left = event.clientX + offset;
+  let top = event.clientY + offset;
+
+  if (left + rect.width + margin > viewportWidth) {
+    left = event.clientX - rect.width - offset;
+  }
+  if (top + rect.height + margin > viewportHeight) {
+    top = event.clientY - rect.height - offset;
+  }
+
+  left = Math.max(margin, Math.min(left, viewportWidth - rect.width - margin));
+  top = Math.max(margin, Math.min(top, viewportHeight - rect.height - margin));
+  tooltip.style.left = `${Math.round(left)}px`;
+  tooltip.style.top = `${Math.round(top)}px`;
 }
 
 function signed(value) {

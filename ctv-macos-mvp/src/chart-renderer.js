@@ -1,8 +1,9 @@
 import { escapeHtml } from "./shared.js";
+import { translateDynamicText } from "./translations.js?v=20260525-statusbar-pass-1";
 
 export function renderMeasurementChart(svg, results, targetRows, mode) {
   const label = mode === "ctv" ? "CTV" : "TVI";
-  const targetName = mode === "ctv" ? "目标偏差" : "目标 TVI";
+  const targetName = mode === "ctv" ? translateDynamicText("目标偏差") : translateDynamicText("目标 TVI");
   const target = targetRows.map((point) => ({
     x: point.tone,
     y: point.value,
@@ -10,24 +11,26 @@ export function renderMeasurementChart(svg, results, targetRows, mode) {
   }));
   const band = targetRows.map((point) => {
     const tolerance = toneTolerance(point.tone, mode);
+    const low = point.value - tolerance;
+    const high = point.value + tolerance;
     return {
       x: point.tone,
-      low: point.value - tolerance,
-      high: point.value + tolerance,
-      tooltip: `容差范围 ${point.tone}%: ${fmt(point.value - tolerance)}-${fmt(point.value + tolerance)}%`,
+      low: mode === "ctv" ? low : Math.max(0, low),
+      high,
+    tooltip: `${translateDynamicText("容差范围")} ${point.tone}%: ${fmt(mode === "ctv" ? low : Math.max(0, low))}-${fmt(high)}%`,
     };
   });
   const series = groupSeries(results, (row) => ({
     x: row.tone,
     y: row.measuredTvi,
-    tooltip: `${row.channel} ${fmt(row.tone)}% ${label}${mode === "ctv" ? " 偏差" : ""}: ${signed(row.measuredTvi)}%, target ${fmt(row.targetTvi)}%`,
+    tooltip: `${row.channel} ${fmt(row.tone)}% ${label}${mode === "ctv" ? ` ${translateDynamicText("偏差")}` : ""}: ${signed(row.measuredTvi)}%, target ${fmt(row.targetTvi)}%`,
   }));
   const axis = measurementAxis(series, target, band, mode);
   drawChart(svg, series, {
     yMin: axis.min,
     yMax: axis.max,
-    yLabel: mode === "ctv" ? "CTV 偏差 %" : "网点扩大 %",
-    bands: [{ name: "标准容差", points: band, color: "#22c55e" }],
+    yLabel: mode === "ctv" ? translateDynamicText("CTV 偏差 %") : translateDynamicText("网点扩大 %"),
+    bands: [{ name: translateDynamicText("标准容差"), points: band, color: "#22c55e" }],
     reference: [{ name: targetName, points: target, color: "#111827" }],
   });
 }
@@ -44,76 +47,176 @@ export function renderCurveChart(svg, results, safetyIssues = []) {
   drawChart(svg, series, {
     yMin: 0,
     yMax: 100,
-    yLabel: "输出网点 %",
+    yLabel: translateDynamicText("输出网点 %"),
     interactivePoints: true,
     reference: [{ name: "Identity", points: [{ x: 0, y: 0 }, { x: 100, y: 100 }], color: "#9ca3af" }],
+  });
+}
+
+export function renderCompensationSimulationChart(svg, rows = []) {
+  const usableRows = rows
+    .filter((row) => Number.isFinite(row.tone) && Number.isFinite(row.simulatedTone) && Number.isFinite(row.targetTone))
+    .sort((a, b) => String(a.channel).localeCompare(String(b.channel)) || rowTone(a) - rowTone(b));
+  const dotGainRows = usableRows.map((row) => ({
+    ...row,
+    currentGain: Number(row.measuredTone) - Number(row.tone),
+    targetGain: Number(row.targetTone) - Number(row.tone),
+    simulatedGain: Number(row.simulatedTone) - Number(row.tone),
+  }));
+  const target = averageByTone(dotGainRows, "targetGain").map((point) => ({
+    ...point,
+    tooltip: `${translateDynamicText("目标网点扩大")} ${fmt(point.x)}%: ${fmt(point.y)}%`,
+  }));
+  const channels = [...new Set(usableRows.map((row) => row.channel))];
+  const toleranceBand = target.map((point) => {
+    const tolerance = toneTolerance(point.x, "tvi");
+    return {
+      x: point.x,
+      low: Math.max(0, point.y - tolerance),
+      high: point.y + tolerance,
+      tooltip: `${translateDynamicText("容差范围")} ${fmt(point.x)}%: ${fmt(Math.max(0, point.y - tolerance))}-${fmt(point.y + tolerance)}%`,
+    };
+  });
+  const references = [{ name: translateDynamicText("目标网点扩大"), points: target, color: "#111827", dasharray: "6 5" }];
+  const currentByChannel = groupSeries(dotGainRows, (row) => ({
+    x: row.tone,
+    y: row.currentGain,
+    tooltip: `${row.channel} ${fmt(row.tone)}% ${translateDynamicText("当前网点扩大")} ${fmt(row.currentGain)}%`,
+  }));
+  for (const channel of channels) {
+    references.push({
+      name: channels.length === 1 ? translateDynamicText("当前网点扩大") : `${translateDynamicText("当前")} ${channel}`,
+      points: (currentByChannel[channel] || []).map((row) => ({
+        ...row,
+        tooltip: row.tooltip,
+      })),
+      color: chartColor(channel),
+      dasharray: "3 5",
+      showInLegend: channels.length === 1,
+    });
+  }
+  if (channels.length === 1 && !references.some((item) => item.name === translateDynamicText("当前网点扩大"))) {
+    references.push({
+      name: translateDynamicText("当前网点扩大"),
+      points: dotGainRows.map((row) => ({
+        x: row.tone,
+        y: row.currentGain,
+        tooltip: `${row.channel} ${fmt(row.tone)}% ${translateDynamicText("当前网点扩大")} ${fmt(row.currentGain)}%`,
+      })),
+      color: "#94a3b8",
+      dasharray: "5 4",
+    });
+  }
+  const series = groupSeries(dotGainRows, (row) => ({
+    x: row.tone,
+    y: row.simulatedGain,
+    tooltip: `${row.channel} ${fmt(row.tone)}% ${translateDynamicText("补偿后网点扩大")} ${fmt(row.simulatedGain)}% / ${translateDynamicText("目标")} ${fmt(row.targetGain)}% / ${translateDynamicText("剩余偏差")} ${signed(row.afterDelta)}%`,
+    quality: row.status === "Fail" ? "fail" : row.status === "Warning" ? "warning" : undefined,
+    outputTone: row.outputTone,
+    dragKind: "compensation-simulation",
+  }));
+  const values = [
+    ...dotGainRows.flatMap((row) => [row.currentGain, row.targetGain, row.simulatedGain]),
+  ].filter(Number.isFinite);
+  const min = 0;
+  const max = Math.max(35, niceCeil(Math.max(...values, 0) * 1.08));
+  drawChart(svg, series, {
+    width: 960,
+    height: 420,
+    yMin: min,
+    yMax: max,
+    yLabel: translateDynamicText("网点扩大 %"),
+    bands: [{ name: translateDynamicText("目标容差"), points: toleranceBand, color: "#22c55e" }],
+    reference: references,
+    referenceDots: false,
+    interactivePoints: true,
   });
 }
 
 export function renderLabChromaticityChart(svg, labRows = []) {
   if (!svg) return;
   const width = 720;
-  const height = 420;
-  const pad = { left: 56, right: 24, top: 24, bottom: 42 };
-  const plotW = width - pad.left - pad.right;
-  const plotH = height - pad.top - pad.bottom;
+  const height = 620;
+  const pad = { left: 58, right: 28, top: 52, bottom: 58 };
+  const availableW = width - pad.left - pad.right;
+  const availableH = height - pad.top - pad.bottom;
+  const plotSize = Math.min(availableW, availableH);
+  const plotX = pad.left + (availableW - plotSize) / 2;
+  const plotY = pad.top + (availableH - plotSize) / 2;
+  const plotRight = plotX + plotSize;
+  const plotBottom = plotY + plotSize;
   const min = -100;
   const max = 100;
-  const xScale = (a) => pad.left + ((a - min) / (max - min)) * plotW;
-  const yScale = (b) => pad.top + (1 - (b - min) / (max - min)) * plotH;
+  const xScale = (a) => plotX + ((a - min) / (max - min)) * plotSize;
+  const yScale = (b) => plotY + (1 - (b - min) / (max - min)) * plotSize;
   const comparable = labRows.filter((row) => row.lab && row.referenceLab);
-  const gridValues = [-100, -50, 0, 50, 100];
-  const grid = gridValues.map((value) => `
-    <line x1="${xScale(value)}" y1="${pad.top}" x2="${xScale(value)}" y2="${height - pad.bottom}" class="grid" />
-    <line x1="${pad.left}" y1="${yScale(value)}" x2="${width - pad.right}" y2="${yScale(value)}" class="grid" />
-    <text x="${xScale(value)}" y="${height - 18}" class="tick" text-anchor="middle">${value}</text>
-    <text x="${pad.left - 10}" y="${yScale(value) + 4}" class="tick" text-anchor="end">${value}</text>
+  const minorGridValues = Array.from({ length: 21 }, (_, index) => -100 + index * 10);
+  const majorGridValues = [-100, -80, -60, -40, -20, 0, 20, 40, 60, 80, 100];
+  const grid = minorGridValues.map((value) => `
+    <line x1="${xScale(value)}" y1="${plotY}" x2="${xScale(value)}" y2="${plotBottom}" class="grid ${value % 20 === 0 ? "major" : "minor"}" />
+    <line x1="${plotX}" y1="${yScale(value)}" x2="${plotRight}" y2="${yScale(value)}" class="grid ${value % 20 === 0 ? "major" : "minor"}" />
   `).join("");
-  const links = comparable.map((row) => `
-    <line x1="${xScale(row.referenceLab.a)}" y1="${yScale(row.referenceLab.b)}" x2="${xScale(row.lab.a)}" y2="${yScale(row.lab.b)}" class="lab-link">
-      <title>${escapeHtml(`${row.label}: ΔE ${fmt(row.deltaE)}`)}</title>
+  const tickLabels = majorGridValues.map((value) => `
+    <text x="${xScale(value)}" y="${plotBottom + 24}" class="tick" text-anchor="middle">${value}</text>
+    <text x="${plotX - 10}" y="${yScale(value) + 4}" class="tick" text-anchor="end">${value}</text>
+  `).join("");
+  const quadrantBg = `
+    <rect x="${plotX}" y="${plotY}" width="${plotSize / 2}" height="${plotSize / 2}" fill="#eef9cf" />
+    <rect x="${xScale(0)}" y="${plotY}" width="${plotSize / 2}" height="${plotSize / 2}" fill="#fee7c8" />
+    <rect x="${plotX}" y="${yScale(0)}" width="${plotSize / 2}" height="${plotSize / 2}" fill="#d9f7ee" />
+    <rect x="${xScale(0)}" y="${yScale(0)}" width="${plotSize / 2}" height="${plotSize / 2}" fill="#f5e7f4" />
+    <rect x="${plotX}" y="${plotY}" width="${plotSize}" height="${plotSize}" fill="#ffffff" opacity=".36" />
+  `;
+  const families = labFamilies(comparable);
+  const targetPolygon = labGamutPolygon(families, "referenceLab", xScale, yScale, "lab-gamut target-gamut");
+  const samplePolygon = labGamutPolygon(families, "lab", xScale, yScale, "lab-gamut sample-gamut");
+  const tonePaths = labTonePaths(families, xScale, yScale);
+  const endpoints = labFamilyEndpoints(families);
+  const vectors = endpoints.map((row) => `
+    <line x1="${xScale(row.referenceLab.a)}" y1="${yScale(row.referenceLab.b)}" x2="${xScale(row.lab.a)}" y2="${yScale(row.lab.b)}" class="lab-vector" marker-end="url(#labVectorArrow)">
+      <title>${escapeHtml(`${labFamilyLabel(row)}: ${translateDynamicText("目标 a*")} ${fmt(row.referenceLab.a)} b* ${fmt(row.referenceLab.b)} -> ${translateDynamicText("实测 a*")} ${fmt(row.lab.a)} b* ${fmt(row.lab.b)} / ΔE ${fmt(row.deltaE)}`)}</title>
     </line>
   `).join("");
   const referenceDots = comparable.map((row) => `
     <circle cx="${xScale(row.referenceLab.a)}" cy="${yScale(row.referenceLab.b)}" r="4" class="lab-dot target">
-      <title>${escapeHtml(`${row.label} target a* ${fmt(row.referenceLab.a)} b* ${fmt(row.referenceLab.b)}`)}</title>
+      <title>${escapeHtml(`${row.label} ${translateDynamicText("目标 a*")} ${fmt(row.referenceLab.a)} b* ${fmt(row.referenceLab.b)}`)}</title>
     </circle>
   `).join("");
   const sampleDots = comparable.map((row) => {
     const cls = row.status === "Fail" ? "fail" : row.status === "Warning" ? "warning" : "pass";
     return `
-      <circle cx="${xScale(row.lab.a)}" cy="${yScale(row.lab.b)}" r="6" class="lab-dot ${cls}">
-        <title>${escapeHtml(`${row.label} sample a* ${fmt(row.lab.a)} b* ${fmt(row.lab.b)} ΔE ${fmt(row.deltaE)}`)}</title>
+      <circle cx="${xScale(row.lab.a)}" cy="${yScale(row.lab.b)}" r="6" class="lab-dot ${cls} ${labFamilyClass(row)}">
+        <title>${escapeHtml(`${row.label} ${translateDynamicText("实测 a*")} ${fmt(row.lab.a)} b* ${fmt(row.lab.b)} ΔE ${fmt(row.deltaE)}`)}</title>
       </circle>
-      <text x="${xScale(row.lab.a) + 8}" y="${yScale(row.lab.b) - 8}" class="lab-label">${escapeHtml(shortLabLabel(row.label))}</text>
     `;
+  }).join("");
+  const labels = endpoints.map((row) => {
+    const targetX = xScale(row.referenceLab.a);
+    const sampleX = xScale(row.lab.a);
+    const anchor = sampleX >= targetX ? "start" : "end";
+    const dx = sampleX >= targetX ? 9 : -9;
+    return `<text x="${sampleX + dx}" y="${yScale(row.lab.b) - 7}" class="lab-label ${labFamilyClass(row)}" text-anchor="${anchor}">${escapeHtml(labFamilyLabel(row))}</text>`;
   }).join("");
 
   svg.innerHTML = `
     <defs>
-      <linearGradient id="labBgA" x1="0%" x2="100%" y1="0%" y2="0%">
-        <stop offset="0%" stop-color="#bbf7d0" />
-        <stop offset="50%" stop-color="#f8fafc" />
-        <stop offset="100%" stop-color="#fecdd3" />
-      </linearGradient>
-      <linearGradient id="labBgB" x1="0%" x2="0%" y1="0%" y2="100%">
-        <stop offset="0%" stop-color="#fde68a" stop-opacity=".5" />
-        <stop offset="50%" stop-color="#ffffff" stop-opacity="0" />
-        <stop offset="100%" stop-color="#bfdbfe" stop-opacity=".5" />
-      </linearGradient>
+      <marker id="labVectorArrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L7,3.5 L0,7 Z" class="lab-vector-arrow" />
+      </marker>
     </defs>
     <rect x="0" y="0" width="${width}" height="${height}" class="chart-bg" />
-    <rect x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}" fill="url(#labBgA)" opacity=".55" />
-    <rect x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}" fill="url(#labBgB)" opacity=".75" />
+    ${quadrantBg}
     ${grid}
-    <line x1="${xScale(0)}" y1="${pad.top}" x2="${xScale(0)}" y2="${height - pad.bottom}" class="axis lab-axis" />
-    <line x1="${pad.left}" y1="${yScale(0)}" x2="${width - pad.right}" y2="${yScale(0)}" class="axis lab-axis" />
-    <text x="${width / 2}" y="${height - 4}" class="axis-label" text-anchor="middle">a*</text>
-    <text x="18" y="${height / 2}" class="axis-label" transform="rotate(-90 18 ${height / 2})" text-anchor="middle">b*</text>
-    ${links}${referenceDots}${sampleDots}
-    <g class="chart-legend" transform="translate(${pad.left} 16)">
-      <circle r="4" cx="0" cy="0" class="lab-dot target" /><text x="10" y="4">Target</text>
-      <circle r="5" cx="82" cy="0" class="lab-dot pass" /><text x="94" y="4">Sample</text>
+    <line x1="${xScale(0)}" y1="${plotY}" x2="${xScale(0)}" y2="${plotBottom}" class="axis lab-axis" />
+    <line x1="${plotX}" y1="${yScale(0)}" x2="${plotRight}" y2="${yScale(0)}" class="axis lab-axis" />
+    ${tickLabels}
+    <text x="${width / 2}" y="${plotBottom + 46}" class="axis-label" text-anchor="middle">a*</text>
+    <text x="20" y="${plotY + plotSize / 2}" class="axis-label" transform="rotate(-90 20 ${plotY + plotSize / 2})" text-anchor="middle">b*</text>
+    ${targetPolygon}${samplePolygon}${tonePaths}${vectors}${referenceDots}${sampleDots}${labels}
+    <g class="chart-legend" transform="translate(${plotX} 28)">
+      <circle r="4" cx="0" cy="0" class="lab-dot target" /><text x="10" y="4">${translateDynamicText("目标")}</text>
+      <circle r="5" cx="62" cy="0" class="lab-dot pass" /><text x="74" y="4">${translateDynamicText("实测")}</text>
+      <line x1="132" y1="0" x2="160" y2="0" class="lab-vector" marker-end="url(#labVectorArrow)" /><text x="170" y="4">${translateDynamicText("偏移")}</text>
     </g>
   `;
 }
@@ -181,22 +284,22 @@ export function renderG7Charts({ npdcChart, grayChart, cmyNpdcChart, weightedCha
   const graySeries = {
     a: grayRows.map((row, index) => ({
       x: grayTone(row, index),
-      y: row.a,
-      tooltip: `Gray ${fmt(grayTone(row, index))}% a*: ${fmt(row.a)}`,
+      y: Number.isFinite(row.deltaA) ? row.deltaA : row.a,
+      tooltip: `Gray ${fmt(grayTone(row, index))}% Δa*: ${fmt(Number.isFinite(row.deltaA) ? row.deltaA : row.a)} / a* ${fmt(row.a)}`,
     })),
     b: grayRows.map((row, index) => ({
       x: grayTone(row, index),
-      y: row.b,
-      tooltip: `Gray ${fmt(grayTone(row, index))}% b*: ${fmt(row.b)}`,
+      y: Number.isFinite(row.deltaB) ? row.deltaB : row.b,
+      tooltip: `Gray ${fmt(grayTone(row, index))}% Δb*: ${fmt(Number.isFinite(row.deltaB) ? row.deltaB : row.b)} / b* ${fmt(row.b)}`,
     })),
   };
-  const grayComponentValues = grayRows.flatMap((row) => [row.a, row.b]).filter(Number.isFinite);
+  const grayComponentValues = Object.values(graySeries).flatMap((rows) => rows.map((row) => row.y)).filter(Number.isFinite);
   const grayComponentMax = Math.max(6, ...grayComponentValues.map((value) => Math.abs(value)));
   const grayLimit = g7SymmetricLimit(grayComponentMax, [8, 12, 15, 20, 30]);
   drawChart(grayChart, graySeries, {
     yMin: -grayLimit,
     yMax: grayLimit,
-    yLabel: "a* / b*",
+    yLabel: "Δa* / Δb*",
     xTicks: g7ToneTicks(),
     yTicks: symmetricToleranceTicks(grayLimit),
     referenceDots: false,
@@ -246,21 +349,21 @@ export function renderG7Charts({ npdcChart, grayChart, cmyNpdcChart, weightedCha
 
 function drawChart(svg, series, config) {
   if (!svg) return;
-  const width = 720;
-  const height = 420;
+  const width = config.width || 720;
+  const height = config.height || 420;
   const pad = { left: 58, right: 24, top: 42, bottom: 48 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
   const xScale = (x) => pad.left + (x / 100) * plotW;
   const yScale = (y) => pad.top + (1 - (y - config.yMin) / (config.yMax - config.yMin)) * plotH;
   const colors = {
-    C: "var(--chart-c, #0891b2)",
-    M: "var(--chart-m, #be185d)",
-    Y: "var(--chart-y, #ca8a04)",
-    K: "var(--chart-k, #111827)",
-    a: "var(--chart-a, #7c3aed)",
-    b: "var(--chart-b, #ea580c)",
-    Gray: "var(--chart-gray, #475569)"
+    C: chartColor("C"),
+    M: chartColor("M"),
+    Y: chartColor("Y"),
+    K: chartColor("K"),
+    a: chartColor("a"),
+    b: chartColor("b"),
+    Gray: chartColor("Gray")
   };
 
   const xTicks = config.xTicks || [0, 25, 50, 75, 100];
@@ -288,6 +391,8 @@ function drawChart(svg, series, config) {
         data-dot-channel="${escapeHtml(channel)}"
         data-dot-x="${escapeHtml(point.x)}"
         ${isDraggable ? `data-draggable-point="true" data-channel="${escapeHtml(channel)}" data-tone="${escapeHtml(point.x)}" data-y="${escapeHtml(point.y)}"` : ""}
+        ${point.dragKind ? `data-drag-kind="${escapeHtml(point.dragKind)}"` : ""}
+        ${Number.isFinite(point.outputTone) ? `data-output-tone="${escapeHtml(point.outputTone)}"` : ""}
       >
         <title>${escapeHtml(point.tooltip || `${channel} ${fmt(point.x)} / ${fmt(point.y)}`)}</title>
       </circle>
@@ -298,12 +403,38 @@ function drawChart(svg, series, config) {
       <title>${escapeHtml(point.tooltip || `${item.name} ${fmt(point.x)} / ${fmt(point.y)}`)}</title>
     </circle>
   `)).join("");
-  const legend = legendItems(series, config.reference || [], colors).map((item, index) => `
-    <g class="chart-legend" transform="translate(${pad.left + index * 88} 28)">
-      <line x1="0" y1="0" x2="18" y2="0" stroke="${item.color}"${item.dasharray ? ` stroke-dasharray="${item.dasharray}"` : ""} />
+  let legendX = pad.left;
+  let legendY = 28;
+  const legend = legendItems(series, config.reference || [], colors, config.bands || []).map((item) => {
+    const itemWidth = Math.max(76, 40 + String(item.name || "").length * 12);
+    if (legendX + itemWidth > width - pad.right) {
+      legendX = pad.left;
+      legendY += 18;
+    }
+    const x = legendX;
+    const y = legendY;
+    legendX += itemWidth;
+    return `
+    <g class="chart-legend" transform="translate(${x} ${y})">
+      ${item.type === "band"
+        ? `<rect x="0" y="-5" width="18" height="10" fill="${item.color}" class="chart-legend-band" />`
+        : `<line x1="0" y1="0" x2="18" y2="0" stroke="${item.color}"${item.dasharray ? ` stroke-dasharray="${item.dasharray}"` : ""} />`}
       <text x="24" y="4">${escapeHtml(item.name)}</text>
     </g>
-  `).join("");
+  `;
+  }).join("");
+
+  if (typeof svg.setAttribute === "function") {
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  }
+  if (svg.dataset) {
+    svg.dataset.chartWidth = String(width);
+    svg.dataset.chartHeight = String(height);
+    svg.dataset.chartYMin = String(config.yMin);
+    svg.dataset.chartYMax = String(config.yMax);
+    svg.dataset.chartPadTop = String(pad.top);
+    svg.dataset.chartPadBottom = String(pad.bottom);
+  }
 
   svg.innerHTML = `
     <rect x="0" y="0" width="${width}" height="${height}" class="chart-bg" />
@@ -311,7 +442,7 @@ function drawChart(svg, series, config) {
     ${horizontalBands}${grid}${yGrid}
     <line x1="${pad.left}" y1="${height - pad.bottom}" x2="${width - pad.right}" y2="${height - pad.bottom}" class="axis" />
     <line x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${height - pad.bottom}" class="axis" />
-    <text x="${width / 2}" y="${height - 4}" class="axis-label" text-anchor="middle">输入网点 %</text>
+    <text x="${width / 2}" y="${height - 4}" class="axis-label" text-anchor="middle">${translateDynamicText("输入网点 %")}</text>
     <text x="18" y="${height / 2}" class="axis-label" transform="rotate(-90 18 ${height / 2})" text-anchor="middle">${config.yLabel}</text>
     ${bands}${ref}${lines}${refDots}${dots}
   `;
@@ -358,9 +489,11 @@ function aggregateGrayRows(rows) {
     const tone = grayTone(row, buckets.size);
     if (!Number.isFinite(tone)) continue;
     const key = tone.toFixed(2);
-    const bucket = buckets.get(key) || { tone, a: [], b: [], chroma: [], weightedChroma: [], measuredNpdc: [], targetNpdc: [], labels: [] };
+    const bucket = buckets.get(key) || { tone, a: [], b: [], deltaA: [], deltaB: [], chroma: [], weightedChroma: [], measuredNpdc: [], targetNpdc: [], labels: [] };
     if (Number.isFinite(row.a)) bucket.a.push(row.a);
     if (Number.isFinite(row.b)) bucket.b.push(row.b);
+    if (Number.isFinite(row.deltaA)) bucket.deltaA.push(row.deltaA);
+    if (Number.isFinite(row.deltaB)) bucket.deltaB.push(row.deltaB);
     if (Number.isFinite(row.chroma)) bucket.chroma.push(row.chroma);
     if (Number.isFinite(row.weightedChroma)) bucket.weightedChroma.push(row.weightedChroma);
     if (Number.isFinite(row.measuredNpdc)) bucket.measuredNpdc.push(row.measuredNpdc);
@@ -374,6 +507,8 @@ function aggregateGrayRows(rows) {
       label: bucket.labels.join(", "),
       a: average(bucket.a),
       b: average(bucket.b),
+      deltaA: average(bucket.deltaA),
+      deltaB: average(bucket.deltaB),
       chroma: average(bucket.chroma),
       weightedChroma: average(bucket.weightedChroma),
       measuredNpdc: average(bucket.measuredNpdc),
@@ -387,6 +522,100 @@ function average(values) {
   return finite.length ? finite.reduce((sum, value) => sum + value, 0) / finite.length : NaN;
 }
 
+function averageByTone(rows, field) {
+  const buckets = new Map();
+  for (const row of rows) {
+    const tone = rowTone(row);
+    if (!Number.isFinite(tone) || !Number.isFinite(row[field])) continue;
+    const key = tone.toFixed(3);
+    const bucket = buckets.get(key) || { x: tone, values: [] };
+    bucket.values.push(Number(row[field]));
+    buckets.set(key, bucket);
+  }
+  return [...buckets.values()]
+    .map((bucket) => ({ x: bucket.x, y: average(bucket.values) }))
+    .sort((a, b) => a.x - b.x);
+}
+
+function rowTone(row) {
+  return Number(row.tone);
+}
+
+function labFamilies(rows) {
+  return rows.reduce((acc, row) => {
+    const family = labFamily(row);
+    if (!family) return acc;
+    acc[family] ||= [];
+    acc[family].push(row);
+    return acc;
+  }, {});
+}
+
+function labFamily(row) {
+  const cmyk = row.cmyk || {};
+  const c = Number(cmyk.c) || 0;
+  const m = Number(cmyk.m) || 0;
+  const y = Number(cmyk.y) || 0;
+  const k = Number(cmyk.k) || 0;
+  if (k > 0 && c < 1 && m < 1 && y < 1) return "K";
+  if (c > 0 && m < 1 && y < 1 && k < 1) return "C";
+  if (m > 0 && c < 1 && y < 1 && k < 1) return "M";
+  if (y > 0 && c < 1 && m < 1 && k < 1) return "Y";
+  if (m > 0 && y > 0 && c < 1 && k < 1) return "R";
+  if (c > 0 && y > 0 && m < 1 && k < 1) return "G";
+  if (c > 0 && m > 0 && y < 1 && k < 1) return "B";
+  return "";
+}
+
+function labFamilyEndpoints(families) {
+  return ["Y", "R", "M", "B", "C", "G"]
+    .map((family) => labEndpoint(families[family]))
+    .filter(Boolean);
+}
+
+function labEndpoint(rows = []) {
+  return rows
+    .filter((row) => row.lab && row.referenceLab)
+    .sort((a, b) => labChroma(b.lab) - labChroma(a.lab))[0];
+}
+
+function labGamutPolygon(families, field, xScale, yScale, className) {
+  const endpoints = labFamilyEndpoints(families);
+  if (endpoints.length < 5) return "";
+  const points = endpoints
+    .filter((row) => row[field])
+    .map((row) => `${xScale(row[field].a).toFixed(1)},${yScale(row[field].b).toFixed(1)}`);
+  if (points.length < 3) return "";
+  return `<polygon class="${className}" points="${points.join(" ")}"><title>${translateDynamicText(className.includes("target") ? "目标色域外圈" : "实测色域外圈")}</title></polygon>`;
+}
+
+function labTonePaths(families, xScale, yScale) {
+  return Object.entries(families)
+    .filter(([family, rows]) => family !== "K" && rows.length > 1)
+    .map(([family, rows]) => {
+      const points = [...rows]
+        .filter((row) => row.lab)
+        .sort((a, b) => labChroma(a.lab) - labChroma(b.lab));
+      if (points.length < 2) return "";
+      const d = points.map((row, index) => `${index ? "L" : "M"} ${xScale(row.lab.a).toFixed(1)} ${yScale(row.lab.b).toFixed(1)}`).join(" ");
+      return `<path d="${d}" class="lab-tone-path lab-${family.toLowerCase()}"><title>${family} ${translateDynamicText("色相轨迹")}</title></path>`;
+    })
+    .join("");
+}
+
+function labChroma(lab) {
+  return Math.sqrt((Number(lab?.a) || 0) ** 2 + (Number(lab?.b) || 0) ** 2);
+}
+
+function labFamilyLabel(row) {
+  return labFamily(row) || shortLabLabel(row.label);
+}
+
+function labFamilyClass(row) {
+  const family = labFamily(row);
+  return family ? `lab-${family.toLowerCase()}` : "";
+}
+
 function measurementAxis(series, target, band, mode) {
   const values = [
     ...Object.values(series).flat().map((point) => Number(point.y)),
@@ -394,7 +623,7 @@ function measurementAxis(series, target, band, mode) {
     ...band.flatMap((point) => [Number(point.low), Number(point.high)]),
   ].filter(Number.isFinite);
   if (mode !== "ctv") {
-    return { min: Math.min(-5, niceFloor(Math.min(...values, 0))), max: Math.max(35, niceCeil(Math.max(...values, 0) * 1.08)) };
+    return { min: 0, max: Math.max(35, niceCeil(Math.max(...values, 0) * 1.08)) };
   }
   const low = Math.min(...values, -3);
   const high = Math.max(...values, 3);
@@ -458,13 +687,26 @@ function toleranceBands() {
   ];
 }
 
-function legendItems(series, references, colors) {
+function legendItems(series, references, colors, bands = []) {
   const items = [
-    ...references.map((item) => ({ name: item.name, color: item.color, dasharray: item.dasharray })),
+    ...bands.map((item) => ({ name: item.name, color: item.color, type: "band" })),
+    ...references.filter((item) => item.showInLegend !== false).map((item) => ({ name: item.name, color: item.color, dasharray: item.dasharray })),
     ...Object.keys(series).map((name) => ({ name, color: colors[name] || "#2563eb" })),
   ];
   const seen = new Set();
   return items.filter((item) => !seen.has(item.name) && seen.add(item.name));
+}
+
+function chartColor(name) {
+  return {
+    C: "var(--chart-c, #0891b2)",
+    M: "var(--chart-m, #be185d)",
+    Y: "var(--chart-y, #ca8a04)",
+    K: "var(--chart-k, #111827)",
+    a: "var(--chart-a, #7c3aed)",
+    b: "var(--chart-b, #ea580c)",
+    Gray: "var(--chart-gray, #475569)"
+  }[name] || "#2563eb";
 }
 
 function fmt(value) {
@@ -492,11 +734,11 @@ function shortLabLabel(label) {
 function curveTooltip(row, quality) {
   const parts = [
     `${row.channel} ${fmt(row.tone)}% -> ${fmt(row.outputTone)}%${row.overrideLocked ? " (locked)" : ""}`,
-    `实测 ${fmt(row.measuredTone ?? row.tone + row.measuredTvi)}% / 目标 ${fmt(row.targetTone ?? row.tone + row.targetTvi)}%`,
-    `理论输出 ${fmt(row.theoreticalOutputTone ?? row.tone + row.theoreticalCorrection)}% / 生产输出 ${fmt(row.productionOutputTone ?? row.tone + row.correction)}%`,
-    `调整 ${signed(row.outputTone - row.tone)}% / ${row.interpolated ? "插值点" : "实测点"}`,
+    `${translateDynamicText("实测")} ${fmt(row.measuredTone ?? row.tone + row.measuredTvi)}% / ${translateDynamicText("目标")} ${fmt(row.targetTone ?? row.tone + row.targetTvi)}%`,
+    `${translateDynamicText("理论输出")} ${fmt(row.theoreticalOutputTone ?? row.tone + row.theoreticalCorrection)}% / ${translateDynamicText("建议录入")} ${fmt(row.outputTone)}%`,
+    `${translateDynamicText("调整")} ${signed(row.outputTone - row.tone)}% / ${translateDynamicText(row.interpolated ? "插值点" : "实测点")}`,
   ];
-  if (quality?.messages?.length) parts.push(`曲线检查: ${quality.messages.join(" / ")}`);
+  if (quality?.messages?.length) parts.push(`${translateDynamicText("曲线检查")}: ${quality.messages.map(translateDynamicText).join(" / ")}`);
   return parts.join("\n");
 }
 

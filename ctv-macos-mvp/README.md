@@ -2,7 +2,7 @@
 
 macOS-first MVP for a print compensation curve tool. The first version is a local browser app so it can be used immediately on macOS and later wrapped with Tauri or SwiftUI.
 
-Current version: `0.1.11`. See [CHANGELOG.md](./CHANGELOG.md) for feature history.
+Current version: `0.1.12`. See [CHANGELOG.md](./CHANGELOG.md) for feature history.
 
 ## MVP scope
 
@@ -33,6 +33,12 @@ python3 -m http.server 4173
 ```
 
 Then open `http://localhost:4173`.
+
+For a Node-only local server that also works on Windows:
+
+```bash
+npm run dev:node
+```
 
 ## Input format
 
@@ -141,9 +147,30 @@ The result table shows a manual-entry reference for Kodak Prinergy Harmony, Koda
 
 ```bash
 npm test
+npm run audit:release
 npm run validate:fixtures
 ```
 
 See `ARCHITECTURE.md` for the current module map and data flow.
 
 `npm test` covers core curve switching, interpolation, smoothing/protection/monotonic behavior, flexible import parsing, and Delta E formula smoke checks. `npm run validate:fixtures` parses the copied reference fixtures under `reference-data` and reports patch rows, single-channel tone rows, usable measurement rows, and generated curve points.
+
+Before packaging a desktop build, run the combined release gate:
+
+```bash
+npm run verify:release
+```
+
+## Desktop packaging
+
+macOS uses the base Tauri config:
+
+```bash
+npm run tauri:build
+```
+
+Windows uses the installer overlay config and should be run on a Windows machine or CI runner:
+
+```bash
+npm run tauri:build:windows
+```

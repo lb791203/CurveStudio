@@ -4,30 +4,36 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CurveStudio</title>
-    <link rel="stylesheet" href="./src/styles.css?v=20260521-icc-p4" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f766e'/%3E%3Cpath d='M12 44c12 0 10-24 22-24s10 24 18 24' fill='none' stroke='white' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./src/styles.css?v=20260525-statusbar-pass-1" />
   </head>
   <body>
-    <main class="app-shell" data-active-step="setup">
+    <main class="app-shell" data-active-step="acquisition">
       <aside class="sidebar">
         <div class="sidebar-header">
           <div>
             <h1 class="brand-logo" data-translate="brand_logo">CurveStudio</h1>
             <p class="subtle">TVI / CTV / G7</p>
           </div>
-          <button id="themeToggle" class="theme-toggle-btn" type="button" aria-label="切换深色模式">
-            <span class="theme-icon" id="themeIcon">&#x263E;</span>
-          </button>
-          <button id="langToggle" class="theme-toggle-btn" type="button" aria-label="切换语言" title="Toggle Language">
-            <span class="theme-icon" id="langIcon" style="font-size: 11px; font-weight: bold;">EN</span>
-          </button>
+          <div class="sidebar-actions">
+            <button id="themeToggle" class="theme-toggle-btn" type="button" aria-label="切换深色模式">
+              <span class="theme-icon" id="themeIcon">&#x263E;</span>
+            </button>
+            <button id="langToggle" class="theme-toggle-btn" type="button" aria-label="切换语言" title="Toggle Language">
+              <span class="theme-icon" id="langIcon" style="font-size: 11px; font-weight: bold;">EN</span>
+            </button>
+            <button id="aboutButton" class="theme-toggle-btn" type="button" aria-label="关于 CurveStudio" title="关于 CurveStudio">
+              <span class="theme-icon">i</span>
+            </button>
+          </div>
         </div>
 
         <nav class="nav-list" aria-label="主要页面">
-          <button class="nav-button active" type="button" data-step-button="setup" data-translate="nav_setup"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>任务配置</button>
-          <button class="nav-button" type="button" data-step-button="acquisition" data-translate="nav_acquisition"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line><circle cx="12" cy="12" r="3"></circle></svg></span>数据采集</button>
+          <button class="nav-button active" type="button" data-step-button="acquisition" data-translate="nav_acquisition"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line><circle cx="12" cy="12" r="3"></circle></svg></span>导入测量</button>
+          <button class="nav-button" type="button" data-step-button="setup" data-translate="nav_setup"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>标准设置</button>
           <button class="nav-button" type="button" data-step-button="diagnose" data-translate="nav_diagnose"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line><path d="M3 20h18"></path></svg></span>分析诊断</button>
-          <button class="nav-button" type="button" data-step-button="curves" data-translate="nav_curves"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"></path><circle cx="18.7" cy="8" r="1.5" fill="currentColor"></circle><circle cx="13.6" cy="13.2" r="1.5" fill="currentColor"></circle><circle cx="10.8" cy="10.5" r="1.5" fill="currentColor"></circle></svg></span>曲线生成</button>
-          <button class="nav-button" type="button" data-step-button="delivery" data-translate="nav_delivery"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></span>交付归档</button>
+          <button class="nav-button" type="button" data-step-button="curves" data-translate="nav_curves"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"></path><circle cx="18.7" cy="8" r="1.5" fill="currentColor"></circle><circle cx="13.6" cy="13.2" r="1.5" fill="currentColor"></circle><circle cx="10.8" cy="10.5" r="1.5" fill="currentColor"></circle></svg></span>生成曲线</button>
+          <button class="nav-button" type="button" data-step-button="delivery" data-translate="nav_delivery"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></span>复测归档</button>
         </nav>
 
         <section class="panel control-panel-widget">
@@ -68,17 +74,17 @@
       <section class="workspace">
         <header class="workspace-header">
           <div class="step-indicator-row">
-            <span class="step-badge" id="currentStepName">第 1 步：任务配置</span>
+            <span class="step-badge" id="currentStepName">第 1 步：导入测量</span>
             <div class="sub-nav" id="subNavBar">
-              <!-- Setup Sub-tabs -->
-              <button class="sub-nav-button active" type="button" data-sub-view-button="job" data-parent-step="setup" data-translate="subnav_job">项目记录</button>
-              <button class="sub-nav-button" type="button" data-sub-view-button="standard" data-parent-step="setup" data-translate="subnav_standard">印刷标准</button>
-              <button class="sub-nav-button" type="button" data-sub-view-button="settings" data-parent-step="setup" data-translate="subnav_settings">系统设置</button>
-
               <!-- Acquisition Sub-tabs -->
-              <button class="sub-nav-button" type="button" data-sub-view-button="measurement" data-parent-step="acquisition" data-translate="subnav_file_import">文件导入</button>
+              <button class="sub-nav-button active" type="button" data-sub-view-button="measurement" data-parent-step="acquisition" data-translate="subnav_file_import">文件导入</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="job" data-parent-step="acquisition" data-translate="subnav_job">项目记录</button>
               <button class="sub-nav-button" type="button" data-sub-view-button="manual" data-parent-step="acquisition" data-translate="subnav_manual">手动测量</button>
               <button class="sub-nav-button" type="button" data-sub-view-button="instrument" data-parent-step="acquisition" data-translate="subnav_instrument">仪器测量</button>
+
+              <!-- Setup Sub-tabs -->
+              <button class="sub-nav-button" type="button" data-sub-view-button="standard" data-parent-step="setup" data-translate="subnav_standard">印刷标准</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="settings" data-parent-step="setup" data-translate="subnav_settings">系统设置</button>
 
               <!-- Diagnose Sub-tabs -->
               <button class="sub-nav-button" type="button" data-sub-view-button="analyze" data-parent-step="diagnose" data-translate="subnav_diagnose">印刷诊断</button>
@@ -101,16 +107,16 @@
           </div>
         </header>
 
-        <section class="view active" data-view="job">
+        <section class="view" data-view="job">
           <section class="panel wide-panel">
             <div class="table-title">
               <div>
                 <h2>Job / Run 项目记录</h2>
-                <span>保存作业项目；每个作业可保留多次 Run 用于复测对比。</span>
+                <span>导入会自动保存 Run；这里用于找回历史测量、复测对比和作业归档。</span>
               </div>
               <div class="inline-actions">
                 <button id="saveRunButton" type="button">保存当前作业 / Run</button>
-                <button id="clearRunsButton" type="button">清空 Job / Run</button>
+                <button id="clearRunsButton" type="button">清空当前 Run</button>
               </div>
             </div>
             <div class="job-grid">
@@ -149,17 +155,33 @@
 
         <section class="view" data-view="standard">
           <section class="panel wide-panel">
-            <div class="table-title">
+            <div class="table-title standard-library-title">
               <div>
                 <h2>Standard Library</h2>
                 <span>选择印刷标准，查看 TVI 目标和 Lab 参考色块；可导入 ICC 作为颜色参考。</span>
               </div>
-              <div class="inline-actions">
-                <label class="file-button secondary-file-button">
-                  <input id="standardIccInput" type="file" accept=".icc,.icm" />
-                  <span>导入 ICC</span>
-                </label>
-                <button id="reloadStandardButton" type="button">重新加载标准</button>
+              <div class="standard-action-toolbar" aria-label="标准库操作">
+                <div class="standard-action-group">
+                  <span class="action-group-label">导入</span>
+                  <label class="file-button secondary-file-button">
+                    <input id="standardIccInput" type="file" accept=".icc,.icm" />
+                    <span>ICC</span>
+                  </label>
+                  <label class="file-button secondary-file-button">
+                    <input id="customStandardFileInput" type="file" accept=".json" />
+                    <span>标准文件</span>
+                  </label>
+                  <button id="reloadStandardButton" type="button">重新加载</button>
+                </div>
+                <div class="standard-action-group">
+                  <span class="action-group-label">自定义</span>
+                  <button id="saveCustomStandardButton" type="button">新增/保存</button>
+                  <button id="exportStandardButton" type="button">导出文件</button>
+                  <button id="restoreStandardListButton" class="secondary-mini" type="button">恢复列表</button>
+                </div>
+                <div class="standard-action-group danger">
+                  <button id="deleteCustomStandardButton" class="danger-mini" type="button">删除/隐藏</button>
+                </div>
               </div>
             </div>
             <div class="split-grid">
@@ -171,17 +193,40 @@
                 <div class="summary-box" id="standardSummary"></div>
                 <div class="summary-box" id="iccProfileSummary"></div>
               </div>
-              <div class="table-wrap compact">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>输入</th>
-                      <th>目标 TVI</th>
-                      <th>目标网点</th>
-                    </tr>
-                  </thead>
-                  <tbody id="targetCurveBody"></tbody>
-                </table>
+              <div class="stack">
+                <div class="table-wrap compact">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>输入</th>
+                        <th>目标 TVI</th>
+                        <th>目标网点</th>
+                      </tr>
+                    </thead>
+                    <tbody id="targetCurveBody"></tbody>
+                  </table>
+                </div>
+                <div class="table-wrap compact tone-tolerance-panel">
+                  <div class="compact-table-title">
+                    <strong>C/M/Y/K 网点容差</strong>
+                    <span id="toneToleranceNote">当前标准的可编辑验收窗口</span>
+                  </div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>通道</th>
+                        <th>TVI 25%</th>
+                        <th>TVI 50%</th>
+                        <th>TVI 75%</th>
+                        <th>CTV 25%</th>
+                        <th>CTV 50%</th>
+                        <th>CTV 75%</th>
+                        <th>TVI 目标曲线</th>
+                      </tr>
+                    </thead>
+                    <tbody id="toneToleranceBody"></tbody>
+                  </table>
+                </div>
               </div>
             </div>
             <section class="standard-config-grid">
@@ -228,14 +273,14 @@
           </section>
         </section>
 
-        <section class="view" data-view="measurement">
+        <section class="view active" data-view="measurement">
           <section class="panel wide-panel">
             <div class="table-title">
               <div>
                 <h2>Measurement 数据采集</h2>
-                <span>支持文件导入、单点手动记录、Excel/WPS 粘贴和现场样例。</span>
+                <span>选择测量文件后自动解析，并检查导表、Lab、密度与可计算曲线点。</span>
               </div>
-              <div class="inline-actions">
+              <div class="inline-actions dev-sample-actions" hidden>
                 <select id="sampleSelect">
                   <option value="">示例数据</option>
                   <option value="kba105">KBA105 报告现场记录</option>
@@ -250,20 +295,21 @@
                 <button id="loadSampleButton" type="button">载入</button>
               </div>
             </div>
-            <div class="measurement-workbench">
-              <div class="measurement-import-card stack">
-                <label class="file-drop">
-                  <input id="fileInput" type="file" accept=".csv,.txt,.cgats,.it8,.rwxf,.cxf,.json" />
-                  <span>选择 CSV / CGATS / IT8 / TXT / JSON 项目档案</span>
-                </label>
-                <button id="desktopOpenFileButton" type="button">桌面打开文件</button>
-                <textarea id="rawInput" spellcheck="false" placeholder="可粘贴 CSV/CGATS，或从 Excel/WPS 复制表格后粘贴到下方手动表。"></textarea>
-                <button id="parseButton" type="button">解析文本数据</button>
+            <div class="measurement-flow">
+              <div class="measurement-import-row">
+                <div class="measurement-file-actions">
+                  <label class="file-drop">
+                    <input id="fileInput" type="file" accept=".csv,.txt,.cgats,.it8,.rwxf,.cxf,.json" />
+                    <span data-translate="measurement_file_select">选择测量文件</span>
+                  </label>
+                  <button id="desktopOpenFileButton" type="button" hidden>桌面打开文件</button>
+                  <textarea id="rawInput" spellcheck="false" hidden placeholder="高级调试：粘贴 CSV/CGATS 原始文本。"></textarea>
+                  <button id="parseButton" type="button" hidden>解析文本数据</button>
+                  <p class="measurement-import-note" data-translate="measurement_import_note">导入成功后会自动保存为一份 Run；当前工作区显示最新测量，上一份可在「项目记录」中找回对比。</p>
+                </div>
+                <div class="summary-box measurement-status-card" id="measurementSummary"></div>
               </div>
-              <div class="measurement-status-grid">
-                <div class="summary-box" id="measurementSummary"></div>
-                <div class="summary-box" id="importAuditSummary"></div>
-              </div>
+              <div class="summary-box measurement-audit-panel" id="importAuditSummary"></div>
               <div class="summary-box patch-preview-panel" id="measurementPatchPreview"></div>
             </div>
           </section>
@@ -330,7 +376,7 @@
                 <h2>设备连接 / 测量队列</h2>
                 <span>先用文件导入和模拟设备跑通流程；真实 SDK 到位后替换 DeviceAdapter。</span>
               </div>
-              <div class="inline-actions">
+              <div class="inline-actions device-actions">
                 <select id="deviceAdapterSelect" aria-label="设备适配器"></select>
                 <button id="deviceConnectButton" type="button">连接</button>
                 <button id="deviceDisconnectButton" type="button">断开</button>
@@ -388,44 +434,42 @@
 
         <section class="view" data-view="analyze">
           <section class="kpi-grid" id="diagnosisCards"></section>
-          <section class="split-grid">
-            <section class="panel">
-              <div class="table-title">
+          <section class="split-grid analysis-overview-grid">
+            <section class="panel analysis-checklist-panel">
+              <div class="table-title analysis-checklist-title">
                 <div>
-                  <h2>校验项目清单</h2>
-                  <span id="verificationChecklistSummary">等待数据</span>
+                  <h2>关键色块验收</h2>
+                  <span id="verificationChecklistSummary">纸白、CMYK 实地与叠印色块</span>
                 </div>
+                <label class="inline-checkbox scca-toggle"><input id="sccaInput" type="checkbox" /> <span>SCCA 纸白校正</span></label>
               </div>
               <div class="table-wrap compact">
-                <table>
+                <table class="key-patch-table">
                   <thead>
                     <tr>
                       <th>项目</th>
-                      <th>实测 / 偏差</th>
-                      <th>目标 / 容差</th>
-                      <th>状态</th>
+                      <th>测量值</th>
+                      <th>标准值</th>
+                      <th>ΔE / 状态</th>
                     </tr>
                   </thead>
-                  <tbody id="verificationChecklistBody"></tbody>
+                  <tbody id="labBody"></tbody>
                 </table>
               </div>
             </section>
-            <article class="chart-panel">
+            <article class="chart-panel analysis-lab-chart-panel">
               <div class="chart-title">
                 <h2>Lab a*b* 色度图</h2>
                 <span>目标点与实测点偏移方向</span>
               </div>
-              <svg id="labChromaticityChart" viewBox="0 0 720 420" role="img" aria-label="Lab chromaticity chart"></svg>
+              <svg id="labChromaticityChart" viewBox="0 0 720 620" role="img" aria-label="Lab chromaticity chart"></svg>
             </article>
           </section>
-          <section class="panel wide-panel">
-            <div class="table-title">
-              <div>
-                <h2>Lab / ΔE 色差校验</h2>
-                <span>支持 ΔE76 / ΔE94 / ΔE2000 / CMC，判定公式在 Settings 中切换。</span>
-              </div>
-              <label class="inline-checkbox"><input id="sccaInput" type="checkbox" /> SCCA 纸白校正</label>
-            </div>
+          <details class="panel wide-panel lab-detail-panel">
+            <summary>
+              <strong>完整 Lab / ΔE 明细</strong>
+              <span id="labDetailSummary">等待数据</span>
+            </summary>
             <div class="table-wrap">
               <table>
                 <thead>
@@ -443,10 +487,10 @@
                     <th>状态</th>
                   </tr>
                 </thead>
-                <tbody id="labBody"></tbody>
+                <tbody id="labDetailBody"></tbody>
               </table>
             </div>
-          </section>
+          </details>
         </section>
 
         <section class="view" data-view="curve">
@@ -461,7 +505,7 @@
             <article class="chart-panel">
               <div class="chart-title">
                 <h2>补偿输出曲线</h2>
-                <span>Input tone to output tone</span>
+                <span>输入网点到输出网点</span>
               </div>
               <svg id="curveChart" viewBox="0 0 720 420" role="img" aria-label="Compensation curve chart"></svg>
             </article>
@@ -491,13 +535,10 @@
                     <th>目标网点</th>
                     <th>TVI/CTV偏差</th>
                     <th class="zone-start">理论输出</th>
-                    <th>生产输出</th>
-	                    <th>Prinergy/RIP 调整</th>
+	                    <th>RIP 调整</th>
 	                    <th>建议录入网点</th>
 	                    <th>曲线检查</th>
 	                    <th>锁定</th>
-                    <th>人工输出</th>
-                    <th>自动输出</th>
                     <th>来源</th>
                     <th>算法来源</th>
                   </tr>
@@ -507,14 +548,15 @@
             </div>
           </section>
 
-          <section class="panel wide-panel">
+          <section class="panel wide-panel compensation-simulation-panel">
             <div class="table-title">
               <div>
                 <h2>补偿模拟验证</h2>
-                <span>基于第一次测量曲线估算套用当前补偿后的网点结果；用于复测前判断方向，不替代第二次实测。</span>
+                <span>网点扩张视角检查当前、目标与补偿后模拟；用于复测前判断方向，不替代第二次实测。</span>
               </div>
             </div>
             <div class="summary-box" id="compensationSimulationSummary"></div>
+            <svg id="compensationSimulationChart" viewBox="0 0 720 420" role="img" aria-label="Dot gain simulation chart"></svg>
             <div class="table-wrap compact">
               <table>
                 <thead>
@@ -531,34 +573,6 @@
                   </tr>
                 </thead>
                 <tbody id="compensationSimulationBody"></tbody>
-              </table>
-            </div>
-          </section>
-
-          <section class="panel wide-panel">
-            <div class="table-title">
-              <div>
-                <h2>Kodak Prinergy / RIP 手动录入验收</h2>
-                <span>只列出需要现场复核的增加点、质量警告点或人工锁定点。</span>
-              </div>
-            </div>
-            <div class="summary-box" id="curveAcceptanceSummary"></div>
-            <div class="table-wrap compact">
-              <table>
-                <thead>
-                  <tr>
-                    <th>通道</th>
-                    <th>输入网点</th>
-                    <th class="zone-start">操作</th>
-                    <th>调整%</th>
-                    <th>建议录入网点</th>
-                    <th>实测网点</th>
-                    <th>目标网点</th>
-                    <th>来源</th>
-                    <th>算法</th>
-                  </tr>
-                </thead>
-                <tbody id="ripEntryBody"></tbody>
               </table>
             </div>
           </section>
@@ -746,42 +760,62 @@
                 <span>导出字段必须记录标准、算法、欠补偿比例和生成时间。</span>
               </div>
             </div>
-            <div class="export-group-grid">
-              <section class="export-group-card">
-                <h3 data-translate="export_group_rip_title">RIP / 曲线交付</h3>
-                <p data-translate="export_group_rip_help">Kodak Prinergy / Harmony 专用模板，以及其它 RIP 可映射的通用 CSV。</p>
-                <div class="export-action-list">
-                  <button id="exportHarmonyButton" type="button" data-translate="btn_export_harmony">导出 Kodak Prinergy Harmony 手录表</button>
-                  <button id="exportPrinergyButton" type="button" data-translate="btn_export_prinergy">导出 Kodak Prinergy CSV</button>
-                  <button id="exportSimpleRipButton" type="button" data-translate="btn_export_simple_rip">导出通用 RIP CSV</button>
-                  <button id="exportCsvButton" type="button" data-translate="btn_export_csv">导出曲线 CSV</button>
+            <div class="export-group-grid export-clean-grid">
+              <section class="export-group-card export-primary-card">
+                <div>
+                  <h3 data-translate="export_group_rip_title">RIP 曲线</h3>
+                  <p data-translate="export_group_rip_help">给 RIP 导入的主曲线文件，包含输入/输出网点和生成上下文。</p>
                 </div>
+                <button id="exportPrinergyButton" class="export-primary-action" type="button" data-translate="btn_export_prinergy">导出 RIP 导入 CSV</button>
+                <details class="export-more-formats">
+                  <summary data-translate="more_export_formats">更多格式</summary>
+                  <div class="export-secondary-actions">
+                    <button id="exportHarmonyButton" type="button" data-translate="btn_export_harmony">RIP 手录表</button>
+                    <button id="exportSimpleRipButton" type="button" data-translate="btn_export_simple_rip">通用 RIP CSV</button>
+                    <button id="exportCsvButton" type="button" data-translate="btn_export_csv">计算明细 CSV</button>
+                  </div>
+                </details>
               </section>
-              <section class="export-group-card">
-                <h3 data-translate="export_group_report_title">验证报告</h3>
-                <p data-translate="export_group_report_help">给复盘、留档和第三方软件交换的 G7 / CGATS 数据。</p>
-                <div class="export-action-list">
-                  <button id="exportG7JsonButton" type="button" data-translate="btn_export_g7_json">导出 G7 报告 JSON</button>
-                  <button id="exportG7CsvButton" type="button" data-translate="btn_export_g7_csv">导出 G7 验证 CSV</button>
-                  <button id="exportCgatsButton" type="button" data-translate="btn_export_cgats">导出 CGATS TXT</button>
+              <section class="export-group-card export-primary-card">
+                <div>
+                  <h3 data-translate="export_group_report_title">G7 / 验证报告</h3>
+                  <p data-translate="export_group_report_help">给复盘、留档和第三方软件交换的验证结果。</p>
                 </div>
+                <button id="exportG7JsonButton" class="export-primary-action" type="button" data-translate="btn_export_g7_json">导出 G7 报告 JSON</button>
+                <details class="export-more-formats">
+                  <summary data-translate="more_export_formats">更多格式</summary>
+                  <div class="export-secondary-actions">
+                    <button id="exportG7CsvButton" type="button" data-translate="btn_export_g7_csv">G7 验证 CSV</button>
+                    <button id="exportCgatsButton" type="button" data-translate="btn_export_cgats">曲线 CGATS TXT</button>
+                  </div>
+                </details>
               </section>
-              <section class="export-group-card">
-                <h3 data-translate="export_group_archive_title">项目归档</h3>
-                <p data-translate="export_group_archive_help">保存当前项目、单个 Job 或全部历史，方便以后恢复和对比。</p>
-                <div class="export-action-list">
-                  <button id="exportJobArchiveButton" type="button" data-translate="btn_export_job">导出当前 Job 档案</button>
-                  <button id="exportJobLibraryButton" type="button" data-translate="btn_export_library">导出全部 Job 历史</button>
-                  <button id="exportJsonButton" type="button" data-translate="btn_export_json_project">导出 JSON 项目档案</button>
+              <section class="export-group-card export-primary-card">
+                <div>
+                  <h3 data-translate="export_group_archive_title">项目档案</h3>
+                  <p data-translate="export_group_archive_help">保存当前项目状态，方便以后恢复、复测和对比。</p>
                 </div>
+                <button id="exportJsonButton" class="export-primary-action" type="button" data-translate="btn_export_json_project">导出当前项目档案</button>
+                <details class="export-more-formats">
+                  <summary data-translate="more_export_formats">更多格式</summary>
+                  <div class="export-secondary-actions">
+                    <button id="exportJobArchiveButton" type="button" data-translate="btn_export_job">当前 Job 档案</button>
+                    <button id="exportJobLibraryButton" type="button" data-translate="btn_export_library">全部 Job 历史</button>
+                  </div>
+                </details>
               </section>
-              <section class="export-group-card export-group-card-icc">
-                <h3 data-translate="export_group_icc_title">ICC / 特性化</h3>
-                <p data-translate="export_group_icc_help">复测通过后生成实验 ICC 草稿；也可导出最新 Run 的测量数据。</p>
-                <div class="export-action-list">
-                  <button id="generateIccProfileButton" type="button" data-translate="btn_export_icc_draft">生成 ICC 草稿（实验）</button>
-                  <button id="exportIccReferenceButton" type="button" data-translate="btn_export_cgats_ref">导出 CGATS 测量数据（来自最新 Run）</button>
+              <section class="export-group-card export-primary-card export-group-card-icc">
+                <div>
+                  <h3 data-translate="export_group_icc_title">测量数据 / ICC</h3>
+                  <p data-translate="export_group_icc_help">导出最新 Run 的测量数据；复测通过后可生成实验 ICC 草稿。</p>
                 </div>
+                <button id="exportIccReferenceButton" class="export-primary-action" type="button" data-translate="btn_export_cgats_ref">导出 CGATS 测量数据</button>
+                <details class="export-more-formats">
+                  <summary data-translate="more_export_formats">更多格式</summary>
+                  <div class="export-secondary-actions">
+                    <button id="generateIccProfileButton" type="button" data-translate="btn_export_icc_draft">生成 ICC 草稿（实验）</button>
+                  </div>
+                </details>
               </section>
             </div>
             <div class="summary-box" id="exportSummary"></div>
@@ -838,7 +872,6 @@
             <div class="table-title">
               <div>
                 <h2>Run 对比</h2>
-                <span>保存两次以上 Run 后显示补偿前后变化。</span>
               </div>
             </div>
             <div id="reportRunCompare" class="summary-box"></div>
@@ -865,7 +898,13 @@
             </div>
             <div class="settings-grid">
               <div class="summary-box span-card">
-                <strong>计算默认值</strong>
+                <div class="settings-card-header">
+                  <strong>计算默认值</strong>
+                  <div class="settings-card-actions">
+                    <button id="applySettingsButton" type="button">应用到当前计算</button>
+                    <button id="resetSettingsButton" class="secondary-action" type="button">恢复建议值</button>
+                  </div>
+                </div>
                 <div class="settings-form-grid">
                   <label class="field-label">
                     默认曲线模式
@@ -892,10 +931,6 @@
                     欠补偿比例 %
                     <input id="settingsRatioInput" type="number" min="0" max="100" step="5" value="50" />
                   </label>
-                </div>
-                <div class="inline-actions">
-                  <button id="applySettingsButton" type="button">应用到当前计算</button>
-                  <button id="resetSettingsButton" class="secondary-action" type="button">恢复建议值</button>
                 </div>
               </div>
               <div class="summary-box">
@@ -1002,6 +1037,21 @@
                 <strong>桌面 App</strong>
                 <div id="desktopSummary"></div>
               </div>
+              <div class="summary-box product-settings-card">
+                <strong>软件维护</strong>
+                <p>版本、帮助文档和更新说明集中管理；计算算法变化会在更新说明中单独列出。</p>
+                <div class="product-version-row">
+                  <span>当前版本</span>
+                  <strong>0.1.12</strong>
+                  <span>构建日期</span>
+                  <strong>2026-05-23</strong>
+                </div>
+                <div class="inline-actions product-actions">
+                  <button id="settingsUpdateButton" type="button">检查更新</button>
+                  <button id="settingsHelpButton" class="secondary-action" type="button">帮助文档</button>
+                  <button id="settingsAboutButton" class="secondary-action" type="button">关于</button>
+                </div>
+              </div>
               <div class="summary-box">
                 <strong>当前限制</strong>
                 <p>完整 G7 认证级补偿、RWXF/CxF 和真实设备 SDK 仍是下一阶段实现项。</p>
@@ -1018,6 +1068,103 @@
 
     <div id="chart-tooltip" class="chart-tooltip" hidden></div>
 
+    <div class="modal-backdrop" id="productInfoDialog" hidden>
+      <section class="modal-card product-info-modal" role="dialog" aria-modal="true" aria-labelledby="productInfoTitle">
+        <div class="modal-title-row">
+          <div>
+            <h2 id="productInfoTitle">CurveStudio 产品中心</h2>
+            <p>帮助文档、软件升级和版本信息。</p>
+          </div>
+          <button id="productInfoCloseButton" class="icon-button" type="button" aria-label="关闭">×</button>
+        </div>
+        <div class="product-info-tabs" role="tablist" aria-label="产品信息">
+          <button class="product-info-tab active" type="button" data-product-info-tab="help">帮助文档</button>
+          <button class="product-info-tab" type="button" data-product-info-tab="updates">软件升级</button>
+          <button class="product-info-tab" type="button" data-product-info-tab="about">关于</button>
+        </div>
+        <div class="product-info-body">
+          <section class="product-info-panel active" data-product-info-panel="help">
+            <div class="info-hero">
+              <span>快速开始</span>
+              <strong>按文件导入、诊断、生成曲线、复测归档的现场流程使用。</strong>
+            </div>
+            <div class="info-grid">
+              <article>
+                <strong>数据采集</strong>
+                <p>导入 CGATS / IT8 / P2P51 / TC1617 测量文件；软件会检查色块、Lab、密度和可计算曲线点。</p>
+              </article>
+              <article>
+                <strong>分析诊断</strong>
+                <p>查看 KPI、纸白/实地/叠印验收、Lab a*b* 色度图和完整 ΔE 明细。</p>
+              </article>
+              <article>
+                <strong>曲线生成</strong>
+                <p>生成 RIP 可录入网点，检查网点扩大、容差、补偿模拟和曲线安全。</p>
+              </article>
+              <article>
+                <strong>交付归档</strong>
+                <p>保存 Job / Run，导出 CSV、CGATS、项目档案和现场报告，便于复测对比。</p>
+              </article>
+            </div>
+            <details class="info-details">
+              <summary>常见提示说明</summary>
+              <p>P2P51 的 25/75 阶调点可能由测量曲线插值生成，这属于正常导表结构，不代表文件不可用。</p>
+              <p>Status-E、真实设备 SDK 和完整认证级 G7 自动补偿仍处在后续阶段；当前报告会明确标注未启用能力。</p>
+            </details>
+          </section>
+          <section class="product-info-panel" data-product-info-panel="updates">
+            <div class="update-status-card">
+              <div>
+                <span>当前版本</span>
+                <strong>CurveStudio 0.1.12</strong>
+              </div>
+              <button id="checkUpdateButton" type="button">检查更新</button>
+            </div>
+            <p id="updateStatusText" class="update-status-text">当前为本地预览版本；在线更新服务尚未启用，市场版将走各应用市场更新机制。</p>
+            <div class="release-note-list">
+              <article>
+                <span>0.1.12</span>
+                <strong>G7 / P2P51 / 曲线页打磨</strong>
+                <p>修正 G7 图表、P2P51 导入提示、Lab a*b* 色度图、补偿模拟网点扩大视图和曲线表输出列。</p>
+              </article>
+              <article>
+                <span>后续计划</span>
+                <strong>稳定版升级通道</strong>
+                <p>官网版接入检查更新；市场版遵循各平台更新；算法变更会单独列出影响范围。</p>
+              </article>
+            </div>
+          </section>
+          <section class="product-info-panel" data-product-info-panel="about">
+            <div class="about-product">
+              <div>
+                <span class="about-mark">CS</span>
+              </div>
+              <div>
+                <h3>CurveStudio</h3>
+                <p>TVI / CTV / G7 曲线生成与现场验收工具</p>
+              </div>
+            </div>
+            <div class="about-facts">
+              <div><span>版本</span><strong>0.1.12</strong></div>
+              <div><span>构建日期</span><strong>2026-05-23</strong></div>
+              <div><span>数据处理</span><strong>默认本地处理，不上传测量文件</strong></div>
+              <div><span>计算能力</span><strong>TVI、CTV、G7、Status-T、ΔE、P2P51</strong></div>
+            </div>
+            <div class="info-grid compact">
+              <article>
+                <strong>算法声明</strong>
+                <p>涉及补偿曲线、G7、Status-T、CTV 或 ΔE 判定的变化，会在更新说明中明确记录。</p>
+              </article>
+              <article>
+                <strong>支持信息</strong>
+                <p>后续将补充官网文档、隐私说明、许可清单和诊断信息导出。</p>
+              </article>
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+
     <div class="modal-backdrop" id="textPromptDialog" hidden>
       <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="textPromptTitle">
         <h2 id="textPromptTitle">输入名称</h2>
@@ -1032,6 +1179,6 @@
       </section>
     </div>
 
-    <script type="module" src="./src/app.js?v=20260521-icc-p4"></script>
+  <script type="module" src="./src/app.js?v=20260525-statusbar-pass-1"></script>
   </body>
 </html>

@@ -41,7 +41,7 @@ const CRPC_STANDARDS = Array.from({ length: 7 }, (_, index) => {
   };
 });
 
-export const STANDARD_LIBRARY = [
+const BUILT_IN_STANDARD_LIBRARY = [
   ...CRPC_STANDARDS,
   {
     id: "fogra39",
@@ -101,6 +101,59 @@ export const STANDARD_LIBRARY = [
     ...COMMON_TOLERANCE,
   },
 ];
+
+let customStandards = [];
+
+export let STANDARD_LIBRARY = [...BUILT_IN_STANDARD_LIBRARY];
+
+export function builtInStandards() {
+  return BUILT_IN_STANDARD_LIBRARY.map((item) => cloneStandard(item));
+}
+
+export function setCustomStandards(items = []) {
+  customStandards = items.map((item) => normalizeCustomStandard(item)).filter(Boolean);
+  STANDARD_LIBRARY = [...BUILT_IN_STANDARD_LIBRARY, ...customStandards];
+  return getCustomStandards();
+}
+
+export function getCustomStandards() {
+  return customStandards.map((item) => cloneStandard(item));
+}
+
+export function isCustomStandard(id) {
+  return customStandards.some((item) => item.id === id);
+}
+
+export function makeCustomStandard(base = {}, fields = {}) {
+  const name = String(fields.name || base.name || "自定义印刷标准").trim() || "自定义印刷标准";
+  return normalizeCustomStandard({
+    ...cloneStandard(base),
+    id: fields.id || `custom_${Date.now()}`,
+    name,
+    printCondition: String(fields.printCondition || base.printCondition || "Custom print condition").trim(),
+    target: fields.target || base.target || "isoA",
+    custom: true,
+    createdAt: base.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export function addOrUpdateCustomStandard(standard) {
+  const normalized = normalizeCustomStandard(standard);
+  if (!normalized) return getCustomStandards();
+  customStandards = [
+    normalized,
+    ...customStandards.filter((item) => item.id !== normalized.id),
+  ];
+  STANDARD_LIBRARY = [...BUILT_IN_STANDARD_LIBRARY, ...customStandards];
+  return getCustomStandards();
+}
+
+export function removeCustomStandard(id) {
+  customStandards = customStandards.filter((item) => item.id !== id);
+  STANDARD_LIBRARY = [...BUILT_IN_STANDARD_LIBRARY, ...customStandards];
+  return getCustomStandards();
+}
 
 export function standardById(id) {
   return STANDARD_LIBRARY.find((item) => item.id === id) || STANDARD_LIBRARY[0];
@@ -165,4 +218,21 @@ export function cmykFromManualRow(row) {
 
 function formatTone(value) {
   return Number(value).toFixed(2);
+}
+
+function normalizeCustomStandard(item) {
+  if (!item || typeof item !== "object") return null;
+  const id = String(item.id || "").trim() || `custom_${Date.now()}`;
+  return {
+    ...cloneStandard(item),
+    id,
+    name: String(item.name || "自定义印刷标准").trim() || "自定义印刷标准",
+    printCondition: String(item.printCondition || "Custom print condition").trim(),
+    target: item.target || "isoA",
+    custom: true,
+  };
+}
+
+function cloneStandard(item) {
+  return JSON.parse(JSON.stringify(item || {}));
 }
