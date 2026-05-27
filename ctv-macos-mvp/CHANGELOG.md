@@ -6,6 +6,7 @@
 - Added `npm run verify:release` as the pre-package release gate.
 - Added a Node-only local static server for Windows-friendly preview.
 - Added a Windows Tauri overlay config for NSIS/MSI installer architecture.
+- Added Windows installer artifact verification and a GitHub Actions workflow template for `windows-latest` installer builds.
 - Documented the shared macOS/Windows desktop packaging path.
 
 ## 0.1.12 - 2026-05-22

@@ -32,6 +32,32 @@ if (windowsTauri && pkg.version !== windowsTauri.version) {
   fail(`package.json version ${pkg.version} does not match ${windowsTauriPath} version ${windowsTauri.version}`);
 }
 
+if (!windowsTauri) {
+  fail(`${windowsTauriPath} is missing.`);
+} else {
+  const targets = windowsTauri.bundle?.targets || [];
+  for (const target of ["nsis", "msi"]) {
+    if (!targets.includes(target)) fail(`${windowsTauriPath} must include ${target} bundle target.`);
+  }
+
+  if (windowsTauri.build?.beforeDevCommand !== "npm run dev:node") {
+    fail(`${windowsTauriPath} must use npm run dev:node for Windows dev preview.`);
+  }
+
+  if (windowsTauri.build?.beforeBuildCommand !== "npm run build:dist") {
+    fail(`${windowsTauriPath} must build the static frontend before packaging.`);
+  }
+
+  for (const icon of ["icons/icon.ico", "icons/icon.png"]) {
+    if (!windowsTauri.bundle?.icon?.includes(icon)) {
+      fail(`${windowsTauriPath} must include ${icon}.`);
+    }
+    if (!fs.existsSync(path.join(root, "src-tauri", icon))) {
+      fail(`Windows icon file is missing: src-tauri/${icon}`);
+    }
+  }
+}
+
 for (const [key, value] of Object.entries(TRANSLATIONS.en || {})) {
   if (hasCjk(value)) fail(`English translation contains CJK text: ${key} = ${value}`);
 }
@@ -62,4 +88,3 @@ if (failures.length) {
 }
 
 console.log("Release audit passed.");
-
