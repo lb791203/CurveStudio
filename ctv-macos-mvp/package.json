@@ -9,6 +9,7 @@
     "build:dist": "node scripts/build-dist.mjs",
     "test": "node --test tests/*.test.js",
     "audit:release": "node scripts/audit-release.mjs",
+    "verify:windows-artifacts": "node scripts/verify-windows-artifacts.mjs",
     "validate:fixtures": "node scripts/validate-importers.mjs",
     "verify:release": "npm run audit:release && npm test && npm run validate:fixtures && npm run build:dist",
     "tauri:dev": "npx @tauri-apps/cli@latest dev",
