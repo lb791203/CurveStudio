@@ -177,7 +177,7 @@ npm run tauri:build:windows
 npm run verify:windows-artifacts
 ```
 
-The GitHub Actions template `ci/github-actions/windows-installer.yml` runs the same release gate on `windows-latest`, builds NSIS and MSI installers, verifies the installer files, and uploads them as the `CurveStudio-windows-installers` artifact. To activate it, copy it to `.github/workflows/windows-installer.yml` with a GitHub token that has the `workflow` scope. Expected output locations are:
+The GitHub workflow `.github/workflows/windows-installer.yml` runs the same release gate on `windows-latest`, builds NSIS and MSI installers, verifies the installer files, and uploads them as the `CurveStudio-windows-installers` artifact. Expected output locations are:
 
 - `src-tauri/target/release/bundle/nsis/*.exe`
 - `src-tauri/target/release/bundle/msi/*.msi`
