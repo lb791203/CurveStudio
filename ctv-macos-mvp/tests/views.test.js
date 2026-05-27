@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { renderCurve, statusText } from "../src/views/analysis.js";
+import { renderAnalyze, renderCurve, statusText } from "../src/views/analysis.js";
 import { renderMeasurement, renderStandard, visibleWarnings } from "../src/views/data.js";
 import { renderInstrument } from "../src/views/instrument.js";
 import { renderExport, renderReport, renderRuns, renderShell } from "../src/views/shell.js";
@@ -21,8 +21,10 @@ function els(overrides = {}) {
     measurementSummary: { innerHTML: "" },
     standardSummary: { innerHTML: "" },
     targetCurveBody: { innerHTML: "" },
+    toneToleranceBody: { innerHTML: "" },
     standardPatchBody: { innerHTML: "" },
     iccProfileSummary: { innerHTML: "" },
+    deleteCustomStandardButton: { disabled: false },
     measurementPatchPreview: { innerHTML: "" },
     importAuditSummary: { innerHTML: "" },
     manualHealthSummary: { innerHTML: "" },
@@ -30,6 +32,7 @@ function els(overrides = {}) {
     instrumentVerificationSummary: { innerHTML: "" },
     instrumentVerificationBody: { innerHTML: "" },
     compensationSimulationSummary: { innerHTML: "" },
+    compensationSimulationChart: { innerHTML: "" },
     compensationSimulationBody: { innerHTML: "" },
     deviceAdapterSelect: { value: "" },
     deviceConnectButton: { disabled: false },
@@ -93,7 +96,7 @@ test("renderMeasurement shows unloaded file prompt and patch empty state", () =>
   const localEls = els();
   renderMeasurement(state({ importInfo: null }), localEls);
 
-  assert.match(localEls.measurementSummary.innerHTML, /未加载文件/);
+  assert.match(localEls.measurementSummary.innerHTML, /未加载测量文件/);
   assert.match(localEls.measurementPatchPreview.innerHTML, /测量文件色块预览/);
   assert.match(localEls.measurementPatchPreview.innerHTML, /未加载测量文件/);
 });
@@ -254,6 +257,138 @@ test("renderStandard shows ICC characterization sampled preview", () => {
   assert.equal((localEls.iccProfileSummary.innerHTML.match(/icc-preview-swatch/g) || []).length, 2);
 });
 
+test("renderStandard shows editable CMYK tone tolerance rows", () => {
+  const localEls = els({ targetSelect: { value: "isoA" }, toneToleranceNote: { textContent: "" } });
+  renderStandard(state({
+    standard: {
+      name: "GRACoL2013 CRPC6",
+      printCondition: "CGATS21-2 CRPC6",
+      target: "isoA",
+      deltaE: { warning: 3.5, fail: 4.2 },
+      toneTolerances: { K: { tvi: { 50: 4.5 }, ctv: { 75: 2.5 } } },
+      channelTargets: { K: "isoB" },
+      g7: { enabled: true, npdcAverage: 1.5, npdcMax: 3, grayAverage: 1.5, grayMax: 3 },
+    },
+  }), localEls);
+
+  assert.equal((localEls.toneToleranceBody.innerHTML.match(/data-tone-tolerance/g) || []).length, 24);
+  assert.match(localEls.toneToleranceBody.innerHTML, /aria-label="K TVI 50% 容差"/);
+  assert.match(localEls.toneToleranceBody.innerHTML, /value="4.50"/);
+  assert.match(localEls.toneToleranceBody.innerHTML, /data-channel-target="K"/);
+  assert.match(localEls.toneToleranceBody.innerHTML, /value="isoB" selected/);
+  assert.match(localEls.toneToleranceNote.textContent, /当前标准文件|自定义设置/);
+});
+
+test("renderStandard uses distinct default CTV tolerance copy when standard has no tone tolerance data", () => {
+  const localEls = els({ targetSelect: { value: "isoA" }, toneToleranceNote: { textContent: "" } });
+  renderStandard(state({
+    standard: {
+      name: "GRACoL2013 CRPC6",
+      printCondition: "CGATS21-2 CRPC6",
+      target: "isoA",
+      deltaE: { warning: 3.5, fail: 4.2 },
+      g7: { enabled: true, npdcAverage: 1.5, npdcMax: 3, grayAverage: 1.5, grayMax: 3 },
+    },
+  }), localEls);
+
+  assert.match(localEls.toneToleranceBody.innerHTML, /aria-label="C CTV 50% 容差" \/>/);
+  assert.match(localEls.toneToleranceBody.innerHTML, /value="3.00"\s+data-tone-tolerance data-channel="C" data-metric="ctv" data-tone="50"/);
+  assert.match(localEls.toneToleranceNote.textContent, /内置默认验收窗口/);
+});
+
+test("renderAnalyze summarizes only the fixed 9 key color patches", () => {
+  const localEls = els({
+    diagnosisCards: {
+      innerHTML: "",
+      insertAdjacentHTML(_position, html) {
+        this.innerHTML += html;
+      },
+    },
+    sccaInput: { checked: false },
+    verificationChecklistSummary: { textContent: "" },
+    labDetailSummary: { textContent: "" },
+    labDetailBody: { innerHTML: "" },
+    labChromaticityChart: { innerHTML: "" },
+    labBody: { innerHTML: "" },
+  });
+  const keyRows = [
+    [{ c: 0, m: 0, y: 0, k: 0 }, "Pass"],
+    [{ c: 100, m: 0, y: 0, k: 0 }, "Fail"],
+    [{ c: 0, m: 100, y: 0, k: 0 }, "Warning"],
+    [{ c: 0, m: 0, y: 100, k: 0 }, "Pass"],
+    [{ c: 0, m: 0, y: 0, k: 100 }, "Pass"],
+    [{ c: 100, m: 100, y: 0, k: 0 }, "Pass"],
+    [{ c: 100, m: 0, y: 100, k: 0 }, "Pass"],
+    [{ c: 0, m: 100, y: 100, k: 0 }, "Pass"],
+    [{ c: 100, m: 100, y: 100, k: 0 }, "Pass"],
+  ].map(([cmyk, status], index) => ({
+    label: `K${index}`,
+    cmyk,
+    lab: { l: 50, a: index, b: 0 },
+    referenceLab: { l: 50, a: 0, b: 0 },
+    deltaE: status === "Fail" ? 5 : status === "Warning" ? 3.8 : 1,
+    status,
+  }));
+  const extraRows = Array.from({ length: 20 }, (_, index) => ({
+    label: `Extra${index}`,
+    cmyk: { c: index, m: index, y: 0, k: 0 },
+    lab: { l: 60, a: 1, b: 2 },
+    referenceLab: null,
+    deltaE: NaN,
+    status: "Missing Target",
+  }));
+
+  renderAnalyze(state({
+    standard: { name: "GRACoL2013 CRPC6", deltaE: { warning: 3.5, fail: 4.2 } },
+    labRows: [...keyRows, ...extraRows],
+    results: [],
+    safetyIssues: [],
+    diagnosis: { level: "warning", title: "测试诊断", ratio: 45, messages: [] },
+  }), localEls);
+
+  assert.equal(localEls.verificationChecklistSummary.textContent, "关键 9 项：Pass 7 / Warning 1 / Fail 1");
+  assert.match(localEls.labDetailSummary.textContent, /可比 9\/29/);
+});
+
+test("renderAnalyze recognizes imported paper Lab for SCCA messaging", () => {
+  const localEls = els({
+    diagnosisCards: {
+      innerHTML: "",
+      insertAdjacentHTML(_position, html) {
+        this.innerHTML += html;
+      },
+    },
+    sccaInput: { checked: true },
+    verificationChecklistSummary: { textContent: "" },
+    labDetailSummary: { textContent: "" },
+    labDetailBody: { innerHTML: "" },
+    labChromaticityChart: { innerHTML: "" },
+    labBody: { innerHTML: "" },
+  });
+
+  renderAnalyze(state({
+    standard: { name: "GRACoL2013 CRPC6", deltaE: { warning: 3.5, fail: 4.2 } },
+    manualRows: [],
+    labRows: [
+      {
+        label: "Y2",
+        cmyk: { c: 0, m: 0, y: 0, k: 0 },
+        lab: { l: 94.46, a: 2.16, b: -4.59 },
+        referenceLab: { l: 94.46, a: 2.16, b: -4.59 },
+        referenceWasSccaCorrected: true,
+        deltaE: 0,
+        status: "Pass",
+      },
+    ],
+    results: [],
+    safetyIssues: [],
+    diagnosis: { level: "warning", title: "测试诊断", ratio: 45, messages: [] },
+  }), localEls);
+
+  assert.match(localEls.diagnosisCards.innerHTML, /SCCA 已启用/);
+  assert.doesNotMatch(localEls.diagnosisCards.innerHTML, /缺少纸白 Lab/);
+});
+
 test("renderShell keeps workflow context in the bottom status bar", () => {
   const localEls = els({
     statusBar: { innerHTML: "" },
@@ -307,9 +442,8 @@ test("statusText and export summary use full shared warnings", () => {
 test("renderCurve channel filter preserves filtered row override keys", () => {
   const localEls = els({
     resultBody: { innerHTML: "" },
-    ripEntryBody: { innerHTML: "" },
-    curveAcceptanceSummary: { innerHTML: "" },
     compensationSimulationSummary: { innerHTML: "" },
+    compensationSimulationChart: { innerHTML: "" },
     compensationSimulationBody: { innerHTML: "" },
     measurementChart: { innerHTML: "" },
     curveChart: { innerHTML: "" },
@@ -347,14 +481,14 @@ test("renderCurve channel filter preserves filtered row override keys", () => {
   assert.match(localEls.resultBody.innerHTML, /data-curve-key="K:50\.000"/);
   assert.match(localEls.resultBody.innerHTML, />K</);
   assert.match(localEls.compensationSimulationSummary.innerHTML, /模拟验证/);
+  assert.match(localEls.compensationSimulationChart.innerHTML, /补偿后网点扩大/);
 });
 
-test("renderCurve keeps RIP acceptance table focused on review rows", () => {
+test("renderCurve shows compensation simulation chart instead of RIP acceptance review", () => {
   const localEls = els({
     resultBody: { innerHTML: "" },
-    ripEntryBody: { innerHTML: "" },
-    curveAcceptanceSummary: { innerHTML: "" },
     compensationSimulationSummary: { innerHTML: "" },
+    compensationSimulationChart: { innerHTML: "" },
     compensationSimulationBody: { innerHTML: "" },
     measurementChart: { innerHTML: "" },
     curveChart: { innerHTML: "" },
@@ -386,9 +520,9 @@ test("renderCurve keeps RIP acceptance table focused on review rows", () => {
 
   renderCurve(localState, localEls);
 
-  assert.doesNotMatch(localEls.ripEntryBody.innerHTML, /50\.00%/);
-  assert.match(localEls.ripEntryBody.innerHTML, /75\.00%/);
-  assert.match(localEls.ripEntryBody.innerHTML, /增加点/);
+  assert.match(localEls.compensationSimulationChart.innerHTML, /目标网点扩大/);
+  assert.match(localEls.compensationSimulationChart.innerHTML, /补偿后网点扩大/);
+  assert.doesNotMatch(localEls.compensationSimulationChart.innerHTML, /RIP 手录验收/);
 });
 
 test("renderRuns compares latest run against previous run", () => {

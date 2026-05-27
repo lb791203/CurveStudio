@@ -263,7 +263,7 @@ function formatMetric(value) {
 
 export function buildSuggestedArchivePath({ customer, press, generatedAt }) {
   const date = generatedAt.slice(0, 10);
-  const time = generatedAt.slice(11, 19).replaceAll(":", "");
+  const time = generatedAt.slice(11, 23).replace(/[:.]/g, "");
   const job = slug([customer || "customer", press || "press", date].join("-"));
   return `jobs/${job}/runs/${date}-${time}.json`;
 }

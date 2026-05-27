@@ -44,7 +44,7 @@ export function buildCurveAcceptance(rows, safetyIssues = []) {
           ? "曲线存在质量警告，建议复核警告点后再导出。"
           : increases.length
         ? "存在需要增加的点，请确认是否为低于目标或过度补偿后的结果。"
-        : "当前曲线以减少网点为主，适合生成 Harmony/Prinergy 手动录入参考。"
+        : "当前曲线以减少网点为主，适合生成 RIP 手动录入参考。"
       : "尚未生成曲线。",
   };
 }

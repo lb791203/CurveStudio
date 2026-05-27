@@ -2,7 +2,7 @@ import { compareRuns } from "./run-compare.js";
 import { classifyP2PPatch } from "./g7-targets.js";
 import { cmykFromRow, labFromRow, cmykFromManualRow } from "./standards.js";
 import { average, number } from "./shared.js";
-import { t } from "./translations.js";
+import { t } from "./translations.js?v=20260525-statusbar-pass-1";
 
 const MIN_CHARACTERIZATION_PATCHES = 300;
 const MIN_LAB_PATCHES = 45;

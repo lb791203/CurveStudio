@@ -7,8 +7,8 @@ import { cmykFromRow, cmykKey, labFromRow, targetOptions } from "../standards.js
 import { escapeAttr, escapeHtml } from "../shared.js";
 import { buildPatchLayout, patchCoordinate, patchName } from "../target-layouts.js";
 import { deltaFormulaLabel, methodLabel } from "../ui-labels.js";
-import { renderImportAudit, fmt } from "./helpers.js";
-import { t } from "../translations.js";
+import { renderImportAudit, fmt } from "./helpers.js?v=20260525-statusbar-pass-1";
+import { t, translateDynamicText } from "../translations.js?v=20260525-statusbar-pass-1";
 
 export function targetName(id) {
   return targetOptions().find((item) => item.id === id)?.name || id;
@@ -75,14 +75,15 @@ export function renderStandard(state, els) {
     standardPatchCount: state.standardPatchMap.size || 0,
   });
   syncG7ToleranceInputs(els, g7);
+  syncCustomStandardActions(state, els);
   els.standardSummary.innerHTML = `
     <strong>${state.standard.name}</strong>
     <p>${state.standard.printCondition}</p>
-    <p>TVI ${escapeHtml(t("target_label", "目标"))}: ${targetName(els.targetSelect.value)}</p>
+    <p>TVI ${escapeHtml(t("target_label", "Target"))}: ${targetName(els.targetSelect.value)}</p>
     <p>25/50/75: ${fmt(targetAt(target, 25))}% / ${fmt(targetAt(target, 50))}% / ${fmt(targetAt(target, 75))}%</p>
-    <p>Lab ${escapeHtml(t("patch_label", "色块"))}: ${state.standardPatchMap.size || 0} ${escapeHtml(t("count_suffix", "个"))}${loading}${warning ? ` / ${escapeHtml(warning)}` : ""}</p>
-    <p>ΔE ${escapeHtml(t("threshold_label", "阈值"))}: ${deltaFormulaLabel(els.deltaFormulaSelect.value)} Warning ${state.standard.deltaE.warning}, Fail ${state.standard.deltaE.fail}</p>
-    <p>G7: ${g7.enabled === false ? t("off_label", "关闭") : t("on_label", "启用")} / NPDC wΔL* ${g7.npdcAverage}/${g7.npdcMax} / ${escapeHtml(t("gray_balance_label", "灰平衡"))} wΔCh ${g7.grayAverage}/${g7.grayMax}</p>
+    <p>Lab ${escapeHtml(t("patch_label", "Patches"))}: ${state.standardPatchMap.size || 0}${loading}${warning ? ` / ${escapeHtml(translateDynamicText(warning))}` : ""}</p>
+    <p>ΔE ${escapeHtml(t("threshold_label", "Tolerance"))}: ${deltaFormulaLabel(els.deltaFormulaSelect.value)} Warning ${state.standard.deltaE.warning}, Fail ${state.standard.deltaE.fail}</p>
+    <p>G7: ${g7.enabled === false ? t("off_label", "Off") : t("on_label", "On")} / NPDC wΔL* ${g7.npdcAverage}/${g7.npdcMax} / ${escapeHtml(t("gray_balance_label", "Gray Balance"))} wΔCh ${g7.grayAverage}/${g7.grayMax}</p>
     ${renderIccPairSummary(pair)}
   `;
   renderIccProfileSummary(state, els);
@@ -93,6 +94,27 @@ export function renderStandard(state, els) {
       <td>${fmt(point.tone + point.value)}%</td>
     </tr>
   `).join("");
+  if (els.toneToleranceNote) els.toneToleranceNote.textContent = toneToleranceNote(state);
+  if (els.toneToleranceBody) {
+    els.toneToleranceBody.innerHTML = ["C", "M", "Y", "K"].map((channel) => `
+      <tr>
+        <td><strong>${channel}</strong></td>
+        ${["tvi", "ctv"].flatMap((metric) => [25, 50, 75].map((tone) => `
+          <td>
+            <input class="inline-number tolerance-cell-input" type="number" min="0" max="20" step="0.1"
+              value="${fmt(channelToneTolerance(state, channel, metric, tone))}"
+              data-tone-tolerance data-channel="${channel}" data-metric="${metric}" data-tone="${tone}"
+              aria-label="${channel} ${metric.toUpperCase()} ${tone}% 容差" />
+          </td>
+        `)).join("")}
+        <td>
+          <select class="compact-select" data-channel-target="${channel}" aria-label="${channel} TVI 目标曲线">
+            ${targetOptions().map((item) => `<option value="${escapeAttr(item.id)}"${item.id === channelTarget(state, channel) ? " selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
+          </select>
+        </td>
+      </tr>
+    `).join("");
+  }
   els.standardPatchBody.innerHTML = standardPatchRows(state).map((item) => `
     <tr>
       <td>${item.label}</td>
@@ -107,6 +129,49 @@ export function renderStandard(state, els) {
   `).join("");
 }
 
+function syncCustomStandardActions(state, els) {
+  if (els.deleteCustomStandardButton) {
+    els.deleteCustomStandardButton.disabled = !state.standard?.id;
+    els.deleteCustomStandardButton.textContent = state.standard?.custom
+      ? t("delete_custom_standard_button", "Delete Custom Standard")
+      : t("hide_builtin_standard_button", "Hide Built-in Standards");
+  }
+  if (els.restoreStandardListButton) {
+    els.restoreStandardListButton.disabled = !(state.hiddenStandardIds?.size);
+  }
+}
+
+function toneTolerance(tone, mode) {
+  if (mode === "ctv") return 3;
+  const numeric = Number(tone);
+  if (Math.abs(numeric - 50) < 0.01) return 4;
+  return 3;
+}
+
+function channelToneTolerance(state, channel, metric, tone) {
+  const stored = state.standard?.toneTolerances?.[channel]?.[metric]?.[tone];
+  return Number.isFinite(Number(stored)) ? Number(stored) : toneTolerance(tone, metric);
+}
+
+function toneToleranceNote(state) {
+  if (hasToneToleranceValues(state.standard?.toneTolerances)) {
+    return t("tone_tolerance_note_standard", "来自当前标准文件或自定义设置；不同标准可保存不同验收窗口。");
+  }
+  return t("tone_tolerance_note_default", "当前使用内置默认验收窗口；标准文件或自定义标准可覆盖这些容差。");
+}
+
+function hasToneToleranceValues(tolerances = {}) {
+  return Object.values(tolerances || {}).some((channel) =>
+    Object.values(channel || {}).some((metric) =>
+      Object.values(metric || {}).some((value) => Number.isFinite(Number(value))),
+    ),
+  );
+}
+
+function channelTarget(state, channel) {
+  return state.standard?.channelTargets?.[channel] || state.standard?.target || "isoA";
+}
+
 function renderIccPairSummary(pair) {
   const statusLabel = pair.status === "pass" ? "Ready" : "Check";
   return `
@@ -119,12 +184,12 @@ function renderIccPairSummary(pair) {
       <div>
         <span class="micro-label">Tone Target</span>
         <strong>${escapeHtml(pair.toneTarget.standardName)}</strong>
-        <p>${escapeHtml(`${pair.toneTarget.targetName} / G7 ${pair.toneTarget.g7Enabled ? t("on_label", "启用") : t("off_label", "关闭")}`)}</p>
+        <p>${escapeHtml(`${pair.toneTarget.targetName} / G7 ${pair.toneTarget.g7Enabled ? t("on_label", "On") : t("off_label", "Off")}`)}</p>
       </div>
       <div class="icc-pair-status">
         <span class="status ${pair.status === "pass" ? "pass" : "warning"}">${statusLabel}</span>
       </div>
-      <p class="icc-pair-message">${escapeHtml(pair.messages[0] || "")}</p>
+      <p class="icc-pair-message">${escapeHtml(translateDynamicText(pair.messages[0] || ""))}</p>
     </div>
   `;
 }
@@ -310,21 +375,21 @@ function cmykToRgb(cmyk) {
 function patchTitle(row, cmyk, lab) {
   const id = patchName(row);
   const cmykText = `CMYK ${fmt(cmyk.c)}/${fmt(cmyk.m)}/${fmt(cmyk.y)}/${fmt(cmyk.k)}`;
-  const labText = lab ? `Lab ${fmt(lab.l)} ${fmt(lab.a)} ${fmt(lab.b)}` : "无 Lab";
+  const labText = lab ? `Lab ${fmt(lab.l)} ${fmt(lab.a)} ${fmt(lab.b)}` : translateDynamicText("无 Lab");
   return [id, cmykText, labText].filter(Boolean).join(" / ");
 }
 
 function patchKindLabel(cmyk) {
   const classes = classifyP2PPatch(cmyk.c, cmyk.m, cmyk.y, cmyk.k);
-  if (classes.includes("paper")) return "纸白";
-  if (classes.includes("c_solid")) return "C 实地";
-  if (classes.includes("m_solid")) return "M 实地";
-  if (classes.includes("y_solid")) return "Y 实地";
-  if (classes.includes("k_solid")) return "K 实地";
+  if (classes.includes("paper")) return translateDynamicText("纸白");
+  if (classes.includes("c_solid")) return translateDynamicText("C 实地");
+  if (classes.includes("m_solid")) return translateDynamicText("M 实地");
+  if (classes.includes("y_solid")) return translateDynamicText("Y 实地");
+  if (classes.includes("k_solid")) return translateDynamicText("K 实地");
   if (classes.includes("npdc")) return "K-only NPDC";
-  if (classes.includes("gray_balance")) return "CMY 灰平衡";
-  if (classes.includes("overprint")) return "叠印";
-  return "普通色块";
+  if (classes.includes("gray_balance")) return translateDynamicText("CMY 灰平衡");
+  if (classes.includes("overprint")) return translateDynamicText("叠印");
+  return translateDynamicText("普通色块");
 }
 
 function patchGuideRows(patches) {
@@ -335,7 +400,7 @@ function patchGuideRows(patches) {
         <td>${index + 1}</td>
         <td>${escapeHtml(name)}</td>
         <td>${fmt(cmyk.c)} / ${fmt(cmyk.m)} / ${fmt(cmyk.y)} / ${fmt(cmyk.k)}</td>
-        <td>${lab ? `${fmt(lab.l)} / ${fmt(lab.a)} / ${fmt(lab.b)}` : "无"}</td>
+        <td>${lab ? `${fmt(lab.l)} / ${fmt(lab.a)} / ${fmt(lab.b)}` : translateDynamicText("无")}</td>
         <td>${patchKindLabel(cmyk)}</td>
       </tr>
     `;
@@ -351,8 +416,8 @@ function patchInspector(patches, selectedIndex, layout) {
   if (!selected) {
     return `
       <div class="patch-inspector empty-state compact-empty">
-        <strong>点击色块查看数值</strong>
-        <p>选择导表中的任意色块后，这里显示坐标、Sample name、CMYK、Lab 和分类。</p>
+        <strong>${escapeHtml(translateDynamicText("点击色块查看数值"))}</strong>
+        <p>${escapeHtml(translateDynamicText("选择导表中的任意色块后，这里显示坐标、Sample name、CMYK、Lab 和分类。"))}</p>
       </div>
     `;
   }
@@ -362,18 +427,18 @@ function patchInspector(patches, selectedIndex, layout) {
   return `
     <div class="patch-inspector">
       <div class="patch-inspector-title">
-        <strong>当前色块 ${escapeHtml(name)}</strong>
+        <strong>${escapeHtml(translateDynamicText("当前色块"))} ${escapeHtml(name)}</strong>
         <span>${coordinate ? `x: ${coordinate.column} / y: ${coordinate.rowIndex}` : `#${Number(selectedIndex) + 1}`}</span>
       </div>
       <dl class="patch-inspector-grid">
         <dt>CMYK</dt>
         <dd>${fmt(selected.cmyk.c)} / ${fmt(selected.cmyk.m)} / ${fmt(selected.cmyk.y)} / ${fmt(selected.cmyk.k)}</dd>
         <dt>Lab</dt>
-        <dd>${lab ? `${fmt(lab.l)} / ${fmt(lab.a)} / ${fmt(lab.b)}` : "无"}</dd>
-        <dt>分类</dt>
+        <dd>${lab ? `${fmt(lab.l)} / ${fmt(lab.a)} / ${fmt(lab.b)}` : translateDynamicText("无")}</dd>
+        <dt>${escapeHtml(translateDynamicText("分类"))}</dt>
         <dd>${escapeHtml(patchKindLabel(selected.cmyk))}</dd>
-        <dt>导表</dt>
-        <dd>${escapeHtml(layout.caption)}</dd>
+        <dt>${escapeHtml(translateDynamicText("导表"))}</dt>
+        <dd>${escapeHtml(translateDynamicText(layout.caption))}</dd>
       </dl>
     </div>
   `;
@@ -385,15 +450,25 @@ function patchGuideSummary(patches, layout) {
     acc[label] = (acc[label] || 0) + 1;
     return acc;
   }, {});
-  const keyOrder = ["纸白", "C 实地", "M 实地", "Y 实地", "K 实地", "K-only NPDC", "CMY 灰平衡", "叠印", "普通色块"];
+  const keyOrder = [
+    translateDynamicText("纸白"),
+    translateDynamicText("C 实地"),
+    translateDynamicText("M 实地"),
+    translateDynamicText("Y 实地"),
+    translateDynamicText("K 实地"),
+    "K-only NPDC",
+    translateDynamicText("CMY 灰平衡"),
+    translateDynamicText("叠印"),
+    translateDynamicText("普通色块"),
+  ];
   const badges = keyOrder
     .filter((label) => counts[label])
     .map((label) => `<span class="patch-guide-badge">${escapeHtml(label)} ${counts[label]}</span>`)
     .join("");
   return `
     <div class="patch-guide-summary">
-      <p><strong>色彩导表</strong> ${escapeHtml(layout.caption)}</p>
-      <p>${escapeHtml(layout.note || "根据文件内 CMYK + Lab 生成色块图，用于确认当前选中的测量文件是否正确。")}</p>
+      <p><strong>${escapeHtml(t("patch_guide_title", "色彩导表"))}</strong> ${escapeHtml(translateDynamicText(layout.caption))}</p>
+      <p>${escapeHtml(translateDynamicText(layout.note || t("patch_guide_default_note", "根据文件内 CMYK + Lab 生成色块图，用于确认当前选中的测量文件是否正确。")))}</p>
       <div class="patch-guide-badges">${badges}</div>
     </div>
   `;
@@ -403,19 +478,19 @@ function renderPatchPreview(state) {
   const rows = state.importInfo?.rawRows || [];
   if (!state.importInfo && !state.measurements.length && !(state.manualRows || []).length) {
     return `
-      <strong>测量文件色块预览</strong>
+      <strong>${escapeHtml(t("patch_preview_title", "测量文件色块预览"))}</strong>
       <div class="empty-state">
-        <strong>未加载测量文件</strong>
-        <p>导入 CGATS / IT8 / P2P / CSV 后，这里会显示对应测量文件的色块图，便于确认选中的文件是否正确。</p>
+        <strong>${escapeHtml(t("no_measurement_file_loaded", "未加载测量文件"))}</strong>
+        <p>${escapeHtml(t("patch_preview_empty_help", "导入 CGATS / IT8 / P2P / CSV 后，这里会显示对应测量文件的色块图，便于确认选中的文件是否正确。"))}</p>
       </div>
     `;
   }
   if (!rows.length) {
     return `
-      <strong>测量文件色块预览</strong>
+      <strong>${escapeHtml(t("patch_preview_title", "测量文件色块预览"))}</strong>
       <div class="empty-state">
-        <strong>暂无可预览色块</strong>
-        <p>当前数据来自手动录入或项目档案，没有原始色块行可绘制。</p>
+        <strong>${escapeHtml(t("patch_preview_no_rows_title", "暂无可预览色块"))}</strong>
+        <p>${escapeHtml(t("patch_preview_no_rows_help", "当前数据来自手动录入或项目档案，没有原始色块行可绘制。"))}</p>
       </div>
     `;
   }
@@ -429,10 +504,10 @@ function renderPatchPreview(state) {
     .filter(Boolean);
   if (!patches.length) {
     return `
-      <strong>测量文件色块预览</strong>
+      <strong>${escapeHtml(t("patch_preview_title", "测量文件色块预览"))}</strong>
       <div class="empty-state">
-        <strong>当前文件没有可预览的 CMYK/Lab 色块</strong>
-        <p>请确认文件包含 CMYK 列，或改用标准 CGATS / IT8 / P2P 导出。</p>
+        <strong>${escapeHtml(t("patch_preview_no_cmyk_title", "当前文件没有可预览的 CMYK/Lab 色块"))}</strong>
+        <p>${escapeHtml(t("patch_preview_no_cmyk_help", "请确认文件包含 CMYK 列，或改用标准 CGATS / IT8 / P2P 导出。"))}</p>
       </div>
     `;
   }
@@ -447,18 +522,18 @@ function renderPatchPreview(state) {
     : null;
   return `
     <div class="patch-preview-title">
-      <strong>测量文件色块图</strong>
-      <span>${patches.length} 个色块${patches.length > shown.length ? ` / 显示前 ${shown.length} 个` : ""} / ${escapeHtml(layout.name)} / ${escapeHtml(layout.mode === "target-coordinate" ? "按导表坐标显示" : "按文件顺序显示")}</span>
+      <strong>${escapeHtml(t("patch_map_title", "测量文件色块图"))}</strong>
+      <span>${patches.length} ${escapeHtml(t("patch_count_suffix", "个色块"))}${patches.length > shown.length ? ` / ${escapeHtml(t("showing_first_label", "显示前"))} ${shown.length} ${escapeHtml(t("count_suffix", "个"))}` : ""} / ${escapeHtml(translateDynamicText(layout.name))} / ${escapeHtml(layout.mode === "target-coordinate" ? t("target_coordinate_layout", "按导表坐标显示") : t("file_order_layout", "按文件顺序显示"))}</span>
     </div>
     <div class="patch-preview-layout">
       <div class="patch-map-card">
-        <div class="patch-preview-grid ${layout.mode === "target-coordinate" ? "target-layout" : ""}" style="--patch-cols: ${layout.columns}; --patch-size: ${layout.cellSize}px" aria-label="测量文件色块预览">
+        <div class="patch-preview-grid ${layout.mode === "target-coordinate" ? "target-layout" : ""}" style="--patch-cols: ${layout.columns}; --patch-size: ${layout.cellSize}px" aria-label="${escapeAttr(t("patch_preview_title", "测量文件色块预览"))}">
           ${layout.cells.map((cell) => {
             if (!cell?.patch) return "<span class=\"patch-swatch empty\" aria-hidden=\"true\"></span>";
             const { row, cmyk, lab, color } = cell.patch;
             const selected = cell.index === selectedIndex;
             const section = cell.section === "extra" ? " extra" : "";
-            return `<button class="patch-swatch${lab ? "" : " cmyk-only"}${section}${selected ? " selected" : ""}" type="button" data-patch-index="${cell.index}" data-patch-section="${escapeAttr(cell.section || "file")}" aria-pressed="${selected ? "true" : "false"}" style="background: ${escapeAttr(color)}" title="${escapeAttr(`${cell.index + 1}. ${patchTitle(row, cmyk, lab)} / ${patchKindLabel(cmyk)}`)}" aria-label="${escapeAttr(`查看色块 ${patchName(row) || cell.index + 1}`)}"></button>`;
+            return `<button class="patch-swatch${lab ? "" : " cmyk-only"}${section}${selected ? " selected" : ""}" type="button" data-patch-index="${cell.index}" data-patch-section="${escapeAttr(cell.section || "file")}" aria-pressed="${selected ? "true" : "false"}" style="background: ${escapeAttr(color)}" title="${escapeAttr(`${cell.index + 1}. ${patchTitle(row, cmyk, lab)} / ${patchKindLabel(cmyk)}`)}" aria-label="${escapeAttr(`${t("view_patch_label", "查看色块")} ${patchName(row) || cell.index + 1}`)}"></button>`;
           }).join("")}
         </div>
       </div>
@@ -468,16 +543,16 @@ function renderPatchPreview(state) {
       </div>
     </div>
     <details class="patch-guide-details">
-      <summary>展开对应色彩导表明细</summary>
-      <div class="patch-guide-table-wrap" aria-label="对应色彩导表">
+      <summary>${escapeHtml(t("show_patch_guide_details", "展开对应色彩导表明细"))}</summary>
+      <div class="patch-guide-table-wrap" aria-label="${escapeAttr(t("matching_target_chart", "对应色彩导表"))}">
         <table class="patch-guide-table">
           <thead>
             <tr>
               <th>#</th>
-              <th>色块</th>
+              <th>${escapeHtml(t("patch_label", "色块"))}</th>
               <th>CMYK</th>
               <th>Lab</th>
-              <th>分类/用途</th>
+              <th>${escapeHtml(t("patch_category_use", "分类/用途"))}</th>
             </tr>
           </thead>
           <tbody>${patchGuideRows(shown)}</tbody>
@@ -490,6 +565,7 @@ function renderPatchPreview(state) {
 export function renderMeasurement(state, els) {
   const rawRows = state.importInfo?.rawRows?.length || 0;
   const warnings = visibleWarnings(state, els);
+  const translatedWarnings = warnings.map(translateDynamicText);
   const health = manualHealth(state.manualRows || []);
   const audit = inspectImport({
     importInfo: state.importInfo,
@@ -497,30 +573,35 @@ export function renderMeasurement(state, els) {
     results: state.results,
     mode: els.modeSelect.value,
   });
-  const status = state.results.length ? "已生成曲线" : state.measurements.length ? "可计算/待确认" : state.importInfo ? "数据不足" : "未导入";
+  const status = state.results.length
+    ? t("measurement_status_curve_ready", "已生成曲线")
+    : state.measurements.length
+      ? t("measurement_status_review", "可计算/待确认")
+      : state.importInfo
+        ? t("measurement_status_insufficient", "数据不足")
+        : t("measurement_status_empty", "未导入");
   if (!state.importInfo && !state.measurements.length && !(state.manualRows || []).length) {
     els.measurementSummary.innerHTML = `
-      <strong>当前数据</strong>
+      <strong>${escapeHtml(t("file_import_status_title", "文件导入状态"))}</strong>
       <div class="empty-state compact-empty">
-        <strong>未加载文件</strong>
-        <p>请选择测量文件、载入示例，或在下方手动录入现场单点数据。</p>
+        <strong>${escapeHtml(t("no_measurement_file_loaded", "未加载测量文件"))}</strong>
+        <p>${escapeHtml(t("file_import_empty_help", "选择 CGATS / IT8 / P2P / CSV / JSON 测量文件后自动解析。"))}</p>
       </div>
     `;
   } else {
     els.measurementSummary.innerHTML = `
-      <strong>当前数据</strong>
-      <p>状态: ${status}</p>
-      <p>来源: ${state.importInfo?.sourceFormat || "手动录入"}</p>
-      <p>原始色块/行: ${rawRows}</p>
-      <p>可计算测量点: ${state.measurements.length}</p>
-      <p>提示: ${warnings.length ? escapeHtml(warnings.join(" / ")) : "无"}</p>
+      <strong>${escapeHtml(t("file_import_status_title", "文件导入状态"))}</strong>
+      <p>${escapeHtml(t("status_label", "状态"))}: ${escapeHtml(status)}</p>
+      <p>${escapeHtml(t("source_label", "来源"))}: ${escapeHtml(state.importInfo?.sourceFormat || t("manual_entry_label", "手动录入"))}</p>
+      <p>${escapeHtml(t("raw_patches_rows_label", "原始色块/行"))} ${rawRows} / ${escapeHtml(t("usable_measurements_label", "可计算测点"))} ${state.measurements.length}</p>
+      <p>${escapeHtml(t("hint_label", "提示"))}: ${translatedWarnings.length ? escapeHtml(translatedWarnings.join(" / ")) : escapeHtml(t("none_label", "无"))}</p>
     `;
   }
   if (els.measurementPatchPreview) els.measurementPatchPreview.innerHTML = renderPatchPreview(state);
   els.importAuditSummary.innerHTML = renderImportAudit(audit);
   els.manualHealthSummary.innerHTML = `
-    <strong>现场录入检查</strong>
-    <p>${health.ready ? "可计算基础曲线。" : "还缺少现场曲线计算数据。"}</p>
-    ${health.messages.map((item) => `<p>${escapeHtml(item)}</p>`).join("")}
+    <strong>${escapeHtml(t("field_entry_check_title", "现场录入检查"))}</strong>
+    <p>${escapeHtml(health.ready ? t("manual_ready_basic_curve", "可计算基础曲线。") : t("manual_missing_curve_data", "还缺少现场曲线计算数据。"))}</p>
+    ${health.messages.map((item) => `<p>${escapeHtml(translateDynamicText(item))}</p>`).join("")}
   `;
 }

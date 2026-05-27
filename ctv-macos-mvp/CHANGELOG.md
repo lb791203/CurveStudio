@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- Added a release audit script for version alignment, duplicate translation keys, English UI text, and generic RIP wording.
+- Added `npm run verify:release` as the pre-package release gate.
+- Added a Node-only local static server for Windows-friendly preview.
+- Added a Windows Tauri overlay config for NSIS/MSI installer architecture.
+- Documented the shared macOS/Windows desktop packaging path.
+
+## 0.1.12 - 2026-05-22
+
+- Aligned CMY gray candidate detection with P2P / Curve+ style gray patches where C can be slightly higher than M/Y.
+- Changed G7 gray-balance wDeltaCh to compare measured gray a*/b* against the selected standard gray Lab target before falling back to neutral zero.
+- Corrected G7 chart/detail summaries so K NPDC, CMY NPDC, and gray-balance wDeltaCh are reported separately.
+- Simplified the curve table by consolidating duplicate output columns into one editable `建议录入网点` column.
+- Replaced the on-page Kodak Prinergy / RIP manual-entry acceptance table with a compensation simulation curve chart.
+- Kept chart hover tooltips inside the visible window near chart edges.
+- Reworked the Lab a*b* chromaticity chart toward the reference software style with quadrant background, target/sample vectors, C/M/Y/R/G/B gamut polygons, hue traces, and Chinese legend labels.
+- Prevented incomplete Lab a*b* data from drawing a misleading C/M/Y-only gamut triangle.
+- Fed full imported raw Lab/CMYK patches into the Lab a*b* chart so P2P/TC1617 data can draw the same C/M/Y/R/G/B gamut shape as reference software.
+
 ## 0.1.11 - 2026-05-22
 
 - Reworked G7 charts toward a report-style layout with fixed, readable NPDC, gray balance, and wDeltaL scales.
