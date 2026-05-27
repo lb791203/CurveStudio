@@ -3,6 +3,9 @@ import path from "node:path";
 
 const root = process.cwd();
 const bundleRoot = process.argv[2] || "src-tauri/target/release/bundle";
+const absoluteBundleRoot = path.isAbsolute(bundleRoot)
+  ? bundleRoot
+  : path.join(root, bundleRoot);
 const minBytes = Number(process.env.CURVESTUDIO_MIN_WINDOWS_INSTALLER_BYTES || 1024 * 1024);
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const tauri = JSON.parse(fs.readFileSync(path.join(root, "src-tauri/tauri.windows.conf.json"), "utf8"));
@@ -22,7 +25,7 @@ function fail(message) {
 }
 
 function findFiles(dir, extension) {
-  const absoluteDir = path.join(root, bundleRoot, dir);
+  const absoluteDir = path.join(absoluteBundleRoot, dir);
   if (!fs.existsSync(absoluteDir)) return [];
   return fs
     .readdirSync(absoluteDir, { withFileTypes: true })
