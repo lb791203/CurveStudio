@@ -1,0 +1,56 @@
+name: Windows Installer
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-windows-installers:
+    name: Build and verify Windows installers
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ctv-macos-mvp
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ctv-macos-mvp/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('ctv-macos-mvp/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Release verification gate
+        run: npm run verify:release
+
+      - name: Build Windows installers
+        run: npm run tauri:build:windows
+
+      - name: Verify installer artifacts
+        run: npm run verify:windows-artifacts
+
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: CurveStudio-windows-installers
+          path: |
+            ctv-macos-mvp/src-tauri/target/release/bundle/nsis/*.exe
+            ctv-macos-mvp/src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error

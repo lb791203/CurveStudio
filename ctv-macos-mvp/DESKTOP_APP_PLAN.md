@@ -34,6 +34,9 @@ The first Windows milestone is installer architecture, not device SDK integratio
 3. Keep future Techkon/X-Rite SDK work behind `DeviceAdapter` so Windows SDK support does not change curve logic.
 4. Validate `npm run verify:release` before each Windows installer build.
 5. Build Windows installers with `npm run tauri:build:windows` on Windows hardware/CI.
+6. Verify installer artifacts with `npm run verify:windows-artifacts`; the check requires NSIS `.exe` and MSI `.msi` files with the product name, package version, and a trustworthy file size.
+
+GitHub Actions template: `ci/github-actions/windows-installer.yml`. Activate it as `.github/workflows/windows-installer.yml` with a GitHub token that has the `workflow` scope. It runs on `windows-latest`, executes the release gate, builds the Windows installers, verifies the artifacts, and uploads the installer files for download.
 
 ## Next desktop tasks
 
@@ -41,7 +44,7 @@ The first Windows milestone is installer architecture, not device SDK integratio
 - Add open-project dialog for JSON archives.
 - Store recent jobs in a local application data directory.
 - Keep SDK/device integration behind `DeviceAdapter` so Techkon/X-Rite support can be added without changing curve logic.
-- Add Windows signing, installer naming, and update-channel decisions after the first NSIS/MSI smoke test.
+- Add Windows signing, installer naming, update-channel decisions, and a real install/uninstall smoke test after the first NSIS/MSI CI artifact succeeds.
 
 ## ICC workflow roadmap
 

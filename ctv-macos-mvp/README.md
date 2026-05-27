@@ -149,6 +149,7 @@ The result table shows a manual-entry reference for Kodak Prinergy Harmony, Koda
 npm test
 npm run audit:release
 npm run validate:fixtures
+npm run verify:windows-artifacts
 ```
 
 See `ARCHITECTURE.md` for the current module map and data flow.
@@ -173,4 +174,10 @@ Windows uses the installer overlay config and should be run on a Windows machine
 
 ```bash
 npm run tauri:build:windows
+npm run verify:windows-artifacts
 ```
+
+The GitHub Actions template `ci/github-actions/windows-installer.yml` runs the same release gate on `windows-latest`, builds NSIS and MSI installers, verifies the installer files, and uploads them as the `CurveStudio-windows-installers` artifact. To activate it, copy it to `.github/workflows/windows-installer.yml` with a GitHub token that has the `workflow` scope. Expected output locations are:
+
+- `src-tauri/target/release/bundle/nsis/*.exe`
+- `src-tauri/target/release/bundle/msi/*.msi`
