@@ -79,4 +79,4 @@ npm run verify:windows-artifacts
 
 This checks release metadata, duplicate translation keys, English UI translation values, the full test suite, fixture import validation, and the static frontend build.
 
-Windows installer verification is prepared as the GitHub Actions template `ci/github-actions/windows-installer.yml`. Activate it as `.github/workflows/windows-installer.yml` with a GitHub token that has the `workflow` scope. The workflow uses a Windows runner, builds NSIS and MSI bundles through `src-tauri/tauri.windows.conf.json`, checks the generated installer files, and uploads them as the `CurveStudio-windows-installers` artifact.
+Windows installer verification runs on GitHub Actions via `.github/workflows/windows-installer.yml`. The workflow uses a Windows runner, builds NSIS and MSI bundles through `src-tauri/tauri.windows.conf.json`, checks the generated installer files, and uploads them as the `CurveStudio-windows-installers` artifact.

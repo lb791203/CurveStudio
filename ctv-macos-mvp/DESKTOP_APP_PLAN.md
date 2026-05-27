@@ -36,7 +36,7 @@ The first Windows milestone is installer architecture, not device SDK integratio
 5. Build Windows installers with `npm run tauri:build:windows` on Windows hardware/CI.
 6. Verify installer artifacts with `npm run verify:windows-artifacts`; the check requires NSIS `.exe` and MSI `.msi` files with the product name, package version, and a trustworthy file size.
 
-GitHub Actions template: `ci/github-actions/windows-installer.yml`. Activate it as `.github/workflows/windows-installer.yml` with a GitHub token that has the `workflow` scope. It runs on `windows-latest`, executes the release gate, builds the Windows installers, verifies the artifacts, and uploads the installer files for download.
+GitHub Actions entrypoint: `.github/workflows/windows-installer.yml`. It runs on `windows-latest`, executes the release gate, builds the Windows installers, verifies the artifacts, and uploads the installer files for download.
 
 ## Next desktop tasks
 
