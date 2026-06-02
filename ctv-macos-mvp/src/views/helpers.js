@@ -1,5 +1,5 @@
 import { escapeAttr, escapeHtml } from "../shared.js";
-import { t, translateDynamicText } from "../translations.js?v=20260525-statusbar-pass-1";
+import { t, translateDynamicText } from "../translations.js";
 import { methodLabel } from "../ui-labels.js";
 
 export function fmt(value) {

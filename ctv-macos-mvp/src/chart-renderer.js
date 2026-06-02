@@ -1,5 +1,5 @@
 import { escapeHtml } from "./shared.js";
-import { translateDynamicText } from "./translations.js?v=20260525-statusbar-pass-1";
+import { translateDynamicText } from "./translations.js";
 
 export function renderMeasurementChart(svg, results, targetRows, mode) {
   const label = mode === "ctv" ? "CTV" : "TVI";

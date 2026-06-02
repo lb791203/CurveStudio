@@ -1,7 +1,7 @@
 import { buildInstrumentVerificationRows, summarizeInstrumentVerification } from "../instrument-verification.js?v=20260521-icc-p4";
 import { summarizeDeviceState } from "../device-adapter.js";
 import { escapeHtml } from "../shared.js?v=20260521-icc-p4";
-import { t, translateDynamicText } from "../translations.js?v=20260525-statusbar-pass-1";
+import { t, translateDynamicText } from "../translations.js";
 import { num, statusClass, signed } from "./helpers.js?v=20260521-icc-p4";
 
 export function renderInstrument(state, els) {

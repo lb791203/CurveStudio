@@ -71,6 +71,43 @@ export function summarizeDeviceState(deviceState = {}, manualRows = []) {
   };
 }
 
+export function sdkDeviceLabel(device = {}) {
+  const product = device.product_string || device.productName || "Unknown instrument";
+  const manufacturer = device.manufacturer_string || device.manufacturer || "";
+  const vendorId = hexId(device.vendor_id ?? device.vendorId);
+  const productId = hexId(device.product_id ?? device.productId);
+  const idText = vendorId && productId ? `VID: ${vendorId}, PID: ${productId}` : "";
+  return [manufacturer, product, idText].filter(Boolean).join(" / ");
+}
+
+export function buildSdkMeasurementRow(queueItemData, response = {}) {
+  if (!queueItemData) throw new Error("Missing measurement queue item.");
+  if (response.parsed === false) {
+    throw new Error(response.message || "Instrument response was captured but not parsed.");
+  }
+  const lab = response.lab || {};
+  const labL = finiteNumber(lab.l);
+  const labA = finiteNumber(lab.a);
+  const labB = finiteNumber(lab.b);
+  if (![labL, labA, labB].every(Number.isFinite)) {
+    throw new Error("Instrument SDK response does not contain parsed Lab values.");
+  }
+  const measuredTone = finiteNumber(response.measuredTone);
+  const density = finiteNumber(response.density);
+  return defaultManualRow({
+    patchType: queueItemData.patchType,
+    channel: queueItemData.channel,
+    tone: queueItemData.tone,
+    measuredTone: Number.isFinite(measuredTone) ? measuredTone : "",
+    density: Number.isFinite(density) ? density : "",
+    labL,
+    labA,
+    labB,
+    source: "仪器测量",
+    note: `SDK读取 ${queueItemData.label}: ${response.message || ""}`,
+  });
+}
+
 export function changeDeviceAdapterState(deviceState = {}, adapterId) {
   return {
     ...deviceState,
@@ -245,4 +282,15 @@ function mockLab(item, sequence) {
 
 function round(value, digits = 2) {
   return Number(Number(value).toFixed(digits));
+}
+
+function finiteNumber(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : NaN;
+}
+
+function hexId(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "";
+  return `0x${numeric.toString(16).toUpperCase().padStart(4, "0")}`;
 }
