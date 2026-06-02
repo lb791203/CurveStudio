@@ -3,12 +3,14 @@ import test from "node:test";
 
 import {
   buildMeasurementQueue,
+  buildSdkMeasurementRow,
   calibrateDeviceState,
   changeDeviceAdapterState,
   connectDeviceState,
   disconnectDeviceState,
   mockReadPatch,
   readDevicePatchState,
+  sdkDeviceLabel,
   summarizeDeviceState,
 } from "../src/device-adapter.js";
 
@@ -30,6 +32,42 @@ test("mockReadPatch returns manual-table compatible instrument row", () => {
   assert.ok(Number.isFinite(row.measuredTone));
   assert.ok(Number.isFinite(row.labL));
   assert.match(row.note, /模拟读取 C 50%/);
+});
+
+test("sdkDeviceLabel formats device identity without hiding VID/PID", () => {
+  const label = sdkDeviceLabel({
+    vendor_id: 0x197B,
+    product_id: 0x0102,
+    manufacturer_string: "Techkon",
+    product_string: "SpectroDens",
+  });
+  assert.match(label, /Techkon/);
+  assert.match(label, /SpectroDens/);
+  assert.match(label, /VID: 0x197B/);
+  assert.match(label, /PID: 0x0102/);
+});
+
+test("buildSdkMeasurementRow accepts only parsed instrument Lab data", () => {
+  const item = { patchType: "solid", channel: "C", tone: 100, label: "C solid" };
+  const row = buildSdkMeasurementRow(item, {
+    parsed: true,
+    message: "SDK parsed Lab",
+    lab: { l: 56.1, a: -35.2, b: -49.8 },
+    density: 1.34,
+  });
+  assert.equal(row.source, "仪器测量");
+  assert.equal(row.labL, 56.1);
+  assert.equal(row.density, 1.34);
+  assert.match(row.note, /SDK parsed Lab/);
+
+  assert.throws(
+    () => buildSdkMeasurementRow(item, { parsed: false, message: "Raw response only" }),
+    /Raw response only/,
+  );
+  assert.throws(
+    () => buildSdkMeasurementRow(item, { parsed: true, lab: { l: 56 } }),
+    /parsed Lab values/,
+  );
 });
 
 test("summarizeDeviceState exposes adapter workflow state", () => {

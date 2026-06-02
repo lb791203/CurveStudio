@@ -1065,6 +1065,54 @@ textarea {
   gap: 12px;
 }
 
+.report-cover-card {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: end;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--blue);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.report-cover-card span,
+.report-cover-card p,
+.report-cover-meta p,
+.report-cover-meta small {
+  color: var(--text-muted);
+}
+
+.report-cover-card span,
+.report-cover-meta p,
+.report-cover-meta small {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.report-cover-card strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.report-cover-card p {
+  margin: 8px 0 0;
+}
+
+.report-cover-meta {
+  min-width: 210px;
+  text-align: right;
+}
+
+.report-cover-meta strong {
+  font-size: 14px;
+}
+
 .report-split {
   align-items: start;
 }
@@ -1089,6 +1137,144 @@ textarea {
 
 .report-list li {
   margin: 3px 0;
+}
+
+.audit-report-panel {
+  margin-top: 12px;
+}
+
+.audit-report-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.audit-report-head p,
+.audit-report-note {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+}
+
+.audit-report-head small {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.audit-score-card {
+  min-width: 120px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  text-align: right;
+}
+
+.audit-score-card span,
+.audit-score-card small,
+.audit-count-card span,
+.audit-count-card small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.audit-score-card strong {
+  display: block;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.audit-conclusion-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.45fr) 1fr;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.audit-conclusion-card p {
+  margin: 5px 0 0;
+}
+
+.audit-conclusion-card .report-list {
+  margin: 5px 0 0;
+}
+
+.audit-count-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.audit-count-card {
+  border: 1px solid var(--line);
+  border-left: 4px solid #64748b;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+.audit-count-card.pass {
+  border-left-color: var(--green);
+}
+
+.audit-count-card.warning {
+  border-left-color: var(--amber);
+}
+
+.audit-count-card strong {
+  display: block;
+  margin: 2px 0;
+  font-size: 18px;
+}
+
+.audit-report-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.audit-mini-table {
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.audit-mini-table strong {
+  display: block;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  background: #f8fafc;
+}
+
+.audit-mini-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.audit-mini-table th,
+.audit-mini-table td {
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.audit-mini-table th {
+  color: var(--text-muted);
+  font-weight: 800;
 }
 
 .audit-channel-list {
@@ -1988,6 +2174,12 @@ svg {
   color: #92400e;
 }
 
+.status.review {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+}
+
 .status.fail::before,
 .status.danger::before,
 .status-pill.danger::before {
@@ -2842,8 +3034,26 @@ body.dark-theme .status-bar-diagnosis.danger {
 }
 
 @media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  :root,
+  body.dark-theme {
+    --bg: #ffffff;
+    --panel: #ffffff;
+    --panel-soft: #f8fafc;
+    --text: #0f172a;
+    --text-muted: #475569;
+    --line: #cbd5e1;
+    --line-soft: #e2e8f0;
+  }
+
   body {
     background: #ffffff;
+    color: #0f172a;
+    font-size: 10.5px;
   }
 
   .sidebar,
@@ -2861,27 +3071,96 @@ body.dark-theme .status-bar-diagnosis.danger {
 
   .workspace {
     padding: 0;
+    overflow: visible;
   }
 
   .view[data-view="report"] {
     display: grid !important;
-    gap: 14px;
+    gap: 9px;
   }
 
   .panel,
   .summary-box,
-  .kpi-card {
+  .kpi-card,
+  .audit-mini-table,
+  .audit-count-card,
+  .audit-score-card,
+  .audit-conclusion-card,
+  .report-cover-card {
     box-shadow: none;
     background: #ffffff;
   }
 
   .wide-panel {
     border-radius: 0;
+    padding: 8px 10px;
   }
 
   .report-grid,
   .kpi-grid {
     grid-template-columns: repeat(4, 1fr);
+    gap: 7px;
+  }
+
+  .report-cover-card {
+    padding: 10px 12px;
+    border-left-color: #2563eb;
+  }
+
+  .report-cover-card strong {
+    font-size: 18px;
+  }
+
+  .kpi-card,
+  .summary-box {
+    padding: 8px 10px;
+  }
+
+  .kpi-card strong {
+    font-size: 15px;
+  }
+
+  .report-panel {
+    border-color: #d8e0ea;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .table-title {
+    padding: 6px 8px;
+  }
+
+  .audit-count-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+  }
+
+  .audit-report-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .audit-mini-table {
+    overflow: visible;
+  }
+
+  .audit-mini-table table {
+    font-size: 9px;
+  }
+
+  .audit-mini-table th,
+  .audit-mini-table td {
+    padding: 4px 5px;
+  }
+
+  .report-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+  }
+
+  .report-list li {
+    margin: 1px 0;
   }
 }
 
@@ -4067,6 +4346,24 @@ body.dark-theme .summary-box {
 
 body.dark-theme .summary-box strong {
   color: var(--ink) !important;
+}
+
+body.dark-theme .audit-score-card,
+body.dark-theme .audit-conclusion-card,
+body.dark-theme .audit-count-card,
+body.dark-theme .audit-mini-table {
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+}
+
+body.dark-theme .audit-mini-table strong {
+  background: var(--surface-soft) !important;
+  border-color: var(--line) !important;
+}
+
+body.dark-theme .audit-mini-table th,
+body.dark-theme .audit-mini-table td {
+  border-color: var(--line) !important;
 }
 
 body.dark-theme .empty-state strong {

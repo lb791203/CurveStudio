@@ -8,7 +8,7 @@ import { escapeAttr, escapeHtml } from "../shared.js";
 import { buildPatchLayout, patchCoordinate, patchName } from "../target-layouts.js";
 import { deltaFormulaLabel, methodLabel } from "../ui-labels.js";
 import { renderImportAudit, fmt } from "./helpers.js?v=20260525-statusbar-pass-1";
-import { t, translateDynamicText } from "../translations.js?v=20260525-statusbar-pass-1";
+import { t, translateDynamicText } from "../translations.js";
 
 export function targetName(id) {
   return targetOptions().find((item) => item.id === id)?.name || id;

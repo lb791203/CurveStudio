@@ -4,10 +4,11 @@ import { buildSuggestedArchivePath, summarizeCurveSafety } from "../exporter.js?
 import { buildIccGenerationGate } from "../icc-generation-gate.js?v=20260525-statusbar-pass-1";
 import { compareRuns, formatMetricChange } from "../run-compare.js?v=20260521-icc-p4";
 import { escapeAttr, escapeHtml } from "../shared.js";
-import { t, translateDynamicText } from "../translations.js?v=20260525-statusbar-pass-1";
+import { t, translateDynamicText } from "../translations.js";
 import { algorithmDescription, deltaFormulaLabel } from "../ui-labels.js";
 import { num, statusClass } from "./helpers.js?v=20260525-statusbar-pass-1";
 import { targetName, visibleWarnings } from "./data.js?v=20260525-statusbar-pass-1";
+import { buildAuditReportComparison } from "../audit-report.js";
 
 export function renderShell(state, els) {
   const channels = channelsPresent(state.measurements);
@@ -210,6 +211,16 @@ function runJobName(run, key) {
   return run.jobName || run.jobId || key;
 }
 
+function reportComparableRuns(runs = [], selectedJobKey = "") {
+  if (!runs.length) return [];
+  const latest = runs[0];
+  const targetKey = selectedJobKey || runJobKey(latest, 0);
+  return runs
+    .map((run, index) => ({ run, index }))
+    .filter((item) => runJobKey(item.run, item.index) === targetKey)
+    .map((item) => item.run);
+}
+
 function changeClass(change) {
   if (!change || change.direction === "unknown" || change.direction === "same") return "";
   return change.direction === "improved" ? "positive" : "negative";
@@ -253,7 +264,8 @@ export function renderReport(state, els) {
   const g7 = state.g7 || {};
   const conclusion = g7.conclusion || {};
   const tvi = tviDeltaSummary(state.results || []);
-  const compare = state.runs.length >= 2 ? compareRuns(state.runs[0], state.runs[1]) : null;
+  const compareRunsForReport = reportComparableRuns(state.runs || [], state.selectedJobKey || "");
+  const compare = compareRunsForReport.length >= 2 ? compareRuns(compareRunsForReport[0], compareRunsForReport[1]) : null;
   const iccGate = buildIccGenerationGate({ runs: state.runs || [], standard: state.standard, requireG7: state.settings?.requireG7ForIcc !== false });
   const generatedAt = new Date().toLocaleString();
   const jobs = groupJobRuns(state.runs || []);
@@ -261,6 +273,18 @@ export function renderReport(state, els) {
   if (els.printReportButton) els.printReportButton.disabled = !state.results.length;
 
   els.reportSummary.innerHTML = `
+    <div class="report-cover-card">
+      <div>
+        <span>${escapeHtml(t("report_cover_eyebrow", "客户验厂 / 曲线复测"))}</span>
+        <strong>${escapeHtml(t("report_title", "客户/验厂报告"))}</strong>
+        <p>${escapeHtml(t("report_cover_summary", "面向现场审核的 TVI / CTV / G7 曲线、Lab 色差和复测状态摘要。"))}</p>
+      </div>
+      <div class="report-cover-meta">
+        <p>${escapeHtml(t("generated_at_label", "Generated At"))}</p>
+        <strong>${escapeHtml(generatedAt)}</strong>
+        <small>${escapeHtml(state.standard?.name || t("not_selected", "未选择"))} / ${escapeHtml(els.modeSelect.value.toUpperCase())}</small>
+      </div>
+    </div>
     ${reportKpi(t("customer_press_label", "客户 / 机器"), `${translateDynamicText(els.jobCustomerInput.value || t("not_filled", "未填"))} / ${translateDynamicText(els.jobPressInput.value || t("not_filled", "未填"))}`)}
     ${reportKpi(t("standard_select_label", "标准"), state.standard?.name || t("not_selected", "未选择"))}
     ${reportKpi(t("algorithm_label", "算法"), `${els.modeSelect.value.toUpperCase()} / ${targetName(els.targetSelect.value)}`)}
@@ -279,6 +303,8 @@ export function renderReport(state, els) {
       ${els.jobNoteInput.value ? `<p>${escapeHtml(t("note_label", "备注"))}: ${escapeHtml(els.jobNoteInput.value)}</p>` : ""}
     </div>
   `;
+
+  renderAuditReportComparison(state, els);
 
   els.reportG7Conclusion.innerHTML = `
     <p><span class="status ${statusClass(conclusion.level || g7.status)}">${escapeHtml(translateDynamicText(conclusion.title || t("g7_not_run_label", "G7 Not Run")))}</span></p>
@@ -309,6 +335,126 @@ export function renderReport(state, els) {
   els.reportRunCompare.innerHTML = compare
     ? reportRunCompareText(compare)
     : `<p>${escapeHtml(t("report_run_compare_need_two", "保存至少两次 Run 后，这里会显示补偿前后 TVI、ΔE、G7 和曲线质量变化。"))}</p>`;
+}
+
+function renderAuditReportComparison(state, els) {
+  if (!els.reportAuditComparison) return;
+  const comparison = buildAuditReportComparison(state.auditReport);
+  if (!comparison) {
+    els.reportAuditComparison.hidden = true;
+    els.reportAuditComparison.innerHTML = "";
+    return;
+  }
+  els.reportAuditComparison.hidden = false;
+  const tvi50 = comparison.tviRows.filter((row) => Math.abs(row.tone - 50) < 0.01);
+  const densitySolids = comparison.densityRows.filter((row) => Math.abs(row.tone - 100) < 0.01);
+  const findingItems = comparison.overall.primaryFindings || [];
+  els.reportAuditComparison.innerHTML = `
+    <div class="audit-report-head">
+      <div>
+      <strong>${escapeHtml(t("audit_report_compare_title", "客户 / 验厂报告对照"))}</strong>
+        <p>${escapeHtml(comparison.title)} / ${escapeHtml(comparison.subtitle)}</p>
+        <small>${escapeHtml(t("audit_report_print_hint", "报告内置容差用于现场复核；带 Review 的项目建议人工确认照片或原报告。"))}</small>
+      </div>
+      <div class="audit-score-card">
+        <span>${escapeHtml(t("audit_report_score_label", "标准评分"))}</span>
+        <strong>${escapeHtml(String(comparison.overall.standardScorePercent ?? "N/A"))}%</strong>
+        <small>${escapeHtml(t("audit_report_level_label", "等级"))} ${escapeHtml(String(comparison.overall.standardScoreLevel ?? "N/A"))}</small>
+      </div>
+    </div>
+    <div class="audit-conclusion-card">
+      <div>
+        <strong>${escapeHtml(t("audit_report_conclusion_title", "验厂摘要"))}</strong>
+        <p>${escapeHtml(t("audit_report_overall_status_label", "总状态"))}: <span class="status ${statusClass(comparison.overall.overallStatus || "Review")}">${escapeHtml(comparison.overall.overallStatus || t("status_review", "待复核"))}</span></p>
+      </div>
+      ${findingItems.length ? `<div><strong>${escapeHtml(t("audit_report_findings_label", "报告要点"))}</strong>${reportList("", findingItems)}</div>` : ""}
+    </div>
+    <div class="audit-count-grid">
+      ${auditCountCard("TVI", comparison.counts.tvi)}
+      ${auditCountCard(t("audit_report_substrate_label", "纸张"), comparison.counts.substrate)}
+      ${auditCountCard("Lab ΔE", comparison.counts.lab)}
+      ${auditCountCard(t("gray_balance_label", "灰平衡"), comparison.counts.gray)}
+      ${auditCountCard(t("audit_report_density_label", "密度"), comparison.counts.density, t("audit_report_loaded_label", "已加载"))}
+    </div>
+    <div class="audit-report-grid">
+      ${auditMiniTable("TVI 50%", [t("channel_label", "通道"), t("audit_report_value_label", "报告"), t("audit_report_delta_label", "偏差"), t("audit_report_tolerance_label", "容差"), t("audit_report_result_label", "结果")], tvi50.map((row) => [
+        row.channel,
+        `${fmtAudit(row.report)} / ${fmtAudit(row.targetReport)}`,
+        fmtAudit(row.deltaReport),
+        fmtAudit(row.tolerance),
+        auditStatusBadge(row.auditStatus),
+      ]))}
+      ${auditMiniTable("Lab ΔE", [t("audit_report_patch_label", "色块"), t("audit_report_value_label", "报告"), t("audit_report_tolerance_label", "容差"), t("audit_report_result_label", "结果")], comparison.labRows.map((row) => [
+        `${row.section} ${row.patch}`,
+        fmtAudit(row.report),
+        fmtAudit(row.tolerance),
+        auditStatusBadge(row.auditStatus),
+      ]))}
+      ${auditMiniTable(t("audit_report_gray_delta_h_title", "三灰 ΔH"), [t("audit_report_patch_label", "色块"), t("audit_report_value_label", "报告"), t("audit_report_tolerance_label", "容差"), t("audit_report_result_label", "结果")], comparison.grayRows.map((row) => [
+        row.patch,
+        fmtAudit(row.report),
+        fmtAudit(row.tolerance),
+        auditStatusBadge(row.auditStatus),
+      ]))}
+      ${auditMiniTable(t("audit_report_density_label", "密度"), [t("channel_label", "通道"), t("target_label", "目标"), t("audit_report_value_label", "报告"), t("audit_report_delta_label", "偏差"), t("audit_report_result_label", "结果")], densitySolids.map((row) => [
+        row.channel,
+        fmtAudit(row.target),
+        fmtAudit(row.print),
+        fmtAudit(row.delta),
+        auditStatusBadge(row.auditStatus),
+      ]))}
+    </div>
+    <p class="audit-report-note">${escapeHtml(t("audit_report_scope_note", "这是客户验厂报告摘要对照；照片报告不是完整 CGATS/P2P 原始测量文件，因此密度和评分先作为审核参考，不作为完整认证复算。"))}</p>
+  `;
+}
+
+function auditCountCard(label, count, passLabel = t("status_pass", "Pass")) {
+  const level = count.check ? "warning" : "pass";
+  const checkLabel = t("audit_report_check_label", "Check");
+  const reviewLabel = t("audit_report_review_label", "Review");
+  const isReferenceOnly = passLabel !== t("status_pass", "Pass") && count.review === count.total;
+  const strongValue = isReferenceOnly ? `${count.total}` : `${count.pass}/${count.total}`;
+  return `
+    <div class="audit-count-card ${level}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(strongValue)}</strong>
+      <small>${escapeHtml(isReferenceOnly ? passLabel : `${passLabel} ${count.pass}`)}${count.review && !isReferenceOnly ? ` / ${escapeHtml(reviewLabel)} ${escapeHtml(String(count.review))}` : ""}${count.check ? ` / ${escapeHtml(checkLabel)} ${escapeHtml(String(count.check))}` : ""}</small>
+    </div>
+  `;
+}
+
+function auditMiniTable(title, headers, rows) {
+  return `
+    <div class="audit-mini-table">
+      <strong>${escapeHtml(title)}</strong>
+      <table>
+        <thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${formatAuditCell(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function formatAuditCell(cell) {
+  return cell?.html ? cell.html : escapeHtml(cell);
+}
+
+function fmtAudit(value) {
+  if (value === null || value === undefined || value === "") return "N/A";
+  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  return String(value);
+}
+
+function auditStatusBadge(status) {
+  const normalized = status || "Review";
+  const statusMap = {
+    Pass: ["pass", t("status_pass", "Pass")],
+    Check: ["warning", t("audit_report_check_label", "Check")],
+    Review: ["review", t("audit_report_review_label", "Review")],
+    Reference: ["review", t("audit_report_reference_label", "Reference")],
+  };
+  const [level, label] = statusMap[normalized] || ["review", normalized];
+  return { html: `<span class="status ${level}">${escapeHtml(label)}</span>` };
 }
 
 function renderIccGenerationGate(gate) {

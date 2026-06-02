@@ -1,4 +1,4 @@
-import { t } from "./translations.js?v=20260525-statusbar-pass-1";
+import { t } from "./translations.js";
 
 export const DELTA_FORMULA_LABELS = {
   de76: "ΔE*ab — CIE 1976",
