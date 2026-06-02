@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "sourceExample": "samples/sml-printspec-audit-example.json",
+  "temporaryImportFile": "/private/tmp/curvestudio-sml-report-review/sml-printspec-tvi-import.csv",
+  "verificationScope": {
+    "tvi": "Loaded the report-derived CSV through CurveStudio parseImportText, then ran buildDiagnosticRows with per-channel PrintSpec target TVI points.",
+    "labDeltaE": "Recomputed CIE 1976 deltaE from the transcribed target and print Lab values.",
+    "substrate": "Recomputed absolute L/a/b axis errors from the transcribed target and print Lab values.",
+    "grayBalance": "Recomputed DeltaH as sqrt(deltaA^2 + deltaB^2), matching the photographed PrintSpec report values.",
+    "density": "Loaded as report reference values only; CurveStudio does not yet have a dedicated PrintSpec density-audit module."
+  },
+  "result": {
+    "importerRows": 20,
+    "tvi": {
+      "rows": 20,
+      "pass": 20,
+      "check": 0
+    },
+    "substrate": {
+      "rows": 3,
+      "pass": 3,
+      "check": 0
+    },
+    "labDeltaE": {
+      "rows": 8,
+      "pass": 8,
+      "check": 0
+    },
+    "grayBalance": {
+      "rows": 3,
+      "pass": 3,
+      "check": 0
+    },
+    "density": {
+      "rows": 20,
+      "loaded": 20
+    }
+  },
+  "sampleComparisons": {
+    "tvi50": [
+      { "channel": "C", "engineMeasuredTvi": 17.2, "reportMeasuredTvi": 17.2, "engineTargetTvi": 14.3, "reportTargetTvi": 14.3, "engineDelta": 2.9, "reportDelta": 2.9 },
+      { "channel": "M", "engineMeasuredTvi": 17.1, "reportMeasuredTvi": 17.1, "engineTargetTvi": 14.3, "reportTargetTvi": 14.3, "engineDelta": 2.8, "reportDelta": 2.8 },
+      { "channel": "Y", "engineMeasuredTvi": 16.9, "reportMeasuredTvi": 16.9, "engineTargetTvi": 14.3, "reportTargetTvi": 14.3, "engineDelta": 2.6, "reportDelta": 2.6 },
+      { "channel": "K", "engineMeasuredTvi": 17.3, "reportMeasuredTvi": 17.3, "engineTargetTvi": 17.0, "reportTargetTvi": 17.0, "engineDelta": 0.3, "reportDelta": 0.3 }
+    ],
+    "labDeltaE": [
+      { "patch": "Cyan", "computed": 4.08, "report": 4.08 },
+      { "patch": "Magenta", "computed": 4.44, "report": 4.44 },
+      { "patch": "Yellow", "computed": 2.31, "report": 2.31 },
+      { "patch": "Black", "computed": 2.00, "report": 2.00 },
+      { "patch": "Red", "computed": 9.62, "report": 9.62 },
+      { "patch": "Green", "computed": 7.27, "report": 7.27 },
+      { "patch": "Violet", "computed": 4.14, "report": 4.14 },
+      { "patch": "CMY Black", "computed": 7.84, "report": 7.83 }
+    ],
+    "grayBalanceDeltaH": [
+      { "patch": "Light Grey", "computed": 1.80, "report": 1.79 },
+      { "patch": "Mid Grey", "computed": 1.99, "report": 1.99 },
+      { "patch": "Dark Grey", "computed": 1.39, "report": 1.39 }
+    ]
+  },
+  "conclusion": "The transcribed report data is internally consistent with CurveStudio's current TVI parser/diagnostic engine and with CIE 1976 Lab recomputation. The only gap is product scope: the photographed report is not a full CGATS/P2P measurement file, so CurveStudio cannot yet reproduce the full PrintSpec audit screen without a dedicated audit-report/example mode."
+}

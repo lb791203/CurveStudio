@@ -102,7 +102,7 @@ For CTV mode, the same compensation pipeline uses `measured_ctv - target_ctv` as
 
 When spectral-only measurement files are used, the current density estimate is visibly marked as `status_t_spectral` / `ISO Status-T 密度`. The Settings page can disable spectral density conversion with `None`; DIN / ISO-I / Status-E remain planned, disabled options until their weighting data is validated against official/vendor references.
 
-The `数据接入` page compares software-calculated ISO 20654 CTV against vendor/instrument CTV fields when present. X-Rite i1Pro workflows should first export CGATS/IT8/CSV from X-Rite/i1Profiler/ColorPort with Lab, XYZ, or spectral data. If the file also contains `CTV`, `SCTV`, `instrument_ctv`, `measured_ctv`, or similar columns, the page reports software CTV, instrument CTV, ΔCTV, and Pass/Warning/Fail. This is a data/vendor cross-check only; it does not validate the compensation curve.
+The Import Measurement page compares software-calculated ISO 20654 CTV against vendor/instrument CTV fields when present. X-Rite i1Pro workflows should first export CGATS/IT8/CSV from X-Rite/i1Profiler/ColorPort with Lab, XYZ, or spectral data. If the file also contains `CTV`, `SCTV`, `instrument_ctv`, `measured_ctv`, or similar columns, the page reports software CTV, instrument CTV, ΔCTV, and Pass/Warning/Fail. This is a data/vendor cross-check only; it does not validate the compensation curve. Direct instrument SDK support is tracked in [SDK_INTEGRATION_PLAN.md](./SDK_INTEGRATION_PLAN.md); raw SDK/HID responses are blocked from writing measurement rows until Lab/density/spectral values are parsed.
 
 Curve validation starts from the generated compensation result. The Curve page now includes a compensation simulation table: it uses the first measured press response curve to estimate the printed tone after applying the current recommended output tone. This helps check whether the proposed TVI/CTV correction moves each point toward the target before making a second proof/press run. Formal validation still requires applying the curve, printing again, and remeasuring.
 
@@ -131,16 +131,17 @@ The result table shows a manual-entry reference for Kodak Prinergy Harmony, Koda
 - Lab verification supports ΔE76, ΔE94, ΔE2000, and CMC formula selection from Settings.
 - CTV fallback and Status-T spectral-density warnings are visible in Curve and Export.
 - Data/vendor cross-check reports ISO 20654 software CTV, instrument CTV, ΔCTV, and missing-field status.
+- SDK/HID instrument reads cannot create fake measurement rows; raw-only responses must be parsed before entering the manual measurement table.
 - Curve simulation reports estimated post-compensation tone, residual deviation, and improvement/worsening before the second measurement run.
 
 ## Next engineering steps
 
 - Add Status-E spectral-density weights only after official/vendor reference values are available.
 - Validate ISO 20654 CTV results against real X-Rite i1Pro and Techkon exports from measured test charts.
+- Advance direct Techkon/X-Rite SDK integration through the DeviceAdapter contract in `SDK_INTEGRATION_PLAN.md`.
 - Turn G7 preview into certification-level NPDC / gray-balance verification once the exact P2P target mapping is finalized.
 - Wire the prepared `storagePlan` to real file-backed job archives once Tauri file APIs are available.
 - Evaluate CxF and RWXF from real X-Rite / Techkon exports.
-- Add TECHKON device integration on macOS if the vendor SDK or HID protocol is available.
 - Package as Tauri app for signed macOS distribution.
 
 ## Validation

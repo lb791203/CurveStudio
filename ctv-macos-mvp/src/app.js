@@ -14,17 +14,17 @@ import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCu
 import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260524-tone-tolerance-note";
 import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260525-statusbar-pass-1";
 import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260521-icc-p4";
-import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260525-statusbar-pass-1";
+import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260602-audit-report-print-1";
 import { buildG7Compensation } from "./g7-compensation.js";
 import { renderCurveChart, renderMeasurementChart, renderLabChromaticityChart, renderG7Charts, renderCompensationSimulationChart } from "./chart-renderer.js?v=20260523-lab-fill";
 import { buildIccGenerationGate } from "./icc-generation-gate.js?v=20260525-statusbar-pass-1";
-import { DEVICE_ADAPTERS, buildMeasurementQueue, calibrateDeviceState, changeDeviceAdapterState, connectDeviceState, disconnectDeviceState, readDevicePatchState, isTauriAvailable } from "./device-adapter.js";
+import { DEVICE_ADAPTERS, buildMeasurementQueue, buildSdkMeasurementRow, calibrateDeviceState, changeDeviceAdapterState, connectDeviceState, disconnectDeviceState, readDevicePatchState, sdkDeviceLabel, isTauriAvailable } from "./device-adapter.js";
 import { inspectImport } from "./import-inspector.js?v=20260525-statusbar-pass-1";
 import { buildIccStandardPair } from "./icc-pairing.js?v=20260521-icc-p4";
 import { parseIccProfile } from "./icc-profile.js?v=20260521-icc-p4";
 import { openTextFileDesktop, saveTextFileDesktop, saveBinaryFileDesktop } from "./desktop-io.js";
 import { buildIccExportPackage, exportMeasurementToCgats } from "./icc-generator.js";
-import { t, updateDomTranslations, getLanguage, setLanguage } from "./translations.js?v=20260525-statusbar-pass-1";
+import { t, updateDomTranslations, getLanguage, setLanguage } from "./translations.js";
 import {
   canCalculateCurve,
   defaultManualRow,
@@ -47,6 +47,7 @@ import { buildCompensationSimulation } from "./compensation-simulation.js";
 import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
 import { STANDARD_LIBRARY, addOrUpdateCustomStandard, buildPatchMap, cmykKey, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260524-standards-files";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
+import { auditMeasurementCsv } from "./audit-report.js";
 
 const CUSTOM_STANDARDS_KEY = "ctv-custom-standards";
 const HIDDEN_STANDARDS_KEY = "ctv-hidden-standards";
@@ -190,6 +191,7 @@ const els = {
   deviceQueueBody: document.querySelector("#deviceQueueBody"),
   exportSummary: document.querySelector("#exportSummary"),
   reportSummary: document.querySelector("#reportSummary"),
+  reportAuditComparison: document.querySelector("#reportAuditComparison"),
   reportG7Conclusion: document.querySelector("#reportG7Conclusion"),
   reportLabSummary: document.querySelector("#reportLabSummary"),
   reportCurveSummary: document.querySelector("#reportCurveSummary"),
@@ -257,6 +259,7 @@ const state = {
   activeCurveChannel: "all",
   selectedPatchIndex: null,
   selectedJobKey: "",
+  auditReport: null,
   lastSavedRunSignature: "",
   settings: {
     densityFilter: "status_t",
@@ -851,6 +854,7 @@ function cloneData(value) {
 
 function parseAndCalculate(options = {}) {
   if (!options.skipConfirm && !confirmDataOverwrite(t("confirm_parse_overwrite", "解析文本数据会替换当前工作区数据。"))) return;
+  if (!options.preserveAuditReport) state.auditReport = null;
   state.importInfo = parseImportText(els.rawInput.value, { densityFilter: state.settings.densityFilter });
   state.measurements = state.importInfo.measurements;
   state.manualRows = [];
@@ -862,6 +866,7 @@ function parseAndCalculate(options = {}) {
 }
 
 function importMeasurementText(text) {
+  state.auditReport = null;
   const incoming = parseImportText(text, { densityFilter: state.settings.densityFilter });
   if (!incoming.measurements.length) {
     window.alert(t("import_no_usable_measurements", "导入文件没有可计算测点，请检查文件格式或测量字段。"));
@@ -901,9 +906,24 @@ async function loadSelectedSample() {
     kba162Curve5Run2: "./reference-data/measurements/kba162-shenghui/kba162-p2p51-curve5-run2.txt",
     p2p51: "./reference-data/measurements/g7-training/P2P51_2019-01-24_13h28_M1_3-2.txt",
     tc1617: "./reference-data/measurements/g7-training/G7_T1617_P2_1_M1.txt",
+    smlPrintSpecAudit: "./samples/sml-printspec-audit-example.json",
   };
+  if (selected === "smlPrintSpecAudit") {
+    const report = await responseJson(samplePaths.smlPrintSpecAudit);
+    state.auditReport = report;
+    els.rawInput.value = auditMeasurementCsv(report);
+    els.jobCustomerInput.value = report.job?.customerName || els.jobCustomerInput.value;
+    els.jobPressInput.value = report.job?.machineModel || report.job?.pressPrinter || els.jobPressInput.value;
+    els.jobPaperInput.value = report.job?.substrateName || els.jobPaperInput.value;
+    els.jobDeviceInput.value = report.source?.software || els.jobDeviceInput.value;
+    els.jobNoteInput.value = `${report.source?.software || "Audit report"} summary sample; not a full CGATS/P2P measurement file.`;
+    parseAndCalculate({ skipConfirm: true, preserveAuditReport: true });
+    switchView("report");
+    return;
+  }
   const response = await fetch(samplePaths[selected] || samplePaths.sample);
   els.rawInput.value = await response.text();
+  state.auditReport = null;
   parseAndCalculate({ skipConfirm: true });
   if (selected === "ctvLab") {
     els.modeSelect.value = "ctv";
@@ -925,9 +945,16 @@ async function loadSelectedSample() {
   }
 }
 
+async function responseJson(path) {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error(`Cannot load ${path}: ${response.status}`);
+  return response.json();
+}
+
 async function loadManualPreset(key) {
   const preset = (await loadKbaPresets())[key];
   if (!preset) return;
+  state.auditReport = null;
   state.manualRows = kbaPresetRows(preset);
   state.manualDirty = false;
   state.curveOverrides = {};
@@ -997,7 +1024,7 @@ async function connectDevice() {
         state.device.vendorId = dev.vendor_id;
         state.device.productId = dev.product_id;
         state.device.productName = dev.product_string || "未知设备";
-        state.device.message = `已连接设备: ${state.device.productName} (VID: 0x${dev.vendor_id.toString(16)}, PID: 0x${dev.product_id.toString(16)})`;
+        state.device.message = `已连接设备: ${sdkDeviceLabel(dev)}`;
       }
     } catch (e) {
       state.device.connected = false;
@@ -1068,21 +1095,10 @@ async function readDevicePatch() {
         productId: state.device.productId
       });
 
-      const row = defaultManualRow({
-        patchType: item.patchType,
-        channel: item.channel,
-        tone: item.tone,
-        measuredTone: "",
-        density: res.density || 0,
-        labL: res.lab.l,
-        labA: res.lab.a,
-        labB: res.lab.b,
-        source: "仪器测量",
-        note: `SDK读取 ${item.label}: ${res.message || ""}`,
-      });
+      const row = buildSdkMeasurementRow(item, res);
 
       state.device.queueIndex = queueIndex + 1;
-      state.device.message = `已成功读取 ${item.label} (L*:${res.lab.l.toFixed(2)}, a*:${res.lab.a.toFixed(2)}, b*:${res.lab.b.toFixed(2)})`;
+      state.device.message = `已成功读取 ${item.label} (L*:${row.labL.toFixed(2)}, a*:${row.labA.toFixed(2)}, b*:${row.labB.toFixed(2)})`;
 
       state.manualRows.push(row);
       markManualDirty();
@@ -1610,6 +1626,8 @@ function switchView(view) {
     item.classList.toggle("active", item.dataset.subViewButton === view);
   });
 
+  if (view === "report") _renderReport(state, els);
+  if (view === "export") _renderExport(state, els);
   if (els.workflowContextToolbar) els.workflowContextToolbar.hidden = true;
 }
 

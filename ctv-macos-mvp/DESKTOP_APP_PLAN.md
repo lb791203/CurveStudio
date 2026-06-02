@@ -32,9 +32,10 @@ The first Windows milestone is installer architecture, not device SDK integratio
 1. Keep calculation, import, standards, G7, ICC gate, and export logic in shared JavaScript modules.
 2. Keep desktop-only filesystem dialogs behind the existing Tauri bridge.
 3. Keep future Techkon/X-Rite SDK work behind `DeviceAdapter` so Windows SDK support does not change curve logic.
-4. Validate `npm run verify:release` before each Windows installer build.
-5. Build Windows installers with `npm run tauri:build:windows` on Windows hardware/CI.
-6. Verify installer artifacts with `npm run verify:windows-artifacts`; the check requires NSIS `.exe` and MSI `.msi` files with the product name, package version, and a trustworthy file size.
+4. Treat raw SDK/HID responses as diagnostics only until a verified parser produces Lab, density, or spectral data.
+5. Validate `npm run verify:release` before each Windows installer build.
+6. Build Windows installers with `npm run tauri:build:windows` on Windows hardware/CI.
+7. Verify installer artifacts with `npm run verify:windows-artifacts`; the check requires NSIS `.exe` and MSI `.msi` files with the product name, package version, and a trustworthy file size.
 
 GitHub Actions entrypoint: `.github/workflows/windows-installer.yml`. It runs on `windows-latest`, executes the release gate, builds the Windows installers, verifies the artifacts, and uploads the installer files for download.
 
@@ -43,7 +44,7 @@ GitHub Actions entrypoint: `.github/workflows/windows-installer.yml`. It runs on
 - Replace browser download links with Tauri save-file dialogs.
 - Add open-project dialog for JSON archives.
 - Store recent jobs in a local application data directory.
-- Keep SDK/device integration behind `DeviceAdapter` so Techkon/X-Rite support can be added without changing curve logic.
+- Continue SDK/device integration from [SDK_INTEGRATION_PLAN.md](./SDK_INTEGRATION_PLAN.md): first stabilize the bridge contract, then add vendor-specific parsers.
 - Add Windows signing, installer naming, update-channel decisions, and a real install/uninstall smoke test after the first NSIS/MSI CI artifact succeeds.
 
 ## ICC workflow roadmap

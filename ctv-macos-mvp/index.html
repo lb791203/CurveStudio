@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CurveStudio</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f766e'/%3E%3Cpath d='M12 44c12 0 10-24 22-24s10 24 18 24' fill='none' stroke='white' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./src/styles.css?v=20260525-statusbar-pass-1" />
+    <link rel="stylesheet" href="./src/styles.css?v=20260602-audit-report-print-1" />
   </head>
   <body>
     <main class="app-shell" data-active-step="acquisition">
@@ -94,7 +94,7 @@
               <button class="sub-nav-button" type="button" data-sub-view-button="curve" data-parent-step="curves" data-translate="subnav_curve">补偿生成</button>
 
               <!-- Delivery Sub-tabs -->
-              <button class="sub-nav-button" type="button" data-sub-view-button="report" data-parent-step="delivery" data-translate="subnav_report">现场报告</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="report" data-parent-step="delivery" data-translate="subnav_report">客户/验厂报告</button>
               <button class="sub-nav-button" type="button" data-sub-view-button="export" data-parent-step="delivery" data-translate="subnav_export">数据导出</button>
             </div>
           </div>
@@ -290,6 +290,7 @@
                   <option value="ctvLab">CTV Lab 计算样例</option>
                   <option value="p2p51">P2P51 G7 测量样例</option>
                   <option value="tc1617">TC1617 G7 测量样例</option>
+                  <option value="smlPrintSpecAudit">SML Viet Nam / XL-75-6C 验厂报告</option>
                   <option value="sample">通用 CSV 示例</option>
                 </select>
                 <button id="loadSampleButton" type="button">载入</button>
@@ -826,21 +827,22 @@
           <section class="panel wide-panel report-panel">
             <div class="table-title">
               <div>
-                <h2>现场报告</h2>
-                <span>汇总 Job、标准、曲线、Lab、G7 和 Run 对比，供现场复盘、打印或留档。</span>
+                <h2 data-translate="report_title">客户/验厂报告</h2>
+                <span data-translate="report_subtitle">汇总客户、验厂、曲线、Lab、G7 和复测信息，供审核、打印或留档。</span>
               </div>
               <div class="inline-actions report-actions">
-                <button id="printReportButton" type="button">打印报告</button>
+                <button id="printReportButton" type="button" data-translate="print_report_btn">打印纸质报告</button>
               </div>
             </div>
             <div id="reportSummary" class="report-grid"></div>
+            <div id="reportAuditComparison" class="summary-box audit-report-panel" hidden></div>
           </section>
 
           <section class="panel wide-panel report-panel">
             <div class="table-title">
               <div>
-                <h2>G7 结论</h2>
-                <span>状态、主要问题和复测建议。</span>
+                <h2 data-translate="report_sec_g7">G7 灰平衡校验结论</h2>
+                <span data-translate="report_g7_subtitle">状态、主要问题和复测建议。</span>
               </div>
             </div>
             <div id="reportG7Conclusion" class="summary-box"></div>
@@ -850,8 +852,8 @@
             <section class="panel wide-panel report-panel">
               <div class="table-title">
                 <div>
-                  <h2>Lab / ΔE 校验</h2>
-                  <span>纸白、实地、叠印色和灰平衡色块的色差摘要。</span>
+                  <h2 data-translate="report_sec_lab">Lab / ΔE 校验</h2>
+                  <span data-translate="report_lab_subtitle">纸白、实地、叠印色和灰平衡色块的色差摘要。</span>
                 </div>
               </div>
               <div id="reportLabSummary" class="summary-box"></div>
@@ -860,8 +862,8 @@
             <section class="panel wide-panel report-panel">
               <div class="table-title">
                 <div>
-                  <h2>曲线质量</h2>
-                  <span>补偿曲线安全检查、TVI 偏差和生产建议。</span>
+                  <h2 data-translate="report_sec_curve">曲线质量</h2>
+                  <span data-translate="report_curve_subtitle">补偿曲线安全检查、TVI 偏差和生产建议。</span>
                 </div>
               </div>
               <div id="reportCurveSummary" class="summary-box"></div>
@@ -871,20 +873,11 @@
           <section class="panel wide-panel report-panel">
             <div class="table-title">
               <div>
-                <h2>Run 对比</h2>
+                <h2 data-translate="report_sec_run">复测对比</h2>
+                <span data-translate="report_run_subtitle">保存两次以上 Run 后显示补偿前后变化。</span>
               </div>
             </div>
             <div id="reportRunCompare" class="summary-box"></div>
-          </section>
-
-          <section class="panel wide-panel report-panel">
-            <div class="table-title">
-              <div>
-                <h2>ICC 生成闸门</h2>
-                <span>检查复测 Run、特性化色块、Lab、G7 和曲线质量是否达到生成 ICC 的最低条件。</span>
-              </div>
-            </div>
-            <div id="reportIccGate" class="summary-box"></div>
           </section>
         </section>
 
@@ -1179,6 +1172,6 @@
       </section>
     </div>
 
-  <script type="module" src="./src/app.js?v=20260525-statusbar-pass-1"></script>
+  <script type="module" src="./src/app.js?v=20260602-audit-report-print-1"></script>
   </body>
 </html>

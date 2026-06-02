@@ -11,7 +11,7 @@ export const TRANSLATIONS = {
     "nav_analysis": "补偿曲线",
     "nav_g7": "G7 验证",
     "nav_export": "数据导出",
-    "nav_report": "现场报告",
+    "nav_report": "客户/验厂报告",
     "nav_settings": "高级设置",
 
     // Sub Navigation Tabs
@@ -24,7 +24,7 @@ export const TRANSLATIONS = {
     "subnav_diagnose": "印刷诊断",
     "subnav_g7": "G7 灰平衡",
     "subnav_curve": "补偿生成",
-    "subnav_report": "现场报告",
+    "subnav_report": "客户/验厂报告",
     "subnav_export": "数据导出",
 
     // Setup Panel
@@ -141,13 +141,40 @@ export const TRANSLATIONS = {
     "icc_gate_detail_summary": "展开详细检查项",
 
     // Report Panel
-    "report_title": "现场报告",
-    "report_subtitle": "按 Command+P 或 Ctrl+P 打印当前报告为 PDF 文件存档。",
+    "report_title": "客户/验厂报告",
+    "report_subtitle": "汇总客户、验厂、曲线、Lab、G7 和复测信息，供审核、打印或留档。",
     "report_sec_g7": "G7 灰平衡校验结论",
     "report_sec_lab": "Lab 色彩精度校验结论",
     "report_sec_curve": "补偿曲线质量与 TVI 校验结论",
-    "report_sec_run": "复测 Run 数据校验对比结论",
-    "print_report_btn": "打印纸质报告",
+    "report_sec_run": "复测对比",
+    "report_g7_subtitle": "状态、主要问题和复测建议。",
+    "report_lab_subtitle": "纸白、实地、叠印色和灰平衡色块的色差摘要。",
+    "report_curve_subtitle": "补偿曲线安全检查、TVI 偏差和生产建议。",
+    "report_run_subtitle": "保存两次以上 Run 后显示补偿前后变化。",
+    "print_report_btn": "打印 / PDF 报告",
+    "report_cover_eyebrow": "客户验厂 / 曲线复测",
+    "report_cover_summary": "面向现场审核的 TVI / CTV / G7 曲线、Lab 色差和复测状态摘要。",
+    "audit_report_compare_title": "客户 / 验厂报告对照",
+    "audit_report_conclusion_title": "验厂摘要",
+    "audit_report_overall_status_label": "总状态",
+    "audit_report_findings_label": "报告要点",
+    "audit_report_score_label": "标准评分",
+    "audit_report_level_label": "等级",
+    "audit_report_substrate_label": "纸张",
+    "audit_report_density_label": "密度",
+    "audit_report_reference_label": "参考",
+    "audit_report_loaded_label": "已加载",
+    "audit_report_check_label": "复核",
+    "audit_report_review_label": "待复核",
+    "audit_report_result_label": "结果",
+    "audit_report_computed_label": "复算",
+    "audit_report_value_label": "报告",
+    "audit_report_delta_label": "偏差",
+    "audit_report_tolerance_label": "容差",
+    "audit_report_patch_label": "色块",
+    "audit_report_gray_delta_h_title": "三灰 ΔH",
+    "audit_report_print_hint": "报告内置容差用于现场复核；带待复核的项目建议人工确认照片或原报告。",
+    "audit_report_scope_note": "这是客户验厂报告摘要对照；照片报告不是完整 CGATS/P2P 原始测量文件，因此密度和评分先作为审核参考，不作为完整认证复算。",
 
     // Settings Panel
     "settings_title": "高级设置",
@@ -389,7 +416,7 @@ export const TRANSLATIONS = {
     "rename_button": "重命名",
     "delete_button": "删除",
     "open_button": "打开",
-    "report_run_compare_need_two": "保存至少两次 Run 后，这里会显示补偿前后 TVI、ΔE、G7 和曲线质量变化。",
+    "report_run_compare_need_two": "当前 Job 至少保存两次 Run 后，这里会显示补偿前后 TVI、ΔE、G7 和曲线质量变化。",
     "empty_run_list_help": "保存 Run 后，这里会形成作业列表；每个作业下面可以保留多次 Run。",
     "selected_job_no_run": "这个作业还没有保存 Run。",
     "import_label": "导入",
@@ -540,7 +567,7 @@ export const TRANSLATIONS = {
     "nav_analysis": "Curve",
     "nav_g7": "G7",
     "nav_export": "Export",
-    "nav_report": "Report",
+    "nav_report": "Customer / Audit Report",
     "nav_settings": "Settings",
 
     // Sub Navigation Tabs
@@ -553,7 +580,7 @@ export const TRANSLATIONS = {
     "subnav_diagnose": "Diagnostics",
     "subnav_g7": "G7 Balance",
     "subnav_curve": "Compensation",
-    "subnav_report": "Field Report",
+    "subnav_report": "Customer / Audit Report",
     "subnav_export": "Data Export",
 
     // Setup Panel
@@ -670,13 +697,40 @@ export const TRANSLATIONS = {
     "icc_gate_detail_summary": "Show detailed checks",
 
     // Report Panel
-    "report_title": "Field Report",
-    "report_subtitle": "Press Command+P or Ctrl+P to print or save as PDF.",
+    "report_title": "Customer / Audit Report",
+    "report_subtitle": "Summarize customer, audit, curve, Lab, G7, and remeasurement data for review, printing, and archiving.",
     "report_sec_g7": "G7 Gray Balance Report",
     "report_sec_lab": "Lab Accuracy Report",
     "report_sec_curve": "Comp Curve & TVI Quality",
-    "report_sec_run": "Run Comparisons",
-    "print_report_btn": "Print PDF Report",
+    "report_sec_run": "Remeasurement Comparison",
+    "report_g7_subtitle": "Status, main issues, and remeasurement recommendations.",
+    "report_lab_subtitle": "Color-difference summary for paper white, solids, overprints, and gray-balance patches.",
+    "report_curve_subtitle": "Compensation curve safety check, TVI delta, and production recommendations.",
+    "report_run_subtitle": "Shows pre/post-compensation changes after at least two Runs are saved.",
+    "print_report_btn": "Print / PDF Report",
+    "report_cover_eyebrow": "Customer Audit / Remeasurement",
+    "report_cover_summary": "Field-audit summary for TVI / CTV / G7 curves, Lab color difference, and remeasurement status.",
+    "audit_report_compare_title": "Customer / Audit Report Check",
+    "audit_report_conclusion_title": "Audit Summary",
+    "audit_report_overall_status_label": "Overall Status",
+    "audit_report_findings_label": "Report Findings",
+    "audit_report_score_label": "Standard Score",
+    "audit_report_level_label": "Level",
+    "audit_report_substrate_label": "Substrate",
+    "audit_report_density_label": "Density",
+    "audit_report_reference_label": "Reference",
+    "audit_report_loaded_label": "Loaded",
+    "audit_report_check_label": "Check",
+    "audit_report_review_label": "Review",
+    "audit_report_result_label": "Result",
+    "audit_report_computed_label": "Recomputed",
+    "audit_report_value_label": "Report",
+    "audit_report_delta_label": "Delta",
+    "audit_report_tolerance_label": "Tolerance",
+    "audit_report_patch_label": "Patch",
+    "audit_report_gray_delta_h_title": "Three-gray ΔH",
+    "audit_report_print_hint": "Built-in tolerances are for field review; Review items should be checked against the photo or original report.",
+    "audit_report_scope_note": "This is a customer audit-report summary check. The photographed report is not a complete CGATS/P2P raw measurement file, so density and scoring are kept as audit references, not a full certification recalculation.",
 
     // Settings Panel
     "settings_title": "Advanced Settings",
@@ -918,7 +972,7 @@ export const TRANSLATIONS = {
     "rename_button": "Rename",
     "delete_button": "Delete",
     "open_button": "Open",
-    "report_run_compare_need_two": "Save at least two Runs to show pre/post-compensation changes in TVI, ΔE, G7, and curve quality.",
+    "report_run_compare_need_two": "Save at least two Runs in the current Job to show pre/post-compensation changes in TVI, ΔE, G7, and curve quality.",
     "empty_run_list_help": "Saved Runs will appear here as a job list; each job can keep multiple Runs.",
     "selected_job_no_run": "This job has no saved Runs yet.",
     "import_label": "Import",
@@ -1106,7 +1160,10 @@ const STATIC_TEXT_ZH_EN = {
   "第 4 步：复测归档": "Step 4: Remeasure & Archive",
   "第 5 步：交付归档": "Step 5: Delivery",
   "未加载测量数据": "No measurement data loaded",
+  "未导入数据": "Not imported",
+  "未加载": "Not loaded",
   "等待诊断": "Awaiting diagnosis",
+  "导入或录入 CMYK 阶调数据后才能诊断。": "Import or enter CMYK tone-ramp data before running diagnostics.",
   "保存 Run 后，这里会形成作业列表；每个作业下面可以保留多次 Run。": "Saved Runs will appear here as a job list; each job can keep multiple Runs.",
   "还没有保存 Run。": "No saved Run yet.",
   "Job / Run 项目记录": "Job / Run Records",
@@ -1375,6 +1432,7 @@ const STATIC_TEXT_ZH_EN = {
   "偏低，但中间调 TVI 接近正常，需复查密度/网点测量条件。": "is low, but midtone TVI is near normal; recheck density/tone measurement conditions.",
   "这类矛盾通常来自实地密度、阶调点、版材状态或测量条件不一致，建议复测后再定正式曲线。": "This mismatch usually comes from inconsistent solid density, tone points, plate condition, or measurement conditions. Remeasure before finalizing the production curve.",
   "G7 数据不足": "Insufficient G7 Data",
+  "G7 数据不完整，不能作为正式验收": "G7 data incomplete; not valid for formal acceptance",
   "不能作为正式 G7 验收": "Not valid for formal G7 acceptance",
   "当前缺少 G7 所需的 K-only NPDC、CMY gray 灰平衡或可比 Lab 数据。": "Missing K-only NPDC, CMY gray-balance, or comparable Lab data required for G7.",
   "需要补齐": "Required",
@@ -1875,6 +1933,11 @@ function translateDynamicZhText(text) {
     if (output.includes(source)) output = output.split(source).join(target);
   }
   output = output
+    .replace(/无主要 G7 问题/g, "No main G7 issues")
+    .replace(/主要问题无变化/g, "No main issue changes")
+    .replace(/已解决/g, "Resolved")
+    .replace(/新增/g, "New")
+    .replace(/仍存在/g, "Still present")
     .replace(/(\d+)\s*个色块/g, "$1 patches")
     .replace(/(\d+)\s*色块/g, "$1 patches")
     .replace(/(\d+)\s*列 x (\d+)\s*行/g, "$1 columns x $2 rows")

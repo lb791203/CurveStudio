@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "exampleType": "customer-audit-report",
+  "source": {
+    "software": "Mellow Colour PrintSpec",
+    "sourceType": "photo-transcribed-example",
+    "note": "Data manually transcribed from SML Viet Nam factory-audit report photos. Use as CurveStudio report-layout and data-model reference, not as a certified measurement file."
+  },
+  "job": {
+    "customerName": "SML Viet Nam",
+    "supplier": "SML Viet Nam",
+    "pressPrinter": "XL-75-6C",
+    "machineModel": "XL-75-6C",
+    "technology": "Offset",
+    "ink": "Dabang",
+    "substrateName": "FSC 300LX3143B",
+    "screenRulingLpi": 175,
+    "printSample": "WKD_SWT_03_04 MO:314102+314103 21",
+    "datePrinted": "2024-06-26",
+    "timePrinted": "07:40:59"
+  },
+  "standard": {
+    "name": "ISO 12647-2:2007 Offset Status T / Paper 2 Matt / Curve A+B / Black / Status T",
+    "observer": "2°",
+    "illuminant": "D50 (F8)",
+    "densityFilter": "Status T",
+    "measurementCondition": "M0",
+    "backing": "Black"
+  },
+  "auditSummary": {
+    "standardScorePercent": 98,
+    "standardScoreLevel": 3,
+    "overallStatus": "Pass",
+    "primaryFindings": [
+      "Solid colour Delta E values are within the shown tolerance of 5.00.",
+      "Overprint Delta E values are high for Red, Green, and CMY Black, but the photographed report shows N/A tolerance for overprints.",
+      "TVI values are close to the target curves; CMY spread shown as 0.2 against a 5.0 tolerance.",
+      "Three-colour grey Delta H values are within the shown tolerance of 2.00."
+    ]
+  },
+  "substrate": {
+    "patch": "White",
+    "targetLab": { "l": 92.0, "a": 0.0, "b": -3.0 },
+    "printLab": { "l": 94.21, "a": 0.64, "b": -3.19 },
+    "isoTolerance": { "l": 3.0, "a": 2.0, "b": 2.0 },
+    "error": { "l": 2.21, "a": 0.64, "b": 0.19 }
+  },
+  "solidColours": [
+    {
+      "patch": "Cyan",
+      "channel": "C",
+      "targetLab": { "l": 54.0, "a": -36.0, "b": -49.0 },
+      "printLab": { "l": 57.68, "a": -35.8, "b": -47.25 },
+      "toleranceDeltaE": 5.0,
+      "printDeltaE": 4.08
+    },
+    {
+      "patch": "Magenta",
+      "channel": "M",
+      "targetLab": { "l": 46.0, "a": 72.0, "b": -5.0 },
+      "printLab": { "l": 50.23, "a": 71.94, "b": -6.34 },
+      "toleranceDeltaE": 5.0,
+      "printDeltaE": 4.44
+    },
+    {
+      "patch": "Yellow",
+      "channel": "Y",
+      "targetLab": { "l": 87.0, "a": -6.0, "b": 90.0 },
+      "printLab": { "l": 88.36, "a": -6.09, "b": 88.14 },
+      "toleranceDeltaE": 5.0,
+      "printDeltaE": 2.31
+    },
+    {
+      "patch": "Black",
+      "channel": "K",
+      "targetLab": { "l": 16.0, "a": 0.0, "b": 0.0 },
+      "printLab": { "l": 17.96, "a": 0.35, "b": 0.21 },
+      "toleranceDeltaE": 5.0,
+      "printDeltaE": 2.0
+    }
+  ],
+  "overprints": [
+    {
+      "patch": "Red",
+      "channels": "MY",
+      "targetLab": { "l": 46.0, "a": 67.0, "b": 47.0 },
+      "printLab": { "l": 49.39, "a": 63.46, "b": 38.72 },
+      "toleranceDeltaE": null,
+      "printDeltaE": 9.62
+    },
+    {
+      "patch": "Green",
+      "channels": "CY",
+      "targetLab": { "l": 49.0, "a": -66.0, "b": 24.0 },
+      "printLab": { "l": 52.15, "a": -59.55, "b": 25.17 },
+      "toleranceDeltaE": null,
+      "printDeltaE": 7.27
+    },
+    {
+      "patch": "Violet",
+      "channels": "CM",
+      "targetLab": { "l": 24.0, "a": 16.0, "b": -45.0 },
+      "printLab": { "l": 28.14, "a": 16.12, "b": -44.93 },
+      "toleranceDeltaE": null,
+      "printDeltaE": 4.14
+    },
+    {
+      "patch": "CMY Black",
+      "channels": "CMY",
+      "targetLab": { "l": 22.0, "a": 0.0, "b": 0.0 },
+      "printLab": { "l": 28.52, "a": -1.45, "b": -4.1 },
+      "toleranceDeltaE": null,
+      "printDeltaE": 7.83
+    }
+  ],
+  "tviDotGain": [
+    {
+      "channel": "C",
+      "target": { "0": 0.0, "25": 9.3, "50": 14.3, "75": 12.3, "100": 0.0 },
+      "print": { "0": 0.0, "25": 11.3, "50": 17.2, "75": 12.0, "100": 0.0 }
+    },
+    {
+      "channel": "M",
+      "target": { "0": 0.0, "25": 9.3, "50": 14.3, "75": 12.3, "100": 0.0 },
+      "print": { "0": 0.0, "25": 11.2, "50": 17.1, "75": 14.4, "100": 0.0 }
+    },
+    {
+      "channel": "Y",
+      "target": { "0": 0.0, "25": 9.3, "50": 14.3, "75": 12.3, "100": 0.0 },
+      "print": { "0": 0.0, "25": 9.8, "50": 16.9, "75": 12.7, "100": 0.0 }
+    },
+    {
+      "channel": "K",
+      "target": { "0": 0.0, "25": 12.1, "50": 17.0, "75": 13.4, "100": 0.0 },
+      "print": { "0": 0.0, "25": 11.5, "50": 17.3, "75": 14.1, "100": 0.0 }
+    }
+  ],
+  "density": [
+    {
+      "channel": "C",
+      "target": { "0": 0.08, "25": 0.25, "50": 0.49, "75": 0.85, "100": 1.4 },
+      "print": { "0": 0.07, "25": 0.25, "50": 0.5, "75": 0.8, "100": 1.26 }
+    },
+    {
+      "channel": "M",
+      "target": { "0": 0.08, "25": 0.25, "50": 0.5, "75": 0.86, "100": 1.45 },
+      "print": { "0": 0.07, "25": 0.25, "50": 0.5, "75": 0.86, "100": 1.27 }
+    },
+    {
+      "channel": "Y",
+      "target": { "0": 0.06, "25": 0.22, "50": 0.43, "75": 0.72, "100": 1.05 },
+      "print": { "0": 0.05, "25": 0.21, "50": 0.44, "75": 0.7, "100": 0.99 }
+    },
+    {
+      "channel": "K",
+      "target": { "0": 0.08, "25": 0.28, "50": 0.54, "75": 0.94, "100": 1.7 },
+      "print": { "0": 0.07, "25": 0.26, "50": 0.53, "75": 0.94, "100": 1.6 }
+    }
+  ],
+  "threeColourGreys": [
+    {
+      "patch": "Light Grey",
+      "targetLab": { "l": null, "a": 0.49, "b": -2.46 },
+      "printLab": { "l": 76.61, "a": 2.2, "b": -1.91 },
+      "toleranceDeltaH": 2.0,
+      "printDeltaH": 1.79
+    },
+    {
+      "patch": "Mid Grey",
+      "targetLab": { "l": null, "a": 0.36, "b": -1.81 },
+      "printLab": { "l": 60.86, "a": 2.33, "b": -1.5 },
+      "toleranceDeltaH": 2.0,
+      "printDeltaH": 1.99
+    },
+    {
+      "patch": "Dark Grey",
+      "targetLab": { "l": null, "a": 0.22, "b": -1.09 },
+      "printLab": { "l": 43.31, "a": 0.81, "b": -2.35 },
+      "toleranceDeltaH": 2.0,
+      "printDeltaH": 1.39
+    }
+  ]
+}

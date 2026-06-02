@@ -97,19 +97,17 @@ fn sdk_read_patch(vendor_id: u16, product_id: u16) -> Result<serde_json::Value, 
 
         let response = String::from_utf8_lossy(&read_buf[..bytes_read]);
         return Ok(serde_json::json!({
-            "status": "success",
-            "message": format!("Techkon measurement raw: {}", response),
-            "lab": { "l": 50.0, "a": 20.0, "b": -30.0 },
-            "density": 1.25
+            "status": "raw",
+            "parsed": false,
+            "message": format!("Techkon measurement response captured but not parsed yet: {}", response),
+            "raw_response": response.to_string()
         }));
     }
 
-    // Default mock response for X-Rite / generic USB HID
     Ok(serde_json::json!({
-        "status": "success",
-        "message": "Instrument measurement succeeded.",
-        "lab": { "l": 55.4, "a": -36.2, "b": -48.1 },
-        "density": 1.35
+        "status": "blocked",
+        "parsed": false,
+        "message": "This instrument was opened, but its SDK/protocol parser is not implemented yet."
     }))
 }
 

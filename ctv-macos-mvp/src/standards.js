@@ -2,17 +2,64 @@ import { TARGETS } from "./curve-engine.js";
 import { number } from "./shared.js";
 import { labFromSpectralRow } from "./spectral-color.js";
 
-const COMMON_TOLERANCE = {
-  deltaE: { warning: 3.5, fail: 4.2 },
-  g7: {
-    enabled: true,
-    npdcAverage: 1.5,
-    npdcMax: 3,
-    grayAverage: 1.5,
-    grayMax: 3,
-    grayInflection: "",
+const CHANNELS = ["C", "M", "Y", "K"];
+const TOLERANCE_TONES = [25, 50, 75];
+
+function buildToneTolerances({ tvi = [3, 4, 3], ctv = [3, 3, 3] } = {}) {
+  return Object.fromEntries(CHANNELS.map((channel) => [
+    channel,
+    {
+      tvi: Object.fromEntries(TOLERANCE_TONES.map((tone, index) => [tone, tvi[index] ?? tvi[1] ?? 3])),
+      ctv: Object.fromEntries(TOLERANCE_TONES.map((tone, index) => [tone, ctv[index] ?? ctv[1] ?? 3])),
+    },
+  ]));
+}
+
+const ACCEPTANCE_PRESETS = {
+  gracolG7: {
+    acceptancePreset: "GRACoL / G7 field audit",
+    toneTolerances: buildToneTolerances({ tvi: [3, 4, 3], ctv: [3, 3, 3] }),
+    deltaE: { warning: 3.5, fail: 4.2 },
+    g7: {
+      enabled: true,
+      npdcAverage: 1.5,
+      npdcMax: 3,
+      grayAverage: 1.5,
+      grayMax: 3,
+      grayInflection: "",
+    },
+  },
+  fograProcess: {
+    acceptancePreset: "FOGRA process-control field audit",
+    toneTolerances: buildToneTolerances({ tvi: [4, 5, 4], ctv: [3, 4, 3] }),
+    deltaE: { warning: 4, fail: 5 },
+    g7: {
+      enabled: false,
+      npdcAverage: 1.5,
+      npdcMax: 3,
+      grayAverage: 1.5,
+      grayMax: 3,
+      grayInflection: "",
+    },
+  },
+  isoTviOnly: {
+    acceptancePreset: "ISO TVI-only field audit",
+    toneTolerances: buildToneTolerances({ tvi: [4, 5, 4], ctv: [4, 4, 4] }),
+    deltaE: { warning: 4, fail: 5 },
+    g7: {
+      enabled: false,
+      npdcAverage: 2,
+      npdcMax: 4,
+      grayAverage: 2,
+      grayMax: 4,
+      grayInflection: "",
+    },
   },
 };
+
+function acceptancePreset(id) {
+  return cloneStandard(ACCEPTANCE_PRESETS[id] || ACCEPTANCE_PRESETS.gracolG7);
+}
 
 const COATED_SOLID_DENSITY_RANGES = {
   C: [1.25, 1.65],
@@ -37,7 +84,7 @@ const CRPC_STANDARDS = Array.from({ length: 7 }, (_, index) => {
     target: "isoA",
     referencePath: `./reference-data/standards/cgats21-iso15339/CGATS21-2-CRPC${crpc}.txt`,
     solidDensityRanges: COATED_SOLID_DENSITY_RANGES,
-    ...COMMON_TOLERANCE,
+    ...acceptancePreset("gracolG7"),
   };
 });
 
@@ -50,7 +97,7 @@ const BUILT_IN_STANDARD_LIBRARY = [
     target: "isoA",
     referencePath: "./reference-data/standards/patchtool/FOGRA39.txt",
     solidDensityRanges: COATED_SOLID_DENSITY_RANGES,
-    ...COMMON_TOLERANCE,
+    ...acceptancePreset("fograProcess"),
   },
   {
     id: "iso_tvi_a",
@@ -58,7 +105,7 @@ const BUILT_IN_STANDARD_LIBRARY = [
     printCondition: "TVI target only",
     target: "isoA",
     solidDensityRanges: BROAD_SOLID_DENSITY_RANGES,
-    ...COMMON_TOLERANCE,
+    ...acceptancePreset("isoTviOnly"),
   },
   {
     id: "iso_tvi_b",
@@ -66,7 +113,7 @@ const BUILT_IN_STANDARD_LIBRARY = [
     printCondition: "TVI target only",
     target: "isoB",
     solidDensityRanges: BROAD_SOLID_DENSITY_RANGES,
-    ...COMMON_TOLERANCE,
+    ...acceptancePreset("isoTviOnly"),
   },
   {
     id: "iso_tvi_c",
@@ -74,7 +121,7 @@ const BUILT_IN_STANDARD_LIBRARY = [
     printCondition: "TVI target only",
     target: "isoC",
     solidDensityRanges: BROAD_SOLID_DENSITY_RANGES,
-    ...COMMON_TOLERANCE,
+    ...acceptancePreset("isoTviOnly"),
   },
   {
     id: "iso_tvi_d",
@@ -82,7 +129,7 @@ const BUILT_IN_STANDARD_LIBRARY = [
     printCondition: "TVI target only",
     target: "isoD",
     solidDensityRanges: BROAD_SOLID_DENSITY_RANGES,
-    ...COMMON_TOLERANCE,
+    ...acceptancePreset("isoTviOnly"),
   },
   {
     id: "iso_tvi_e",
@@ -90,7 +137,7 @@ const BUILT_IN_STANDARD_LIBRARY = [
     printCondition: "TVI target only",
     target: "isoE",
     solidDensityRanges: BROAD_SOLID_DENSITY_RANGES,
-    ...COMMON_TOLERANCE,
+    ...acceptancePreset("isoTviOnly"),
   },
   {
     id: "iso_tvi_f",
@@ -98,7 +145,7 @@ const BUILT_IN_STANDARD_LIBRARY = [
     printCondition: "TVI target only",
     target: "isoF",
     solidDensityRanges: BROAD_SOLID_DENSITY_RANGES,
-    ...COMMON_TOLERANCE,
+    ...acceptancePreset("isoTviOnly"),
   },
 ];
 

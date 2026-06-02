@@ -702,10 +702,12 @@ test("renderReport summarizes field report sections", () => {
     },
     runs: [
       {
+        jobKey: "job-a",
         createdAt: "Run2",
         metrics: { avgTviDelta: 3, maxDeltaE: 4, g7Status: "Warning", g7ConclusionTitle: "边界", g7PriorityItems: [], curveWarnings: 1, curveDangers: 0, curveQualityStatus: "Warning", channelTvi: { K: 3 } },
       },
       {
+        jobKey: "job-a",
         createdAt: "Run1",
         metrics: { avgTviDelta: 7, maxDeltaE: 8, g7Status: "Fail", g7ConclusionTitle: "失败", g7PriorityItems: ["Fail: 灰平衡最大 Ch"], curveWarnings: 2, curveDangers: 1, curveQualityStatus: "Blocked", channelTvi: { K: 7 } },
       },
@@ -722,6 +724,44 @@ test("renderReport summarizes field report sections", () => {
   assert.match(localEls.reportRunCompare.innerHTML, /已解决/);
   assert.doesNotMatch(localEls.reportRunCompare.innerHTML, /<strong>Run 对比/);
   assert.equal(localEls.printReportButton.disabled, false);
+});
+
+test("renderReport compares only runs from the current job", () => {
+  const localEls = els({
+    jobPaperInput: { value: "Coated" },
+    jobDeviceInput: { value: "X-Rite eXact" },
+    jobOperatorInput: { value: "LB" },
+    jobNoteInput: { value: "" },
+  });
+  const localState = state({
+    selectedJobKey: "job-a",
+    measurements: [{ channel: "K", tone: 50, measuredTone: 66 }],
+    results: [{ channel: "K", tone: 50, tviDelta: 4.5 }],
+    runs: [
+      {
+        jobKey: "job-b",
+        createdAt: "Unrelated latest",
+        metrics: { avgTviDelta: 1, maxDeltaE: 1, g7Status: "Pass", g7ConclusionTitle: "无关", g7PriorityItems: [], curveWarnings: 0, curveDangers: 0, curveQualityStatus: "Ready", channelTvi: { K: 1 } },
+      },
+      {
+        jobKey: "job-a",
+        createdAt: "Job A remeasure",
+        metrics: { avgTviDelta: 3, maxDeltaE: 4, g7Status: "Warning", g7ConclusionTitle: "边界", g7PriorityItems: [], curveWarnings: 1, curveDangers: 0, curveQualityStatus: "Warning", channelTvi: { K: 3 } },
+      },
+      {
+        jobKey: "job-a",
+        createdAt: "Job A first",
+        metrics: { avgTviDelta: 7, maxDeltaE: 8, g7Status: "Fail", g7ConclusionTitle: "失败", g7PriorityItems: ["Fail: 灰平衡最大 Ch"], curveWarnings: 2, curveDangers: 1, curveQualityStatus: "Blocked", channelTvi: { K: 7 } },
+      },
+    ],
+  });
+
+  renderReport(localState, localEls);
+
+  assert.match(localEls.reportRunCompare.innerHTML, /Job A remeasure/);
+  assert.match(localEls.reportRunCompare.innerHTML, /Job A first/);
+  assert.doesNotMatch(localEls.reportRunCompare.innerHTML, /Unrelated latest/);
+  assert.match(localEls.reportRunCompare.innerHTML, /已解决/);
 });
 
 test("renderInstrument shows i1Pro cross verification rows", () => {

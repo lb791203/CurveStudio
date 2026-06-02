@@ -5,7 +5,7 @@ import { renderCompensationSimulationChart, renderCurveChart, renderG7Charts, re
 import { curveRowKey } from "../curve-overrides.js?v=20260521-icc-p4";
 import { escapeAttr, escapeHtml } from "../shared.js?v=20260521-icc-p4";
 import { deltaFormulaLabel, methodLabel } from "../ui-labels.js?v=20260521-icc-p4";
-import { t, translateDynamicText } from "../translations.js?v=20260525-statusbar-pass-1";
+import { t, translateDynamicText } from "../translations.js";
 import { fmt, num, signed, kpiCard, statusClass, labText } from "./helpers.js?v=20260525-statusbar-pass-1";
 import { visibleWarnings } from "./data.js?v=20260525-statusbar-pass-1";
 
