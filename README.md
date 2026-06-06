@@ -54,7 +54,7 @@ CurveStudio is currently an MVP. The initial focus is to make the core calibrati
 
 ## Repository structure
 
-- `docs/` — technical documentation and roadmap
+- `docs/` — technical documentation, roadmap, and maintenance plan
 - `examples/` — sample measurement datasets
 - `screenshots/` — application screenshots and image guidelines
 - `README.md` — project overview
@@ -65,6 +65,7 @@ CurveStudio is currently an MVP. The initial focus is to make the core calibrati
 - [Curve calculation notes](docs/curve-calculation.md)
 - [G7 / CTV workflow notes](docs/g7-ctv-workflow.md)
 - [Roadmap](docs/roadmap.md)
+- [Maintenance plan](docs/maintenance-plan.md)
 
 ## Example datasets
 
