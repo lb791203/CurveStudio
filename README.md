@@ -14,6 +14,8 @@ Commercial calibration and curve-management tools are often expensive, closed-so
 - Visualizing tone curves for technical review
 - Preparing data that can later be exported into RIP-compatible curve formats
 
+CurveStudio is based on a long-standing idea from real offset printing production work. In the printing industry, curve calibration tools are usually commercial, closed-source, or tied to specific vendor workflows. CurveStudio aims to make TVI / CTV / G7 compensation curve calculation more transparent, practical, and accessible. It appears to be one of the first open-source macOS tools focused specifically on this print-calibration workflow.
+
 ## Current scope
 
 CurveStudio is currently an MVP. The initial focus is to make the core calibration workflow clear and maintainable:
