@@ -52,6 +52,26 @@ CurveStudio is currently an MVP. The initial focus is to make the core calibrati
 4. Review measured curves, target curves, and compensation curves.
 5. Export the calculated correction values for RIP curve preparation.
 
+## Screenshots
+
+### Generate compensation curve
+
+![Generate Curve](screenshots/generate-curve.jpg)
+
+CurveStudio compares measured TVI / CTV data against target curves and generates compensation output values for RIP curve preparation.
+
+### Import measurement data
+
+![Import Measurement](screenshots/import-measurement.jpg)
+
+The import workflow parses CGATS / IT8 measurement data, checks usable tone points, and prepares the dataset for curve calculation.
+
+### Diagnostics and Lab chart
+
+![Diagnostics](screenshots/diagnostics-lab-chart.jpg)
+
+The diagnostics view helps review density, Lab, delta E, target-to-measured offset, and possible measurement or press-condition issues.
+
 ## Repository structure
 
 - `docs/` — technical documentation, roadmap, and maintenance plan
@@ -70,16 +90,6 @@ CurveStudio is currently an MVP. The initial focus is to make the core calibrati
 ## Example datasets
 
 Sample datasets are included under `examples/` to demonstrate typical CMYK press measurement inputs and compensation curve outputs.
-
-## Screenshots
-
-Application screenshots should be placed in the `screenshots/` directory after running the macOS app locally.
-
-Recommended filenames:
-
-- `screenshots/main-window.png`
-- `screenshots/curve-analysis.png`
-- `screenshots/export-panel.png`
 
 ## Maintainer
 
