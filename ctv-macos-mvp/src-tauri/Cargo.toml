@@ -1,6 +1,6 @@
 [package]
 name = "curvestudio"
-version = "0.1.12"
+version = "1.0.1"
 description = "TVI / CTV / G7 compensation curve desktop app"
 authors = ["FM PRINT"]
 edition = "2021"
