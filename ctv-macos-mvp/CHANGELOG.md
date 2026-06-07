@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased
+## 1.0.1 - 2026-06-08
 
+- Optimize field audit report layout, scoring logic, standard curves, and unify UI button styles.
+- Support importing ICC profiles directly within standard library.
+- Fix manual measurement tab auto-jumping issues.
+- Rename step 4 to '报告与导出' (Reports & Exports).
 - Added a release audit script for version alignment, duplicate translation keys, English UI text, and generic RIP wording.
 - Added `npm run verify:release` as the pre-package release gate.
 - Added a Node-only local static server for Windows-friendly preview.
