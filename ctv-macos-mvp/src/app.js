@@ -492,7 +492,7 @@ function attachEvents() {
   els.checkUpdateButton?.addEventListener("click", () => {
     setProductInfoTab("updates");
     if (els.updateStatusText) {
-      els.updateStatusText.textContent = "当前版本 0.1.12；在线更新服务尚未启用。市场版将通过应用市场更新，官网版后续接入检查更新。";
+      els.updateStatusText.textContent = "当前版本 1.0.1；在线更新服务尚未启用。市场版将通过应用市场更新，官网版后续接入检查更新。";
     }
   });
   window.addEventListener("keydown", (event) => {
