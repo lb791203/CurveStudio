@@ -206,7 +206,11 @@ export function buildLabVerificationRows({ manualRows, measurements, rawRows = [
       deltaE00,
       deltaECMC: deltaECMCValue,
       deltaFormula: formula,
-      status: !Number.isFinite(deltaE) ? "Missing Target" : deltaE >= fail ? "Fail" : deltaE >= warning ? "Warning" : "Pass",
+      status: !Number.isFinite(deltaE)
+        ? "Missing Target"
+        : (isPaperCmyk(item.cmyk) || isSolidCmyk(item.cmyk, "C") || isSolidCmyk(item.cmyk, "M") || isSolidCmyk(item.cmyk, "Y") || isSolidCmyk(item.cmyk, "K"))
+          ? (deltaE >= fail ? "Fail" : deltaE >= warning ? "Warning" : "Pass")
+          : "Review",
     };
   });
 }

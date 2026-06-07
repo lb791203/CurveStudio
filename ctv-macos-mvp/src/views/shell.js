@@ -6,9 +6,16 @@ import { compareRuns, formatMetricChange } from "../run-compare.js?v=20260521-ic
 import { escapeAttr, escapeHtml } from "../shared.js";
 import { t, translateDynamicText } from "../translations.js";
 import { algorithmDescription, deltaFormulaLabel } from "../ui-labels.js";
-import { num, statusClass } from "./helpers.js?v=20260525-statusbar-pass-1";
+import { displayPatchLabel, num, statusClass } from "./helpers.js?v=20260604-patch-labels-1";
 import { targetName, visibleWarnings } from "./data.js?v=20260525-statusbar-pass-1";
 import { buildAuditReportComparison } from "../audit-report.js";
+
+const SML_ISO_12647_2_2007_DENSITY_TARGETS = {
+  C: { 0: 0.08, 25: 0.25, 50: 0.49, 75: 0.85, 100: 1.4 },
+  M: { 0: 0.08, 25: 0.25, 50: 0.5, 75: 0.86, 100: 1.45 },
+  Y: { 0: 0.06, 25: 0.22, 50: 0.43, 75: 0.72, 100: 1.05 },
+  K: { 0: 0.08, 25: 0.28, 50: 0.54, 75: 0.94, 100: 1.7 },
+};
 
 export function renderShell(state, els) {
   const channels = channelsPresent(state.measurements);
@@ -340,72 +347,797 @@ export function renderReport(state, els) {
 function renderAuditReportComparison(state, els) {
   if (!els.reportAuditComparison) return;
   const comparison = buildAuditReportComparison(state.auditReport);
-  if (!comparison) {
+  const hasAuditOrData = Boolean(comparison || state.measurements?.length || state.results?.length || state.labRows?.length);
+  if (typeof document !== "undefined") {
+    const reportView = document.querySelector(".view[data-view='report']");
+    if (reportView) {
+      reportView.classList.toggle("has-audit-report", hasAuditOrData);
+    }
+  }
+  if (!hasAuditOrData) {
     els.reportAuditComparison.hidden = true;
     els.reportAuditComparison.innerHTML = "";
     return;
   }
   els.reportAuditComparison.hidden = false;
+  const productionPanel = renderProductionAuditReport(state, els);
+  if (!comparison) {
+    els.reportAuditComparison.innerHTML = productionPanel;
+    return;
+  }
   const tvi50 = comparison.tviRows.filter((row) => Math.abs(row.tone - 50) < 0.01);
   const densitySolids = comparison.densityRows.filter((row) => Math.abs(row.tone - 100) < 0.01);
   const findingItems = comparison.overall.primaryFindings || [];
   els.reportAuditComparison.innerHTML = `
-    <div class="audit-report-head">
-      <div>
-      <strong>${escapeHtml(t("audit_report_compare_title", "客户 / 验厂报告对照"))}</strong>
-        <p>${escapeHtml(comparison.title)} / ${escapeHtml(comparison.subtitle)}</p>
-        <small>${escapeHtml(t("audit_report_print_hint", "报告内置容差用于现场复核；带 Review 的项目建议人工确认照片或原报告。"))}</small>
+    ${productionPanel}
+    <div class="audit-source-review">
+      <div class="audit-report-head">
+        <div>
+          <strong>${escapeHtml(t("audit_report_compare_title", "来源验厂报告复核"))}</strong>
+          <p>${escapeHtml(comparison.title)} / ${escapeHtml(comparison.subtitle)}</p>
+          <small>${escapeHtml(t("audit_report_print_hint", "用于核对照片/验厂报告转录值；带 Review 的项目表示原报告未给出明确容差，需要人工确认。"))}</small>
+        </div>
+        <div class="audit-score-card">
+          <span>${escapeHtml(t("audit_report_score_label", "标准评分"))}</span>
+          <strong>${escapeHtml(String(comparison.overall.standardScorePercent ?? "N/A"))}%</strong>
+          <small>${escapeHtml(t("audit_report_level_label", "等级"))} ${escapeHtml(String(comparison.overall.standardScoreLevel ?? "N/A"))}</small>
+        </div>
       </div>
-      <div class="audit-score-card">
-        <span>${escapeHtml(t("audit_report_score_label", "标准评分"))}</span>
-        <strong>${escapeHtml(String(comparison.overall.standardScorePercent ?? "N/A"))}%</strong>
-        <small>${escapeHtml(t("audit_report_level_label", "等级"))} ${escapeHtml(String(comparison.overall.standardScoreLevel ?? "N/A"))}</small>
+      <div class="audit-conclusion-card">
+        <div>
+          <strong>${escapeHtml(t("audit_report_conclusion_title", "验厂摘要"))}</strong>
+          <p>${escapeHtml(t("audit_report_overall_status_label", "总状态"))}: <span class="status ${statusClass(comparison.overall.overallStatus || "Review")}">${escapeHtml(comparison.overall.overallStatus || t("status_review", "待复核"))}</span></p>
+        </div>
+        ${findingItems.length ? `<div><strong>${escapeHtml(t("audit_report_findings_label", "报告要点"))}</strong>${reportList("", findingItems)}</div>` : ""}
+      </div>
+      <div class="audit-count-grid">
+        ${auditCountCard("TVI", comparison.counts.tvi)}
+        ${auditCountCard(t("audit_report_substrate_label", "纸张"), comparison.counts.substrate)}
+        ${auditCountCard("Lab ΔE", comparison.counts.lab)}
+        ${auditCountCard(t("gray_balance_label", "灰平衡"), comparison.counts.gray)}
+        ${auditCountCard(t("audit_report_density_label", "密度"), comparison.counts.density, t("audit_report_loaded_label", "已加载"))}
+      </div>
+      <div class="audit-report-grid">
+        ${auditMiniTable("TVI 50%", [t("channel_label", "通道"), t("audit_report_value_label", "报告"), t("audit_report_delta_label", "偏差"), t("audit_report_tolerance_label", "容差"), t("audit_report_result_label", "结果")], tvi50.map((row) => [
+          row.channel,
+          `${fmtAudit(row.report)} / ${fmtAudit(row.targetReport)}`,
+          fmtAudit(row.deltaReport),
+          fmtAudit(row.tolerance),
+          auditStatusBadge(row.auditStatus),
+        ]))}
+        ${auditMiniTable("Lab ΔE", [t("audit_report_patch_label", "色块"), t("audit_report_value_label", "报告"), t("audit_report_tolerance_label", "容差"), t("audit_report_result_label", "结果")], comparison.labRows.map((row) => [
+          `${row.section} ${row.patch}`,
+          fmtAudit(row.report),
+          fmtAudit(row.tolerance),
+          auditStatusBadge(row.auditStatus),
+        ]))}
+        ${auditMiniTable(t("audit_report_gray_delta_h_title", "三灰 ΔH"), [t("audit_report_patch_label", "色块"), t("audit_report_value_label", "报告"), t("audit_report_tolerance_label", "容差"), t("audit_report_result_label", "结果")], comparison.grayRows.map((row) => [
+          row.patch,
+          fmtAudit(row.report),
+          fmtAudit(row.tolerance),
+          auditStatusBadge(row.auditStatus),
+        ]))}
+        ${auditMiniTable(t("audit_report_density_label", "密度"), [t("channel_label", "通道"), t("target_label", "目标"), t("audit_report_value_label", "报告"), t("audit_report_delta_label", "偏差"), t("audit_report_result_label", "结果")], densitySolids.map((row) => [
+          row.channel,
+          fmtAudit(row.target),
+          fmtAudit(row.print),
+          fmtAudit(row.delta),
+          auditStatusBadge(row.auditStatus),
+        ]))}
+      </div>
+      <p class="audit-report-note">${escapeHtml(t("audit_report_scope_note", "这是客户验厂报告摘要对照；照片报告不是完整 CGATS/P2P 原始测量文件，因此密度和评分先作为审核参考，不作为完整认证复算。"))}</p>
+    </div>
+  `;
+}
+
+function renderProductionAuditReport(state, els) {
+  const toneRows = productionToneRows(state, els);
+  const labRows = productionLabRows(state);
+  const densityRows = productionDensityRows(state);
+  const solidDensityRows = densityRows.filter((row) => Math.abs(Number(row.tone) - 100) < 0.01);
+  const midtoneDensityRows = densityRows.filter((row) => Math.abs(Number(row.tone) - 50) < 0.01);
+  const grayRows = productionGrayRows(state);
+  const toneCounts = countReportStatus(toneRows);
+  const labCounts = countReportStatus(labRows);
+  const densityCounts = countReportStatus(densityRows);
+  const g7Status = state.g7?.status || t("g7_not_run_label", "G7 Not Run");
+  const reportStatus = state.auditReport?.auditSummary?.overallStatus || reportOverallStatus([
+    ...toneRows.map((row) => row.status),
+    ...labRows.map((row) => row.status),
+    ...grayRows.map((row) => row.status),
+    state.g7?.status,
+  ]);
+  const standardLabel = state.standard?.name || t("not_selected", "Not selected");
+  const condition = state.importInfo?.metadata?.measurement_condition || state.settings?.measurementCondition || t("unspecified_label", "Unspecified");
+
+  return `
+    <div class="audit-report-head audit-production-head">
+      <div>
+        <strong>${escapeHtml(t("production_audit_report_title", "现场验厂报告输出"))}</strong>
+        <p>${escapeHtml(t("production_audit_report_help", "参考客户验厂报告结构，将当前 Run 转成可打印的客户/验厂报告：摘要、判定、TVI/CTV、Lab/ΔE、密度与复测状态。"))}</p>
+        <small>${escapeHtml(t("production_audit_report_standard_note", "报告以当前软件选择的印刷标准、容差、ΔE 公式和测量条件生成。"))}</small>
+      </div>
+      <div class="audit-score-card ${statusClass(reportStatus)}">
+        <span>${escapeHtml(t("overall_result_label", "总判定"))}</span>
+        <strong>${escapeHtml(translateDynamicText(reportStatus))}</strong>
+        <small>${escapeHtml(standardLabel)}</small>
       </div>
     </div>
-    <div class="audit-conclusion-card">
-      <div>
-        <strong>${escapeHtml(t("audit_report_conclusion_title", "验厂摘要"))}</strong>
-        <p>${escapeHtml(t("audit_report_overall_status_label", "总状态"))}: <span class="status ${statusClass(comparison.overall.overallStatus || "Review")}">${escapeHtml(comparison.overall.overallStatus || t("status_review", "待复核"))}</span></p>
-      </div>
-      ${findingItems.length ? `<div><strong>${escapeHtml(t("audit_report_findings_label", "报告要点"))}</strong>${reportList("", findingItems)}</div>` : ""}
+    <div class="audit-report-meta-grid">
+      ${auditMetaCard(t("customer_press_label", "客户 / 机器"), `${els.jobCustomerInput.value || t("not_filled", "Not filled")} / ${els.jobPressInput.value || t("not_filled", "Not filled")}`)}
+      ${auditMetaCard(t("standard_select_label", "印刷标准"), standardLabel)}
+      ${auditMetaCard(t("measurement_condition_label", "测量条件"), condition)}
+      ${auditMetaCard("G7", translateDynamicText(g7Status), statusClass(g7Status))}
     </div>
-    <div class="audit-count-grid">
-      ${auditCountCard("TVI", comparison.counts.tvi)}
-      ${auditCountCard(t("audit_report_substrate_label", "纸张"), comparison.counts.substrate)}
-      ${auditCountCard("Lab ΔE", comparison.counts.lab)}
-      ${auditCountCard(t("gray_balance_label", "灰平衡"), comparison.counts.gray)}
-      ${auditCountCard(t("audit_report_density_label", "密度"), comparison.counts.density, t("audit_report_loaded_label", "已加载"))}
+    <div class="audit-count-grid audit-production-counts">
+      ${auditCountCard("TVI / CTV", toneCounts)}
+      ${auditCountCard("Lab ΔE", labCounts)}
+      ${auditCountCard(t("audit_report_density_label", "密度"), densityCounts, t("audit_report_reference_label", "Reference"))}
+    </div>
+    <div class="audit-chart-grid audit-production-chart-grid">
+      ${auditLineChart(t("production_tone_chart_title", "网点扩张曲线"), toneRows, {
+        yLabel: "TVI",
+        valueKey: "measuredValue",
+        targetKey: "targetValue",
+        suffix: "%",
+        className: "audit-tone-chart",
+      })}
+      ${auditDensityChart(t("solid_density_chart_title", "实地密度目标 / 实测"), solidDensityRows, "audit-solid-density-chart")}
+      ${auditDensityChart(t("midtone_density_chart_title", "50% 密度目标 / 实测"), midtoneDensityRows, "audit-midtone-density-chart")}
+      ${auditLabChart(t("production_lab_chart_title", "Lab a*b* 目标 / 实测"), labRows)}
     </div>
     <div class="audit-report-grid">
-      ${auditMiniTable("TVI 50%", [t("channel_label", "通道"), t("audit_report_value_label", "报告"), t("audit_report_delta_label", "偏差"), t("audit_report_tolerance_label", "容差"), t("audit_report_result_label", "结果")], tvi50.map((row) => [
+      ${auditToneMatrixTable(t("production_tone_table_title", "TVI / CTV 关键网点判定"), toneRows)}
+      ${auditMiniTable(t("production_lab_table_title", "Lab / ΔE 关键色块判定"), [
+        t("audit_report_patch_label", "色块"),
+        t("target_label", "目标"),
+        t("measured_label", "实测"),
+        "ΔE",
+        t("audit_report_tolerance_label", "容差"),
+        t("audit_report_result_label", "结果"),
+      ], labRows.map((row) => [
+        row.label,
+        formatLabTriplet(row.targetLab),
+        formatLabTriplet(row.measuredLab),
+        fmtAudit(row.deltaE),
+        row.tolerance,
+        auditStatusBadge(row.status),
+      ]))}
+      ${auditMiniTable(t("production_density_table_title", "四色实地密度"), [
+        t("channel_label", "通道"),
+        t("target_label", "目标"),
+        t("measured_label", "实测"),
+        t("delta_label", "偏差"),
+        t("audit_report_result_label", "结果"),
+      ], solidDensityRows.map((row) => [
         row.channel,
-        `${fmtAudit(row.report)} / ${fmtAudit(row.targetReport)}`,
-        fmtAudit(row.deltaReport),
-        fmtAudit(row.tolerance),
-        auditStatusBadge(row.auditStatus),
+        formatDensityTarget(row),
+        fmtAudit(row.measured),
+        signedPlain(row.delta),
+        auditStatusBadge(row.status),
       ]))}
-      ${auditMiniTable("Lab ΔE", [t("audit_report_patch_label", "色块"), t("audit_report_value_label", "报告"), t("audit_report_tolerance_label", "容差"), t("audit_report_result_label", "结果")], comparison.labRows.map((row) => [
-        `${row.section} ${row.patch}`,
-        fmtAudit(row.report),
-        fmtAudit(row.tolerance),
-        auditStatusBadge(row.auditStatus),
-      ]))}
-      ${auditMiniTable(t("audit_report_gray_delta_h_title", "三灰 ΔH"), [t("audit_report_patch_label", "色块"), t("audit_report_value_label", "报告"), t("audit_report_tolerance_label", "容差"), t("audit_report_result_label", "结果")], comparison.grayRows.map((row) => [
-        row.patch,
-        fmtAudit(row.report),
-        fmtAudit(row.tolerance),
-        auditStatusBadge(row.auditStatus),
-      ]))}
-      ${auditMiniTable(t("audit_report_density_label", "密度"), [t("channel_label", "通道"), t("target_label", "目标"), t("audit_report_value_label", "报告"), t("audit_report_delta_label", "偏差"), t("audit_report_result_label", "结果")], densitySolids.map((row) => [
+      ${auditMiniTable(t("production_50_density_table_title", "50% 四色密度"), [
+        t("channel_label", "通道"),
+        t("target_label", "目标"),
+        t("measured_label", "实测"),
+        t("delta_label", "偏差"),
+        t("audit_report_result_label", "结果"),
+      ], midtoneDensityRows.map((row) => [
         row.channel,
-        fmtAudit(row.target),
-        fmtAudit(row.print),
-        fmtAudit(row.delta),
-        auditStatusBadge(row.auditStatus),
+        formatDensityTarget(row),
+        fmtAudit(row.measured),
+        signedPlain(row.delta),
+        auditStatusBadge(row.status),
       ]))}
+      ${grayRows.length ? auditMiniTable(t("production_gray_table_title", "三色灰平衡"), [
+        t("audit_report_patch_label", "色块"),
+        t("target_label", "目标"),
+        t("measured_label", "实测"),
+        "ΔH",
+        t("audit_report_tolerance_label", "容差"),
+        t("audit_report_result_label", "结果"),
+      ], grayRows.map((row) => [
+        row.label,
+        formatLabTriplet(row.targetLab),
+        formatLabTriplet(row.measuredLab),
+        fmtAudit(row.deltaH),
+        fmtAudit(row.tolerance),
+        auditStatusBadge(row.status),
+      ])) : ""}
     </div>
-    <p class="audit-report-note">${escapeHtml(t("audit_report_scope_note", "这是客户验厂报告摘要对照；照片报告不是完整 CGATS/P2P 原始测量文件，因此密度和评分先作为审核参考，不作为完整认证复算。"))}</p>
+    <p class="audit-report-note">${escapeHtml(t("production_audit_report_note", "说明：此报告为现场复核和客户沟通版式；正式验收仍以补偿后复测样张、客户标准和设备原始测量文件为准。"))}</p>
   `;
+}
+
+function auditMetaCard(label, value, level = "") {
+  return `
+    <div class="audit-meta-card ${level || ""}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(translateDynamicText(String(value ?? "")))}</strong>
+    </div>
+  `;
+}
+
+function productionToneRows(state, els) {
+  const tones = [25, 50, 75];
+  if (state.auditReport?.tviDotGain?.length) {
+    return ["C", "M", "Y", "K"].flatMap((channel) => {
+      const item = state.auditReport.tviDotGain.find((entry) => entry.channel === channel);
+      if (!item) return [];
+      const tolerance = auditNumber(item.tolerance ?? state.auditReport.auditRules?.tviDotGainTolerance ?? 5);
+      return tones.map((tone) => {
+        const targetValue = auditNumber(item.target?.[String(tone)]);
+        const measuredValue = auditNumber(item.print?.[String(tone)]);
+        const delta = measuredValue - targetValue;
+        return {
+          channel,
+          tone,
+          targetValue,
+          measuredValue,
+          delta,
+          tolerance,
+          status: reportToleranceStatus(Math.abs(delta), tolerance),
+        };
+      }).filter((row) => Number.isFinite(row.targetValue) || Number.isFinite(row.measuredValue));
+    });
+  }
+  return ["C", "M", "Y", "K"].flatMap((channel) =>
+    tones.map((tone) => {
+      const row = nearestReportToneRow(state.results || [], channel, tone);
+      if (!row) return null;
+      const tolerance = reportToneTolerance(state, els, channel, tone);
+      const measuredValue = Number.isFinite(Number(row.measuredTvi))
+        ? Number(row.measuredTvi)
+        : Number(row.measuredTone) - Number(row.tone);
+      let targetValue = Number.isFinite(Number(row.targetTvi))
+        ? Number(row.targetTvi)
+        : Number(row.targetTone) - Number(row.tone);
+      if (state.standard?.id === "sml_printspec_xl75_6c") {
+        if (channel === "K") {
+          if (tone === 25) targetValue = 12.1;
+          else if (tone === 50) targetValue = 17.0;
+          else if (tone === 75) targetValue = 13.4;
+        } else {
+          if (tone === 25) targetValue = 9.3;
+          else if (tone === 50) targetValue = 14.3;
+          else if (tone === 75) targetValue = 12.3;
+        }
+      }
+      const delta = measuredValue - targetValue;
+      return {
+        channel,
+        tone: Number(row.tone),
+        targetValue,
+        measuredValue,
+        delta,
+        tolerance,
+        status: reportToleranceStatus(Math.abs(delta), tolerance),
+      };
+    }).filter(Boolean)
+  );
+}
+
+function nearestReportToneRow(rows, channel, tone) {
+  const candidates = (rows || []).filter((row) => row.channel === channel && Number.isFinite(Number(row.tone)) && Number.isFinite(Number(row.tviDelta)));
+  if (!candidates.length) return null;
+  return candidates.reduce((best, row) => {
+    const distance = Math.abs(Number(row.tone) - tone);
+    return !best || distance < best.distance ? { row, distance } : best;
+  }, null)?.row || null;
+}
+
+function reportToneTolerance(state, els, channel, tone) {
+  const mode = els.modeSelect?.value === "ctv" ? "ctv" : "tvi";
+  const byStandard = state.standard?.toneTolerances?.[channel]?.[mode]?.[String(tone)];
+  if (Number.isFinite(Number(byStandard))) return Number(byStandard);
+  return tone === 50 ? 4 : 3;
+}
+
+function productionLabRows(state) {
+  if (state.auditReport) {
+    const report = state.auditReport;
+    const rows = [];
+    if (report.substrate?.targetLab || report.substrate?.printLab) {
+      rows.push({
+        label: t("paper_white_label", "纸白"),
+        targetLab: report.substrate.targetLab,
+        measuredLab: report.substrate.printLab,
+        deltaE: labDeltaForReport(report.substrate.printLab, report.substrate.targetLab),
+        tolerance: "L 3 / a*b* 2",
+        status: substrateStatus(report.substrate),
+      });
+    }
+    for (const row of report.solidColours || []) {
+      const tolerance = auditNumber(row.toleranceDeltaE);
+      const deltaE = auditNumber(row.printDeltaE);
+      rows.push({
+        label: `${row.channel || patchChannel(row.patch)} ${t("solid_patch_suffix", "实地")}`,
+        targetLab: row.targetLab,
+        measuredLab: row.printLab,
+        deltaE,
+        tolerance: formatDeltaEToleranceLabel({ fail: tolerance }),
+        status: Number.isFinite(tolerance) ? reportToleranceStatus(deltaE, tolerance).replace("Warning", "Fail") : "Review",
+      });
+    }
+    for (const row of report.overprints || []) {
+      const tolerance = auditNumber(row.toleranceDeltaE);
+      const deltaE = auditNumber(row.printDeltaE);
+      rows.push({
+        label: `${row.channels || patchChannel(row.patch)} ${t("overprint_patch_suffix", "叠印")}`,
+        targetLab: row.targetLab,
+        measuredLab: row.printLab,
+        deltaE,
+        tolerance: formatDeltaEToleranceLabel({ fail: tolerance }),
+        status: Number.isFinite(tolerance) ? reportToleranceStatus(deltaE, tolerance).replace("Warning", "Fail") : "Review",
+      });
+    }
+    return rows;
+  }
+  const warning = Number(state.standard?.deltaE?.warning ?? 3.5);
+  const fail = Number(state.standard?.deltaE?.fail ?? 4.2);
+  return (state.labRows || [])
+    .filter((row) => Number.isFinite(Number(row.deltaE)) || row.status)
+    .slice(0, 12)
+    .map((row) => {
+      const deltaE = Number(row.deltaE);
+      const isPaper = row.cmyk && ["c", "m", "y", "k"].every((ch) => Math.abs(row.cmyk[ch] || 0) < 0.01);
+      const isSolid = row.cmyk && ["C", "M", "Y", "K"].some((channel) => {
+        const values = { C: row.cmyk.c, M: row.cmyk.m, Y: row.cmyk.y, K: row.cmyk.k };
+        const ch = channel;
+        return Math.abs(values[ch] - 100) < 0.01 &&
+          Object.entries(values).every(([cand, val]) => cand === ch || Math.abs(val) < 0.01);
+      });
+      const status = (row.status === "Pass" || row.status === "Warning" || row.status === "Fail" || row.status === "Review")
+        ? row.status
+        : Number.isFinite(deltaE)
+          ? (isPaper || isSolid)
+            ? (deltaE <= warning ? "Pass" : deltaE <= fail ? "Warning" : "Fail")
+            : "Review"
+          : "Review";
+      return {
+        label: customerPatchLabel(row),
+        targetLab: row.referenceLab || row.targetLab || row.standardLab,
+        measuredLab: row.lab || row.measuredLab,
+        deltaE: Number.isFinite(deltaE) ? deltaE : "N/A",
+        tolerance: (isPaper || isSolid) ? formatDeltaEToleranceLabel({ warning, fail }) : "N/A",
+        status,
+      };
+    });
+}
+
+function productionDensityRows(state) {
+  if (state.auditReport?.density?.length) {
+    return (state.auditReport.density || []).flatMap((item) =>
+      [100, 50].map((tone) => {
+        const target = auditNumber(item.target?.[String(tone)]);
+        const measured = auditNumber(item.print?.[String(tone)]);
+        if (!Number.isFinite(target) && !Number.isFinite(measured)) return null;
+        const targetRange = tone === 100 ? standardDensityRange(state.standard, item.channel) : null;
+        return {
+          channel: item.channel,
+          tone,
+          target,
+          targetRange,
+          measured,
+          delta: measured - target,
+          status: tone === 100 ? densityTargetStatus(measured, { value: target, range: targetRange }) : "Reference",
+        };
+      }).filter(Boolean),
+    );
+  }
+  const byChannelKey = new Map();
+  for (const row of state.measurements || []) {
+    const channel = row.channel;
+    const tone = Number(row.tone);
+    const density = Number(row.density);
+    if (!["C", "M", "Y", "K"].includes(channel) || !Number.isFinite(density)) continue;
+    if (Math.abs(tone - 100) <= 0.01 || Math.abs(tone - 50) <= 0.01) {
+      const roundedTone = Math.round(tone);
+      const targetInfo = standardDensityTargetInfo(state.standard, channel, roundedTone);
+      const target = targetInfo.value;
+      const delta = Number.isFinite(target) ? density - target : null;
+      const key = `${channel}_${Math.round(tone)}`;
+      byChannelKey.set(key, {
+        channel,
+        tone: roundedTone,
+        target: Number.isFinite(target) ? target : null,
+        targetRange: targetInfo.range,
+        measured: density,
+        delta,
+        status: densityTargetStatus(density, targetInfo),
+      });
+    }
+  }
+  return ["C", "M", "Y", "K"].flatMap((channel) =>
+    [100, 50].map((tone) => byChannelKey.get(`${channel}_${tone}`)).filter(Boolean)
+  );
+}
+
+function standardDensityTargetInfo(standard, channel, tone) {
+  const direct = auditNumber(
+    standard?.densityTargets?.[channel]?.[String(tone)] ??
+    standard?.densityTargets?.[channel]?.[tone],
+  );
+  const range = tone === 100 ? standardDensityRange(standard, channel) : null;
+  if (Number.isFinite(direct)) return { value: direct, range };
+  const standardText = `${standard?.name || ""} ${standard?.printCondition || ""}`;
+  if (/ISO\s*12647-2:2007\s*Offset/i.test(standardText)) {
+    const smlTarget = auditNumber(SML_ISO_12647_2_2007_DENSITY_TARGETS[channel]?.[tone]);
+    if (Number.isFinite(smlTarget)) return { value: smlTarget, range };
+  }
+  return { value: NaN, range };
+}
+
+function standardDensityRange(standard, channel) {
+  const range = standard?.solidDensityRanges?.[channel];
+  if (!Array.isArray(range) || range.length < 2) return null;
+  const min = auditNumber(range[0]);
+  const max = auditNumber(range[1]);
+  return Number.isFinite(min) && Number.isFinite(max) ? [min, max] : null;
+}
+
+function densityTargetStatus(measured, targetInfo) {
+  if (!Number.isFinite(measured)) return "Review";
+  const [min, max] = targetInfo.range || [];
+  if (Number.isFinite(min) && Number.isFinite(max)) {
+    if (measured >= min && measured <= max) return "Pass";
+    const margin = 0.05;
+    return measured >= min - margin && measured <= max + margin ? "Warning" : "Fail";
+  }
+  return Number.isFinite(targetInfo.value) ? "Reference" : "Reference";
+}
+
+function productionGrayRows(state) {
+  let list = [];
+  if (state.auditReport?.threeColourGreys?.length) {
+    list = state.auditReport.threeColourGreys.map((row) => ({
+      patch: row.patch,
+      targetLab: row.targetLab,
+      printLab: row.printLab,
+      printDeltaH: row.printDeltaH,
+      toleranceDeltaH: row.toleranceDeltaH,
+    }));
+  } else {
+    const rawRows = state.importInfo?.rawRows || [];
+    const light = rawRows.find((r) => r.patch_type === "gray_balance" && (r.sample_id?.includes("Light") || r.sample_name?.includes("Light")));
+    const mid = rawRows.find((r) => r.patch_type === "gray_balance" && (r.sample_id?.includes("Mid") || r.sample_name?.includes("Mid")));
+    const dark = rawRows.find((r) => r.patch_type === "gray_balance" && (r.sample_id?.includes("Dark") || r.sample_name?.includes("Dark")));
+    
+    if (light && mid && dark) {
+      list = [
+        {
+          patch: "Light Grey",
+          targetLab: { a: 0.49, b: -2.46 },
+          printLab: { l: Number(light.lab_l), a: Number(light.lab_a), b: Number(light.lab_b) },
+          toleranceDeltaH: 2.00,
+        },
+        {
+          patch: "Mid Grey",
+          targetLab: { a: 0.36, b: -1.81 },
+          printLab: { l: Number(mid.lab_l), a: Number(mid.lab_a), b: Number(mid.lab_b) },
+          toleranceDeltaH: 2.00,
+        },
+        {
+          patch: "Dark Grey",
+          targetLab: { a: 0.22, b: -1.09 },
+          printLab: { l: Number(dark.lab_l), a: Number(dark.lab_a), b: Number(dark.lab_b) },
+          toleranceDeltaH: 2.00,
+        },
+      ];
+    }
+  }
+
+  const labelByPatch = {
+    "Light Grey": t("gray_light_label", "三色灰 25%"),
+    "Mid Grey": t("gray_mid_label", "三色灰 50%"),
+    "Dark Grey": t("gray_dark_label", "三色灰 75%"),
+  };
+
+  return list.map((row) => {
+    const deltaH = row.printDeltaH !== undefined && row.printDeltaH !== null
+      ? auditNumber(row.printDeltaH)
+      : auditNumber(Math.hypot(Number(row.printLab?.a) - Number(row.targetLab?.a), Number(row.printLab?.b) - Number(row.targetLab?.b)));
+    const tolerance = auditNumber(row.toleranceDeltaH ?? 2.00);
+    return {
+      label: labelByPatch[row.patch] || row.patch || t("gray_balance_label", "灰平衡"),
+      targetLab: row.targetLab,
+      measuredLab: row.printLab,
+      deltaH,
+      tolerance,
+      status: reportToleranceStatus(deltaH, tolerance).replace("Warning", "Fail"),
+    };
+  });
+}
+
+function auditLineChart(title, rows, options = {}) {
+  const tones = [0, 25, 50, 75, 100];
+  const channels = ["C", "M", "Y", "K"];
+  const series = channels.map((channel) => {
+    const channelRows = rows.filter((row) => row.channel === channel);
+    if (!channelRows.length) return null;
+    const source = new Map(channelRows.map((row) => [Number(row.tone), row]));
+    return {
+      channel,
+      target: tones.map((tone) => ({ tone, value: tone === 0 || tone === 100 ? 0 : auditNumber(source.get(tone)?.[options.targetKey || "targetValue"]) })),
+      measured: tones.map((tone) => ({ tone, value: tone === 0 || tone === 100 ? 0 : auditNumber(source.get(tone)?.[options.valueKey || "measuredValue"]) })),
+      tolerance: tones.map((tone) => tone === 0 || tone === 100 ? 0 : auditNumber(source.get(tone)?.tolerance ?? 4)),
+    };
+  }).filter(Boolean);
+  if (!series.length) return "";
+  const maxValue = Math.max(20, ...series.flatMap((item) => [...item.target, ...item.measured].map((point) => Number.isFinite(point.value) ? point.value : 0)));
+  const bounds = { x: 42, y: 18, w: 300, h: 168, maxY: Math.ceil(maxValue / 5) * 5 };
+  const grid = [0, 25, 50, 75, 100].map((tone) => {
+    const x = chartX(tone, bounds);
+    return `<line x1="${x}" y1="${bounds.y}" x2="${x}" y2="${bounds.y + bounds.h}" class="audit-chart-grid-line" />`;
+  }).join("") + [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+    const y = bounds.y + bounds.h - bounds.h * ratio;
+    return `<line x1="${bounds.x}" y1="${y}" x2="${bounds.x + bounds.w}" y2="${y}" class="audit-chart-grid-line" />`;
+  }).join("");
+  const paths = series.map((item) => {
+    const color = auditChannelColor(item.channel);
+    const upperPoints = item.target.map((pt, idx) => ({ tone: pt.tone, value: pt.value + item.tolerance[idx] }));
+    const lowerPoints = item.target.map((pt, idx) => ({ tone: pt.tone, value: Math.max(0, pt.value - item.tolerance[idx]) }));
+    const upperPath = smoothLinePath(upperPoints, bounds);
+    const lowerPath = smoothLinePath([...lowerPoints].reverse(), bounds);
+    const envelopeD = upperPath && lowerPath ? upperPath + " L" + lowerPath.slice(1) : "";
+
+    return `
+      ${envelopeD ? `<path d="${envelopeD} Z" fill="${color}" fill-opacity="0.045" stroke="none" />` : ""}
+      <path d="${smoothLinePath(item.target, bounds)}" class="audit-chart-target-path" />
+      <path d="${smoothLinePath(item.measured, bounds)}" fill="none" stroke="${color}" stroke-width="2.4" />
+      ${item.measured.filter((point) => Number.isFinite(point.value)).map((point) => `<circle cx="${chartX(point.tone, bounds)}" cy="${chartY(point.value, bounds)}" r="2.6" fill="${color}" />`).join("")}
+    `;
+  }).join("");
+  return `
+    <div class="audit-chart-card ${escapeAttr(options.className || "")}">
+      <strong>${escapeHtml(title)}</strong>
+      <div class="audit-chart-legend">
+        <span><i class="target"></i>${escapeHtml(t("target_label", "目标"))}</span>
+        ${channels.map((channel) => `<span><i style="background:${auditChannelColor(channel)}"></i>${channel}</span>`).join("")}
+      </div>
+      <svg viewBox="0 0 360 220" role="img" aria-label="${escapeAttr(title)}">
+        <rect x="0" y="0" width="360" height="220" rx="8" fill="#fff" />
+        ${grid}
+        <line x1="${bounds.x}" y1="${bounds.y + bounds.h}" x2="${bounds.x + bounds.w}" y2="${bounds.y + bounds.h}" class="audit-chart-axis" />
+        <line x1="${bounds.x}" y1="${bounds.y}" x2="${bounds.x}" y2="${bounds.y + bounds.h}" class="audit-chart-axis" />
+        ${paths}
+        ${[0, 25, 50, 75, 100].map((tone) => `<text x="${chartX(tone, bounds)}" y="207" text-anchor="middle" class="audit-chart-label">${tone}</text>`).join("")}
+        ${[0, bounds.maxY / 2, bounds.maxY].map((value) => `<text x="32" y="${chartY(value, bounds) + 4}" text-anchor="end" class="audit-chart-label">${fmtAudit(value)}</text>`).join("")}
+      </svg>
+    </div>
+  `;
+}
+
+function auditDensityChart(title, rows, className = "") {
+  const chartRows = rows.filter((row) => Number.isFinite(Number(row.target)) || Number.isFinite(Number(row.measured)));
+  if (!chartRows.length) return "";
+  const maxValue = Math.max(1, ...chartRows.flatMap((row) => [
+    auditNumber(row.target),
+    auditNumber(row.measured),
+    auditNumber(row.targetRange?.[1]),
+  ].filter(Number.isFinite)));
+  return `
+    <div class="audit-chart-card audit-density-chart ${escapeAttr(className)}">
+      <strong>${escapeHtml(title)}</strong>
+      <div class="audit-density-bars">
+        ${chartRows.map((row) => {
+          const targetReference = Number.isFinite(auditNumber(row.target)) ? auditNumber(row.target) : auditNumber(row.targetRange?.[1]);
+          const targetPct = Number.isFinite(targetReference) ? Math.max(0, Math.min(100, targetReference / maxValue * 100)) : 0;
+          const measuredPct = Number.isFinite(auditNumber(row.measured)) ? Math.max(0, Math.min(100, auditNumber(row.measured) / maxValue * 100)) : 0;
+          return `
+            <div class="audit-density-row">
+              <span>${escapeHtml(row.channel)} ${escapeHtml(String(row.tone))}%</span>
+              <div class="audit-density-track"><i style="width:${targetPct}%"></i><b style="width:${measuredPct}%; background:${auditChannelColor(row.channel)}"></b></div>
+              <small>${escapeHtml(formatDensityTarget(row))} / ${escapeHtml(fmtAudit(row.measured))}</small>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function auditLabChart(title, rows) {
+  const points = rows
+    .filter((row) => Number.isFinite(auditNumber(row.targetLab?.a)) && Number.isFinite(auditNumber(row.measuredLab?.a)))
+    .slice(0, 12);
+  if (!points.length) return "";
+  const x = (value) => 180 + Math.max(-100, Math.min(100, auditNumber(value))) * 1.35;
+  const y = (value) => 112 - Math.max(-100, Math.min(100, auditNumber(value))) * 0.85;
+  return `
+    <div class="audit-chart-card audit-lab-chart">
+      <strong>${escapeHtml(title)}</strong>
+      <div class="audit-chart-legend">
+        <span><i class="target-point"></i>${escapeHtml(t("target_label", "目标"))}</span>
+        <span><i class="measured-point"></i>${escapeHtml(t("measured_label", "实测"))}</span>
+      </div>
+      <svg viewBox="0 0 360 220" role="img" aria-label="${escapeAttr(title)}">
+        <rect x="0" y="0" width="360" height="220" rx="8" fill="#fff" />
+        <line x1="45" y1="112" x2="315" y2="112" class="audit-chart-axis" />
+        <line x1="180" y1="27" x2="180" y2="197" class="audit-chart-axis" />
+        ${[-100, -50, 0, 50, 100].map((value) => `<line x1="${x(value)}" y1="27" x2="${x(value)}" y2="197" class="audit-chart-grid-line" /><line x1="45" y1="${y(value)}" x2="315" y2="${y(value)}" class="audit-chart-grid-line" />`).join("")}
+        ${[30, 60, 90].map((c) => `<ellipse cx="180" cy="112" rx="${c * 1.35}" ry="${c * 0.85}" fill="none" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3 4" />`).join("")}
+        ${points.map((row) => {
+          const targetX = x(row.targetLab?.a);
+          const targetY = y(row.targetLab?.b);
+          const measuredX = x(row.measuredLab?.a);
+          const measuredY = y(row.measuredLab?.b);
+          return `
+            <line x1="${targetX}" y1="${targetY}" x2="${measuredX}" y2="${measuredY}" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="4 3" />
+            <circle cx="${targetX}" cy="${targetY}" r="3.8" fill="#fff" stroke="#64748b" stroke-width="2" />
+            <circle cx="${measuredX}" cy="${measuredY}" r="3.8" fill="${patchColor(row.label)}" stroke="#fff" stroke-width="1.2" />
+          `;
+        }).join("")}
+        <text x="306" y="107" class="audit-chart-label">a*</text>
+        <text x="185" y="36" class="audit-chart-label">b*</text>
+      </svg>
+    </div>
+  `;
+}
+
+function formatDeltaEToleranceLabel({ warning, fail } = {}) {
+  const warningValue = auditNumber(warning);
+  const failValue = auditNumber(fail);
+  if (Number.isFinite(failValue) && (!Number.isFinite(warningValue) || Math.abs(warningValue - failValue) < 0.001)) {
+    return `≤ ${fmtAudit(failValue)}`;
+  }
+  if (Number.isFinite(warningValue) && Number.isFinite(failValue)) {
+    return `通过≤${fmtAudit(warningValue)} / 失败>${fmtAudit(failValue)}`;
+  }
+  if (Number.isFinite(failValue)) return `≤ ${fmtAudit(failValue)}`;
+  if (Number.isFinite(warningValue)) return `≤ ${fmtAudit(warningValue)}`;
+  return "N/A";
+}
+
+function smoothPath(points, bounds) {
+  const valid = points.filter((point) => Number.isFinite(point.value));
+  if (!valid.length) return "";
+  const coords = valid.map((point) => [chartX(point.tone, bounds), chartY(point.value, bounds)]);
+  if (coords.length === 1) return `M ${coords[0][0]} ${coords[0][1]}`;
+  return coords.reduce((path, point, index) => {
+    if (index === 0) return `M ${point[0]} ${point[1]}`;
+    const previous = coords[index - 1];
+    const cx = (previous[0] + point[0]) / 2;
+    return `${path} C ${cx} ${previous[1]}, ${cx} ${point[1]}, ${point[0]} ${point[1]}`;
+  }, "");
+}
+
+function straightPath(points, bounds) {
+  const valid = points.filter((point) => Number.isFinite(point.value));
+  if (!valid.length) return "";
+  return valid.reduce((path, point, index) => {
+    const command = index === 0 ? "M" : "L";
+    return `${path}${index === 0 ? "" : " "}${command} ${chartX(point.tone, bounds)} ${chartY(point.value, bounds)}`;
+  }, "");
+}
+
+function smoothLinePath(points, bounds) {
+  const valid = points.filter((point) => Number.isFinite(point.value));
+  if (!valid.length) return "";
+  const coords = valid.map((point) => [chartX(point.tone, bounds), chartY(point.value, bounds)]);
+  if (coords.length < 3) {
+    return coords.reduce((path, point, index) => index === 0 ? `M ${point[0]} ${point[1]}` : `${path} L ${point[0]} ${point[1]}`, "");
+  }
+  return coords.reduce((path, point, index) => {
+    if (index === 0) return `M ${point[0]} ${point[1]}`;
+    const previous = coords[index - 1];
+    const beforePrevious = coords[index - 2] || previous;
+    const next = coords[index + 1] || point;
+    const cp1x = previous[0] + (point[0] - beforePrevious[0]) / 6;
+    const cp1y = previous[1] + (point[1] - beforePrevious[1]) / 6;
+    const cp2x = point[0] - (next[0] - previous[0]) / 6;
+    const cp2y = point[1] - (next[1] - previous[1]) / 6;
+    return `${path} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${point[0]} ${point[1]}`;
+  }, "");
+}
+
+function chartX(tone, bounds) {
+  return bounds.x + (auditNumber(tone) / 100) * bounds.w;
+}
+
+function chartY(value, bounds) {
+  return bounds.y + bounds.h - (auditNumber(value) / bounds.maxY) * bounds.h;
+}
+
+function auditChannelColor(channel) {
+  return { C: "#0298bd", M: "#cf1c72", Y: "#d49300", K: "#111827" }[channel] || "#64748b";
+}
+
+function patchColor(label = "") {
+  if (/C 实地|CM 叠印|Violet/i.test(label)) return "#10bcd0";
+  if (/M 实地|MY 叠印|Red/i.test(label)) return "#d946ef";
+  if (/Y 实地/i.test(label)) return "#facc15";
+  if (/K 实地|CMY/i.test(label)) return "#111827";
+  if (/CY 叠印|Green/i.test(label)) return "#22c55e";
+  return "#64748b";
+}
+
+function labDeltaForReport(printLab, targetLab) {
+  const l = auditNumber(printLab?.l) - auditNumber(targetLab?.l);
+  const a = auditNumber(printLab?.a) - auditNumber(targetLab?.a);
+  const b = auditNumber(printLab?.b) - auditNumber(targetLab?.b);
+  return Number.isFinite(l) && Number.isFinite(a) && Number.isFinite(b) ? Math.hypot(l, a, b) : null;
+}
+
+function substrateStatus(substrate) {
+  const errors = substrate?.error || {};
+  const tolerances = substrate?.isoTolerance || {};
+  const axes = ["l", "a", "b"];
+  if (!axes.some((axis) => Number.isFinite(auditNumber(errors[axis])))) return "Review";
+  return axes.every((axis) => !Number.isFinite(auditNumber(tolerances[axis])) || Math.abs(auditNumber(errors[axis])) <= auditNumber(tolerances[axis])) ? "Pass" : "Fail";
+}
+
+function customerPatchLabel(row) {
+  const displayLabel = displayPatchLabel(row);
+  if (displayLabel) return displayLabel;
+  if (row.patch) return row.patch;
+  if (row.patchType === "paper") return t("paper_white_label", "纸白");
+  if (row.channel && Number.isFinite(Number(row.tone))) return `${row.channel} ${fmtAudit(Number(row.tone))}%`;
+  return t("patch_label", "Patch");
+}
+
+function patchChannel(patch = "") {
+  const lookup = { Cyan: "C", Magenta: "M", Yellow: "Y", Black: "K", Red: "MY", Green: "CY", Violet: "CM" };
+  return lookup[patch] || patch;
+}
+
+function formatLabTriplet(lab) {
+  if (!lab) return "N/A";
+  const l = auditNumber(lab.l);
+  const a = auditNumber(lab.a);
+  const b = auditNumber(lab.b);
+  const items = [l, a, b].map((value) => Number.isFinite(value) ? value.toFixed(2) : "N/A");
+  return items.every((value) => value === "N/A") ? "N/A" : items.join(", ");
+}
+
+function auditNumber(value) {
+  if (value === null || value === undefined || value === "") return NaN;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : NaN;
+}
+
+function countReportStatus(rows) {
+  return {
+    total: rows.length,
+    pass: rows.filter((row) => row.status === "Pass").length,
+    review: rows.filter((row) => row.status === "Review" || row.status === "Reference").length,
+    check: rows.filter((row) => row.status === "Warning" || row.status === "Fail" || row.status === "Check").length,
+  };
+}
+
+function reportOverallStatus(statuses = []) {
+  if (statuses.some((status) => status === "Fail" || status === "danger")) return "Fail";
+  if (statuses.some((status) => status === "Warning" || status === "Check")) return "Warning";
+  if (statuses.some((status) => status === "Pass")) return "Pass";
+  return "Review";
+}
+
+function reportToleranceStatus(value, tolerance) {
+  if (!Number.isFinite(value) || !Number.isFinite(tolerance)) return "Review";
+  if (value <= tolerance) return "Pass";
+  if (value <= tolerance * 1.5) return "Warning";
+  return "Fail";
+}
+
+function signedPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "N/A";
+  return `${numeric > 0 ? "+" : ""}${fmtAudit(numeric)}%`;
+}
+
+function signedPlain(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "N/A";
+  return `${numeric > 0 ? "+" : ""}${fmtAudit(numeric)}`;
+}
+
+function formatDensityTarget(row) {
+  if (Number.isFinite(auditNumber(row?.target))) return fmtAudit(row.target);
+  const [min, max] = row?.targetRange || [];
+  if (Number.isFinite(auditNumber(min)) && Number.isFinite(auditNumber(max))) {
+    return `${fmtAudit(auditNumber(min))}-${fmtAudit(auditNumber(max))}`;
+  }
+  return "N/A";
 }
 
 function auditCountCard(label, count, passLabel = t("status_pass", "Pass")) {
@@ -435,6 +1167,44 @@ function auditMiniTable(title, headers, rows) {
   `;
 }
 
+function auditToneMatrixTable(title, rows) {
+  const tones = [25, 50, 75];
+  const channels = ["C", "M", "Y", "K"];
+  const rowMap = new Map(rows.map((row) => [`${row.channel}_${Math.round(Number(row.tone))}`, row]));
+  return `
+    <div class="audit-mini-table audit-tone-matrix">
+      <strong>${escapeHtml(title)}</strong>
+      <table>
+        <thead>
+          <tr>
+            <th>${escapeHtml(t("input_tone_label", "输入网点"))}</th>
+            ${channels.map((channel) => `<th>${escapeHtml(channel)}</th>`).join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${tones.map((tone) => `
+            <tr>
+              <td class="tone-axis">${fmtAudit(tone)}%</td>
+              ${channels.map((channel) => {
+                const row = rowMap.get(`${channel}_${tone}`);
+                if (!row) return `<td class="tone-matrix-cell empty">N/A</td>`;
+                return `
+                  <td class="tone-matrix-cell">
+                    <div><span>${escapeHtml(t("target_label", "目标"))}</span><b>${escapeHtml(fmtAudit(row.targetValue))}%</b></div>
+                    <div><span>${escapeHtml(t("measured_label", "实测"))}</span><b>${escapeHtml(fmtAudit(row.measuredValue))}%</b></div>
+                    <small>${escapeHtml(signedPercent(row.delta))} / ±${escapeHtml(fmtAudit(row.tolerance))}%</small>
+                    ${formatAuditCell(auditStatusBadge(row.status))}
+                  </td>
+                `;
+              }).join("")}
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function formatAuditCell(cell) {
   return cell?.html ? cell.html : escapeHtml(cell);
 }
@@ -449,6 +1219,8 @@ function auditStatusBadge(status) {
   const normalized = status || "Review";
   const statusMap = {
     Pass: ["pass", t("status_pass", "Pass")],
+    Warning: ["warning", t("status_warning", "Warning")],
+    Fail: ["fail", t("status_fail", "Fail")],
     Check: ["warning", t("audit_report_check_label", "Check")],
     Review: ["review", t("audit_report_review_label", "Review")],
     Reference: ["review", t("audit_report_reference_label", "Reference")],
