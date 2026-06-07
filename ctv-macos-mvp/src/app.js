@@ -11,10 +11,10 @@ import {
 import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260522-g7-verify";
 import { applyCurveOverrides, curveRowKey, pruneCurveOverrides } from "./curve-overrides.js";
 import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260524-standards-runs";
-import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260524-tone-tolerance-note";
-import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260525-statusbar-pass-1";
+import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260603-standard-simple-1";
+import { renderAnalyze as _renderAnalyze, renderCurve as _renderCurve, renderG7 as _renderG7 } from "./views/analysis.js?v=20260604-patch-labels-1";
 import { renderInstrument as _renderInstrument } from "./views/instrument.js?v=20260521-icc-p4";
-import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260602-audit-report-print-1";
+import { renderShell as _renderShell, renderControlValues as _renderControlValues, renderRuns as _renderRuns, renderExport as _renderExport, renderReport as _renderReport, renderSettings as _renderSettings } from "./views/shell.js?v=20260604-audit-band-tolerance-1";
 import { buildG7Compensation } from "./g7-compensation.js";
 import { renderCurveChart, renderMeasurementChart, renderLabChromaticityChart, renderG7Charts, renderCompensationSimulationChart } from "./chart-renderer.js?v=20260523-lab-fill";
 import { buildIccGenerationGate } from "./icc-generation-gate.js?v=20260525-statusbar-pass-1";
@@ -45,7 +45,7 @@ import {
 import { clearStoredProject, compactProjectArchiveForRun, loadLastProject, loadStoredRuns, saveLastProject, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js?v=20260524-clear-current-run";
 import { buildCompensationSimulation } from "./compensation-simulation.js";
 import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
-import { STANDARD_LIBRARY, addOrUpdateCustomStandard, buildPatchMap, cmykKey, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260524-standards-files";
+import { STANDARD_LIBRARY, addOrUpdateCustomStandard, buildPatchMap, cmykKey, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260604-density-targets-1";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 import { auditMeasurementCsv } from "./audit-report.js";
 
@@ -86,7 +86,7 @@ const els = {
   standardIccInput: document.querySelector("#standardIccInput"),
   customStandardFileInput: document.querySelector("#customStandardFileInput"),
   saveCustomStandardButton: document.querySelector("#saveCustomStandardButton"),
-  exportStandardButton: document.querySelector("#exportStandardButton"),
+  renameStandardButton: document.querySelector("#renameStandardButton"),
   deleteCustomStandardButton: document.querySelector("#deleteCustomStandardButton"),
   restoreStandardListButton: document.querySelector("#restoreStandardListButton"),
   applyCustomTargetButton: document.querySelector("#applyCustomTargetButton"),
@@ -368,12 +368,18 @@ function attachEvents() {
   els.fileInput.addEventListener("change", async (event) => {
     const [file] = event.target.files;
     if (!file) return;
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.endsWith(".icc") || lowerName.endsWith(".icm")) {
+      await loadIccProfileFromFile(file);
+      event.target.value = "";
+      return;
+    }
     const text = await file.text();
     if (file.name.toLowerCase().endsWith(".json") && await restoreProjectFromText(text)) {
       event.target.value = "";
       return;
     }
-    importMeasurementText(text, { sourceName: file.name });
+    await importMeasurementText(text, { sourceName: file.name });
     event.target.value = "";
   });
 
@@ -391,11 +397,11 @@ function attachEvents() {
   els.clearManualButton.addEventListener("click", clearManualRows);
   els.saveRunButton.addEventListener("click", saveRun);
   els.clearRunsButton.addEventListener("click", clearRuns);
-  els.reloadStandardButton.addEventListener("click", () => loadStandard(els.standardSelect.value));
+  els.reloadStandardButton?.addEventListener("click", () => loadStandard(els.standardSelect.value));
   els.standardIccInput?.addEventListener("change", importStandardIcc);
   els.customStandardFileInput?.addEventListener("change", importCustomStandardFile);
   els.saveCustomStandardButton?.addEventListener("click", saveCustomStandard);
-  els.exportStandardButton?.addEventListener("click", exportCurrentStandard);
+  els.renameStandardButton?.addEventListener("click", renameStandard);
   els.deleteCustomStandardButton?.addEventListener("click", deleteOrHideStandard);
   els.restoreStandardListButton?.addEventListener("click", restoreStandardList);
   els.applyCustomTargetButton.addEventListener("click", applyCustomTarget);
@@ -643,7 +649,15 @@ async function loadStandard(id) {
   els.targetSelect.value = state.standard.target;
   renderStandard();
 
-  if (state.standard.referencePath) {
+  if (Array.isArray(state.standard.referenceRows) && state.standard.referenceRows.length) {
+    state.standardImport = {
+      sourceFormat: state.standard.referenceSourceFormat || "Imported Standard",
+      rawRows: state.standard.referenceRows,
+      fields: Object.keys(state.standard.referenceRows[0] || {}),
+      warnings: [],
+    };
+    state.standardPatchMap = buildPatchMap(state.standard.referenceRows);
+  } else if (state.standard.referencePath) {
     try {
       const response = await fetch(state.standard.referencePath);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -659,9 +673,7 @@ async function loadStandard(id) {
   calculate({ preserveRatio: true });
 }
 
-async function importStandardIcc(event) {
-  const [file] = event.target.files || [];
-  if (!file) return;
+async function loadIccProfileFromFile(file) {
   try {
     const profile = parseIccProfile(await file.arrayBuffer(), { fileName: file.name });
     state.iccProfile = profile;
@@ -692,16 +704,22 @@ async function importStandardIcc(event) {
       importedAt: new Date().toISOString(),
     };
     renderStandard();
-  } finally {
-    event.target.value = "";
   }
 }
 
+async function importStandardIcc(event) {
+  const [file] = event.target.files || [];
+  if (!file) return;
+  await loadIccProfileFromFile(file);
+  event.target.value = "";
+}
+
 async function saveCustomStandard() {
-  const id = isCustomStandard(state.standard?.id) ? state.standard.id : undefined;
-  const name = isCustomStandard(state.standard?.id) ? state.standard.name : `${state.standard.name} 自定义`;
+  if (!state.standard?.id) return;
+  const suggestedName = `${state.standard.name || "New Standard"} Copy`;
+  const name = String(await askText("新建标准名称", suggestedName) || "").trim();
+  if (!name) return;
   const custom = makeCustomStandard(state.standard, {
-    id,
     name,
     printCondition: state.standard.printCondition,
     target: els.targetSelect.value || state.standard.target,
@@ -712,11 +730,73 @@ async function saveCustomStandard() {
   await loadStandard(custom.id);
 }
 
+async function renameStandard() {
+  if (!state.standard?.id) return;
+  const name = String(await askText("标准名称", state.standard.name || "") || "").trim();
+  if (!name || name === state.standard.name) return;
+  const custom = makeCustomStandard(state.standard, {
+    id: isCustomStandard(state.standard.id) ? state.standard.id : undefined,
+    name,
+    printCondition: state.standard.printCondition,
+    target: els.targetSelect.value || state.standard.target,
+  });
+  const items = addOrUpdateCustomStandard(custom);
+  if (!persistCustomStandards(items)) return;
+  if (!isCustomStandard(state.standard.id)) {
+    state.hiddenStandardIds.add(state.standard.id);
+    if (!persistHiddenStandards()) return;
+  }
+  populateSelects();
+  await loadStandard(custom.id);
+}
+
 async function importCustomStandardFile(event) {
   const [file] = event.target.files || [];
   if (!file) return;
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith(".icc") || lowerName.endsWith(".icm")) {
+    await loadIccProfileFromFile(file);
+    event.target.value = "";
+    return;
+  }
   try {
-    const parsed = JSON.parse(await file.text());
+    const text = await file.text();
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
+    if (!parsed) {
+      const imported = parseImportText(text);
+      const patchMap = buildPatchMap(imported.rawRows || []);
+      if (!patchMap.size) throw new Error("未在标准文件中找到 CMYK + Lab 参考色块。请导入 CGATS/IT8 标准参考文件或 CurveStudio 标准 JSON。");
+      const name = standardNameFromImportedReference(imported, file.name);
+      const printCondition = imported.metadata?.file_descriptor || imported.metadata?.descriptor || file.name;
+      const source = {
+        id: importedStandardId(name, printCondition),
+        name,
+        printCondition,
+        target: state.standard?.target || els.targetSelect.value || "isoA",
+        referenceRows: imported.rawRows,
+        referenceSourceFormat: imported.sourceFormat,
+        referenceImportedAt: new Date().toISOString(),
+      };
+      const custom = makeCustomStandard(source, {
+        id: source.id,
+        name: source.name,
+        printCondition: source.printCondition,
+        target: source.target,
+      });
+      custom.referenceRows = source.referenceRows;
+      custom.referenceSourceFormat = source.referenceSourceFormat;
+      custom.referenceImportedAt = source.referenceImportedAt;
+      const items = addOrUpdateCustomStandard(custom);
+      if (!persistCustomStandards(items)) return;
+      populateSelects();
+      await loadStandard(custom.id);
+      return;
+    }
     const source = parsed?.standard && typeof parsed.standard === "object" ? parsed.standard : parsed;
     if (!source || typeof source !== "object") throw new Error("文件内容不是有效的标准 JSON。");
     const importedId = String(source.id || "").trim();
@@ -738,29 +818,30 @@ async function importCustomStandardFile(event) {
   }
 }
 
-async function exportCurrentStandard() {
-  if (!state.standard?.id) return;
-  const exportStandard = {
-    ...state.standard,
-    exportedAt: new Date().toISOString(),
-    fileType: "CurveStudio standard",
-  };
-  const filename = `${slug(state.standard.name || "curvestudio-standard")}.standard.json`;
-  await download(filename, JSON.stringify(exportStandard, null, 2), "application/json", {
-    allowWithoutResults: true,
-    skipManualDirty: true,
-  });
+function standardNameFromImportedReference(imported, fileName) {
+  const descriptor = [
+    imported?.metadata?.file_descriptor,
+    imported?.metadata?.descriptor,
+    imported?.metadata?.originator,
+  ].filter(Boolean).join(" ");
+  if (/SML|PrintSpec|XL-75|ISO 12647-2/i.test(`${descriptor} ${fileName}`)) {
+    return "ISO 12647-2:2007 Offset";
+  }
+  return fileName.replace(/\.(txt|it8|cgats|csv)$/i, "").replace(/[-_]+/g, " ").trim() || "Imported Standard";
+}
+
+function importedStandardId(name, printCondition) {
+  return `custom_${slug(`${name}-${printCondition}`).slice(0, 96)}`;
 }
 
 async function deleteOrHideStandard() {
   if (!state.standard?.id) return;
   const name = state.standard.name;
+  if (!window.confirm(`删除标准「${name}」？`)) return;
   if (isCustomStandard(state.standard.id)) {
-    if (!window.confirm(`删除自定义标准「${name}」？`)) return;
     const items = removeCustomStandard(state.standard.id);
     if (!persistCustomStandards(items)) return;
   } else {
-    if (!window.confirm(`从列表隐藏内置标准「${name}」？可用「恢复标准列表」找回。`)) return;
     state.hiddenStandardIds.add(state.standard.id);
     if (!persistHiddenStandards()) return;
   }
@@ -856,6 +937,7 @@ function parseAndCalculate(options = {}) {
   if (!options.skipConfirm && !confirmDataOverwrite(t("confirm_parse_overwrite", "解析文本数据会替换当前工作区数据。"))) return;
   if (!options.preserveAuditReport) state.auditReport = null;
   state.importInfo = parseImportText(els.rawInput.value, { densityFilter: state.settings.densityFilter });
+  if (state.auditReport) applyAuditReportImportMetadata(state.importInfo, state.auditReport);
   state.measurements = state.importInfo.measurements;
   state.manualRows = [];
   state.manualDirty = false;
@@ -865,18 +947,80 @@ function parseAndCalculate(options = {}) {
   calculate();
 }
 
-function importMeasurementText(text) {
-  state.auditReport = null;
+async function importMeasurementText(text, options = {}) {
+  state.auditReport = await detectAuditReportForImport(text, options.sourceName);
+  if (state.auditReport) {
+    await loadAuditReportStandard(state.auditReport);
+    applyAuditReportJobFields(state.auditReport);
+  }
   const incoming = parseImportText(text, { densityFilter: state.settings.densityFilter });
   if (!incoming.measurements.length) {
     window.alert(t("import_no_usable_measurements", "导入文件没有可计算测点，请检查文件格式或测量字段。"));
     return false;
   }
+  if (state.auditReport) applyAuditReportImportMetadata(incoming, state.auditReport);
   saveCurrentRun({ switchToJob: false, namePrefix: t("run_name_previous_import", "上一份测量"), skipIfUnchanged: true });
   loadImportedMeasurement(incoming, text);
   saveCurrentRun({ switchToJob: false, namePrefix: t("run_name_imported_measurement", "导入测量") });
   render();
   return true;
+}
+
+async function detectAuditReportForImport(text, sourceName = "") {
+  const marker = `${sourceName || ""}\n${text || ""}`;
+  if (!/SML|PrintSpec|XL-75-6C|ISO 12647-2:2007/i.test(marker)) return null;
+  try {
+    return await responseJson("./samples/sml-printspec-audit-example.json");
+  } catch (error) {
+    console.warn("SML audit report metadata could not be attached", error);
+    return null;
+  }
+}
+
+async function loadAuditReportStandard(report) {
+  const marker = [
+    report?.standard?.name,
+    report?.source?.software,
+    report?.job?.customerName,
+    report?.job?.machineModel,
+  ].filter(Boolean).join(" ");
+  const match = STANDARD_LIBRARY.find((item) => (
+    item.id === "sml_printspec_xl75_6c" &&
+    /SML|PrintSpec|XL-75-6C|ISO 12647-2:2007/i.test(marker)
+  ));
+  if (!match || state.standard?.id === match.id) return;
+  await loadStandard(match.id);
+}
+
+function applyAuditReportImportMetadata(importInfo, report) {
+  if (!importInfo || !report?.standard) return;
+  importInfo.metadata = {
+    ...(importInfo.metadata || {}),
+    measurement_condition: importInfo.metadata?.measurement_condition || report.standard.measurementCondition || "",
+    illuminant: importInfo.metadata?.illuminant || report.standard.illuminant || "",
+    observer: importInfo.metadata?.observer || report.standard.observer || "",
+    density_filter: importInfo.metadata?.density_filter || report.standard.densityFilter || "",
+    backing: importInfo.metadata?.backing || report.standard.backing || "",
+  };
+}
+
+function applyAuditReportJobFields(report, options = {}) {
+  if (!report) return;
+  const overwrite = Boolean(options.overwrite);
+  const setValue = (input, value) => {
+    if (!input || !value) return;
+    const current = String(input.value || "").trim();
+    if (overwrite || !current || /^(现场客户|Field Customer|KBA)$/i.test(current)) {
+      input.value = value;
+    }
+  };
+  setValue(els.jobCustomerInput, report.job?.customerName || report.job?.supplier);
+  setValue(els.jobPressInput, report.job?.machineModel || report.job?.pressPrinter);
+  setValue(els.jobPaperInput, report.job?.substrateName);
+  setValue(els.jobDeviceInput, report.source?.software);
+  if (els.jobNoteInput && (overwrite || !String(els.jobNoteInput.value || "").trim())) {
+    els.jobNoteInput.value = `${report.source?.software || "Audit report"} summary sample; not a full CGATS/P2P measurement file.`;
+  }
 }
 
 function loadImportedMeasurement(importInfo, text) {
@@ -911,12 +1055,9 @@ async function loadSelectedSample() {
   if (selected === "smlPrintSpecAudit") {
     const report = await responseJson(samplePaths.smlPrintSpecAudit);
     state.auditReport = report;
+    await loadAuditReportStandard(report);
     els.rawInput.value = auditMeasurementCsv(report);
-    els.jobCustomerInput.value = report.job?.customerName || els.jobCustomerInput.value;
-    els.jobPressInput.value = report.job?.machineModel || report.job?.pressPrinter || els.jobPressInput.value;
-    els.jobPaperInput.value = report.job?.substrateName || els.jobPaperInput.value;
-    els.jobDeviceInput.value = report.source?.software || els.jobDeviceInput.value;
-    els.jobNoteInput.value = `${report.source?.software || "Audit report"} summary sample; not a full CGATS/P2P measurement file.`;
+    applyAuditReportJobFields(report, { overwrite: true });
     parseAndCalculate({ skipConfirm: true, preserveAuditReport: true });
     switchView("report");
     return;
@@ -1001,7 +1142,6 @@ function addManualTemplate(type) {
   markManualDirty();
   renderManualTable();
   renderMeasurement();
-  switchView("measurement");
 }
 
 function changeDeviceAdapter() {
@@ -1179,6 +1319,7 @@ function applyManualRows() {
   state.selectedPatchIndex = null;
   els.rawInput.value = manualRowsToCsv(state.manualRows.map(normalizeManualRow));
   calculate();
+  switchView("analyze");
 }
 
 function selectMeasurementPatch(event) {
@@ -1226,6 +1367,7 @@ function calculationOptions() {
     target: els.targetSelect.value,
     smooth: els.smoothInput.value,
     limit: els.limitInput.value,
+    standardId: state.standard?.id,
   };
 }
 
@@ -1512,7 +1654,7 @@ async function openWithDesktopDialog() {
     const result = await openTextFileDesktop();
     if (!result.handled || result.canceled) return;
     if (String(result.path || "").toLowerCase().endsWith(".json") && await restoreProjectFromText(result.contents)) return;
-    importMeasurementText(result.contents, { sourceName: result.path || "" });
+    await importMeasurementText(result.contents, { sourceName: result.path || "" });
   } catch (error) {
     window.alert(`桌面打开文件失败：${error.message || error}`);
   }
@@ -1607,7 +1749,7 @@ function switchView(view) {
     acquisition: t("step_acquisition", "第 1 步：导入测量"),
     diagnose: t("step_diagnose", "第 2 步：分析诊断"),
     curves: t("step_curves", "第 3 步：生成曲线"),
-    delivery: t("step_delivery", "第 4 步：复测归档")
+    delivery: t("step_delivery", "第 4 步：报告与导出")
   };
   const stepIndicator = document.getElementById("currentStepName");
   if (stepIndicator) {
@@ -2121,7 +2263,7 @@ function labReferencePatchMap() {
 function labReferenceSource() {
   const sampled = state.iccProfile?.characterization?.sampledCount || 0;
   if (sampled > 0) return `ICC sampled reference (${sampled} patches)`;
-  if (state.standardPatchMap.size) return "built-in standard reference";
+  if (state.standardPatchMap.size) return "standard Lab reference";
   return "none";
 }
 

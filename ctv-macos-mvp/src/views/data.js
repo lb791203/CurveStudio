@@ -132,9 +132,10 @@ export function renderStandard(state, els) {
 function syncCustomStandardActions(state, els) {
   if (els.deleteCustomStandardButton) {
     els.deleteCustomStandardButton.disabled = !state.standard?.id;
-    els.deleteCustomStandardButton.textContent = state.standard?.custom
-      ? t("delete_custom_standard_button", "Delete Custom Standard")
-      : t("hide_builtin_standard_button", "Hide Built-in Standards");
+    els.deleteCustomStandardButton.textContent = t("delete_standard_button", "Delete Standard");
+  }
+  if (els.renameStandardButton) {
+    els.renameStandardButton.disabled = !state.standard?.id;
   }
   if (els.restoreStandardListButton) {
     els.restoreStandardListButton.disabled = !(state.hiddenStandardIds?.size);
@@ -157,7 +158,7 @@ function toneToleranceNote(state) {
   if (hasToneToleranceValues(state.standard?.toneTolerances)) {
     return t("tone_tolerance_note_standard", "来自当前标准文件或自定义设置；不同标准可保存不同验收窗口。");
   }
-  return t("tone_tolerance_note_default", "当前使用内置默认验收窗口；标准文件或自定义标准可覆盖这些容差。");
+  return t("tone_tolerance_note_default", "当前使用默认验收窗口；标准文件或自定义标准可覆盖这些容差。");
 }
 
 function hasToneToleranceValues(tolerances = {}) {
@@ -198,7 +199,7 @@ function labReferenceLine(reference) {
   if (reference.source === "imported-icc") {
     return `${reference.colorSpace || "unknown"} -> ${reference.pcs || "unknown"} / sampled ${reference.sampledCount || 0}/${reference.patchCount || 0}`;
   }
-  if (reference.source === "built-in-standard") return `built-in standard / Lab patches ${reference.sampledCount || 0}`;
+  if (reference.source === "standard-reference") return `standard reference / Lab patches ${reference.sampledCount || 0}`;
   return "missing";
 }
 

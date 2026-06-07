@@ -6,7 +6,7 @@ import { curveRowKey } from "../curve-overrides.js?v=20260521-icc-p4";
 import { escapeAttr, escapeHtml } from "../shared.js?v=20260521-icc-p4";
 import { deltaFormulaLabel, methodLabel } from "../ui-labels.js?v=20260521-icc-p4";
 import { t, translateDynamicText } from "../translations.js";
-import { fmt, num, signed, kpiCard, statusClass, labText } from "./helpers.js?v=20260525-statusbar-pass-1";
+import { displayPatchLabel, fmt, num, signed, kpiCard, statusClass, labText } from "./helpers.js?v=20260604-patch-labels-1";
 import { visibleWarnings } from "./data.js?v=20260525-statusbar-pass-1";
 
 export function renderAnalyze(state, els) {
@@ -57,13 +57,27 @@ function isPaperCmyk(cmyk) {
   return cmyk && ["c", "m", "y", "k"].every((channel) => Math.abs(Number(cmyk[channel]) || 0) < 0.01);
 }
 
+function isSolidOrPaperCmyk(cmyk) {
+  if (!cmyk) return false;
+  const c = Number(cmyk.c ?? cmyk.C ?? 0);
+  const m = Number(cmyk.m ?? cmyk.M ?? 0);
+  const y = Number(cmyk.y ?? cmyk.Y ?? 0);
+  const k = Number(cmyk.k ?? cmyk.K ?? 0);
+  if ([c, m, y, k].every((val) => Math.abs(val) < 0.01)) return true;
+  const vals = { C: c, M: m, Y: y, K: k };
+  return ["C", "M", "Y", "K"].some((ch) =>
+    Math.abs(vals[ch] - 100) < 0.01 &&
+    Object.entries(vals).every(([cand, val]) => cand === ch || Math.abs(val) < 0.01)
+  );
+}
+
 function renderLabDetailRows(labRows = [], sccaBlocked = false) {
   if (!labRows.length) {
     return `<tr><td colspan="11">${sccaBlocked ? t("scca_needs_paper_lab", "SCCA requires paper-white Lab; current measurement is missing paper white.") : t("no_lab_compare_data", "No Lab/ΔE comparison data is available.")}</td></tr>`;
   }
   return labRows.map((row) => `
     <tr>
-      <td>${escapeHtml(row.label)}</td>
+      <td>${escapeHtml(displayPatchLabel(row))}</td>
       <td>${labText(row.lab)}</td>
       <td>${row.referenceLab ? `${labText(row.referenceLab)}${row.referenceWasSccaCorrected ? " / SCCA" : ""}` : t("missing_target", "Missing target")}</td>
       <td>${num(row.deltaL)}</td>
@@ -92,12 +106,14 @@ function renderKeyPatchRows(labRows = [], thresholds = {}) {
       `;
     }
     const targetColor = row.referenceLab ? sampleColor : "#e2e8f0";
-    const deClass = deColorClass(row.deltaE, thresholds.warning || 3.5, thresholds.fail || 4.2);
+    const isStandardEvaluation = isSolidOrPaperCmyk(slot.cmyk);
+    const deClass = isStandardEvaluation
+      ? deColorClass(row.deltaE, thresholds.warning || 3.5, thresholds.fail || 4.2)
+      : "";
     return `
       <tr>
         <td>
           <strong>${escapeHtml(slot.name)}</strong>
-          <div class="cell-note">${escapeHtml(row.label || "")}</div>
         </td>
         <td>${renderKeyPatchLabCell(sampleColor, row.lab, { note: `D ${Number.isFinite(row.density) ? num(row.density) : "-"}` })}</td>
           <td>${renderKeyPatchLabCell(targetColor, row.referenceLab, { missing: t("missing_target", "Missing target") })}</td>
@@ -570,11 +586,17 @@ function metricStrip(items) {
 
 function buildVerificationChecklist(state, els) {
   const rows = [];
+  const thresholds = state.standard?.deltaE || {};
   for (const row of state.labRows || []) {
+    const isStandardEvaluation = isSolidOrPaperCmyk(row.cmyk);
     rows.push({
       label: row.label,
       measured: Number.isFinite(row.deltaE) ? `ΔE ${num(row.deltaE)}` : t("missing_standard_target", "Missing standard target"),
-      target: row.referenceLab ? `< ${state.standard.deltaE.warning} / ${state.standard.deltaE.fail}` : t("no_matching_lab", "No matching Lab"),
+      target: row.referenceLab
+        ? isStandardEvaluation
+          ? `< ${thresholds.warning || 3.5} / ${thresholds.fail || 4.2}`
+          : "N/A"
+        : t("no_matching_lab", "No matching Lab"),
       status: row.status === "Missing Target" ? "Warning" : row.status,
       note: row.lab ? `L* ${num(row.lab.l)}  a* ${num(row.lab.a)}  b* ${num(row.lab.b)}` : row.source,
     });
