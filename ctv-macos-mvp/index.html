@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CurveStudio</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f766e'/%3E%3Cpath d='M12 44c12 0 10-24 22-24s10 24 18 24' fill='none' stroke='white' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./src/styles.css?v=20260602-audit-report-print-1" />
+    <link rel="stylesheet" href="./src/styles.css?v=20260607-nav-delivery-rename" />
   </head>
   <body>
     <main class="app-shell" data-active-step="acquisition">
@@ -33,7 +33,7 @@
           <button class="nav-button" type="button" data-step-button="setup" data-translate="nav_setup"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>标准设置</button>
           <button class="nav-button" type="button" data-step-button="diagnose" data-translate="nav_diagnose"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line><path d="M3 20h18"></path></svg></span>分析诊断</button>
           <button class="nav-button" type="button" data-step-button="curves" data-translate="nav_curves"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"></path><circle cx="18.7" cy="8" r="1.5" fill="currentColor"></circle><circle cx="13.6" cy="13.2" r="1.5" fill="currentColor"></circle><circle cx="10.8" cy="10.5" r="1.5" fill="currentColor"></circle></svg></span>生成曲线</button>
-          <button class="nav-button" type="button" data-step-button="delivery" data-translate="nav_delivery"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></span>复测归档</button>
+          <button class="nav-button" type="button" data-step-button="delivery" data-translate="nav_delivery"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></span>报告与导出</button>
         </nav>
 
         <section class="panel control-panel-widget">
@@ -161,27 +161,19 @@
                 <span>选择印刷标准，查看 TVI 目标和 Lab 参考色块；可导入 ICC 作为颜色参考。</span>
               </div>
               <div class="standard-action-toolbar" aria-label="标准库操作">
-                <div class="standard-action-group">
-                  <span class="action-group-label">导入</span>
-                  <label class="file-button secondary-file-button">
-                    <input id="standardIccInput" type="file" accept=".icc,.icm" />
-                    <span>ICC</span>
-                  </label>
-                  <label class="file-button secondary-file-button">
-                    <input id="customStandardFileInput" type="file" accept=".json" />
-                    <span>标准文件</span>
-                  </label>
-                  <button id="reloadStandardButton" type="button">重新加载</button>
-                </div>
-                <div class="standard-action-group">
-                  <span class="action-group-label">自定义</span>
-                  <button id="saveCustomStandardButton" type="button">新增/保存</button>
-                  <button id="exportStandardButton" type="button">导出文件</button>
-                  <button id="restoreStandardListButton" class="secondary-mini" type="button">恢复列表</button>
-                </div>
-                <div class="standard-action-group danger">
-                  <button id="deleteCustomStandardButton" class="danger-mini" type="button">删除/隐藏</button>
-                </div>
+                <button id="saveCustomStandardButton" type="button">新建</button>
+                <label class="file-button secondary-file-button">
+                  <input id="customStandardFileInput" type="file" accept=".json,.standard.json,.txt,.it8,.cgats,.csv,.icc,.icm" />
+                  <span>导入</span>
+                </label>
+                <button id="renameStandardButton" class="secondary-mini" type="button">改名</button>
+                <button id="deleteCustomStandardButton" class="danger-mini" type="button">删除</button>
+                <!--
+                <label class="file-button secondary-file-button compact-file-button" title="导入 ICC 作为 Lab/颜色参考，不会单独生成 TVI/G7 补偿曲线。">
+                  <input id="standardIccInput" type="file" accept=".icc,.icm" />
+                  <span>ICC 参考</span>
+                </label>
+                -->
               </div>
             </div>
             <div class="split-grid">
@@ -300,7 +292,7 @@
               <div class="measurement-import-row">
                 <div class="measurement-file-actions">
                   <label class="file-drop">
-                    <input id="fileInput" type="file" accept=".csv,.txt,.cgats,.it8,.rwxf,.cxf,.json" />
+                    <input id="fileInput" type="file" accept=".csv,.txt,.cgats,.it8,.rwxf,.cxf,.json,.icc,.icm" />
                     <span data-translate="measurement_file_select">选择测量文件</span>
                   </label>
                   <button id="desktopOpenFileButton" type="button" hidden>桌面打开文件</button>
@@ -326,7 +318,7 @@
               <div class="manual-tools">
                 <div class="manual-template-actions">
                   <select id="manualModeSelect" aria-label="手动表插入模式">
-                    <option value="platePrint">版材/印刷品网点</option>
+                    <option value="platePrint">印张网点 (TVI)</option>
                     <option value="density">密度 TVI</option>
                     <option value="labCtv">CTV Lab</option>
                     <option value="g7">G7 验证</option>
@@ -352,7 +344,7 @@
                     <th>类型</th>
                     <th>通道/色块</th>
                     <th>输入网点</th>
-                    <th>版/印实测网点</th>
+                    <th>印张实测网点 %</th>
                     <th>密度 D</th>
                     <th>L*</th>
                     <th>a*</th>
@@ -1079,7 +1071,7 @@
           <section class="product-info-panel active" data-product-info-panel="help">
             <div class="info-hero">
               <span>快速开始</span>
-              <strong>按文件导入、诊断、生成曲线、复测归档的现场流程使用。</strong>
+              <strong>按文件导入、诊断、生成曲线、报告与导出的现场流程使用。</strong>
             </div>
             <div class="info-grid">
               <article>
@@ -1172,6 +1164,6 @@
       </section>
     </div>
 
-  <script type="module" src="./src/app.js?v=20260602-audit-report-print-1"></script>
-  </body>
+  <script type="module" src="./src/app.js?v=20260607-nav-delivery-rename"></script>
+</body>
 </html>

@@ -36,7 +36,7 @@ export function defaultManualRow(overrides = {}) {
 
 export function manualTemplateRows(type, source = "手动") {
   const templates = {
-    platePrint: toneRows([25, 50, 75], source, "版材/印刷品网点"),
+    platePrint: toneRows([25, 50, 75], source, "印张网点 (TVI)"),
     density: [
       manualRow("paper", "Paper", "", "", 0, source, "纸白密度"),
       ...["C", "M", "Y", "K"].map((channel) => manualRow("solid", channel, 100, "", "", source, `${channel} 实地密度`)),

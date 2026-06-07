@@ -11,8 +11,8 @@ export function buildIccStandardPair({ iccProfile, standard, targetName, standar
       status: iccProfile.characterization?.status || "metadata-only",
     }
     : {
-      source: standardPatchCount ? "built-in-standard" : "none",
-      label: standardPatchCount ? standard?.name || "Built-in standard" : "No Lab reference",
+      source: standardPatchCount ? "standard-reference" : "none",
+      label: standardPatchCount ? standard?.name || "Standard reference" : "No Lab reference",
       sampledCount: standardPatchCount,
       patchCount: standardPatchCount,
       status: standardPatchCount ? "ready" : "missing",
@@ -55,7 +55,7 @@ export function buildIccStandardPair({ iccProfile, standard, targetName, standar
   if (!messages.length) {
     messages.push(labReference.source === "imported-icc"
       ? "ICC Lab 参考与当前阶调目标已配对；导入 ICC 不会自动改变 TVI/CTV/G7 目标。"
-      : "当前使用内置标准 Lab 参考与显式阶调目标。");
+      : "当前使用标准 Lab 参考与显式阶调目标。");
   }
 
   return {

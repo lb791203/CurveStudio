@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
 
 import { renderAnalyze, renderCurve, statusText } from "../src/views/analysis.js";
@@ -14,6 +15,10 @@ function els(overrides = {}) {
     ratioInput: { value: "50" },
     jobCustomerInput: { value: "Demo" },
     jobPressInput: { value: "KBA" },
+    jobPaperInput: { value: "" },
+    jobDeviceInput: { value: "" },
+    jobOperatorInput: { value: "" },
+    jobNoteInput: { value: "" },
     workflowContextToolbar: { hidden: false },
     jobTitle: { textContent: "" },
     jobMeta: { textContent: "" },
@@ -42,6 +47,7 @@ function els(overrides = {}) {
     deviceAdapterSummary: { innerHTML: "" },
     deviceQueueBody: { innerHTML: "" },
     reportSummary: { innerHTML: "" },
+    reportAuditComparison: { innerHTML: "", hidden: true },
     reportG7Conclusion: { innerHTML: "" },
     reportLabSummary: { innerHTML: "" },
     reportCurveSummary: { innerHTML: "" },
@@ -293,7 +299,7 @@ test("renderStandard uses distinct default CTV tolerance copy when standard has 
 
   assert.match(localEls.toneToleranceBody.innerHTML, /aria-label="C CTV 50% 容差" \/>/);
   assert.match(localEls.toneToleranceBody.innerHTML, /value="3.00"\s+data-tone-tolerance data-channel="C" data-metric="ctv" data-tone="50"/);
-  assert.match(localEls.toneToleranceNote.textContent, /内置默认验收窗口/);
+  assert.match(localEls.toneToleranceNote.textContent, /默认验收窗口/);
 });
 
 test("renderAnalyze summarizes only the fixed 9 key color patches", () => {
@@ -348,6 +354,44 @@ test("renderAnalyze summarizes only the fixed 9 key color patches", () => {
 
   assert.equal(localEls.verificationChecklistSummary.textContent, "关键 9 项：Pass 7 / Warning 1 / Fail 1");
   assert.match(localEls.labDetailSummary.textContent, /可比 9\/29/);
+});
+
+test("renderAnalyze hides imported SML sample ids from customer-facing Lab tables", () => {
+  const localEls = els({
+    diagnosisCards: {
+      innerHTML: "",
+      insertAdjacentHTML(_position, html) {
+        this.innerHTML += html;
+      },
+    },
+    sccaInput: { checked: false },
+    verificationChecklistSummary: { textContent: "" },
+    labDetailSummary: { textContent: "" },
+    labDetailBody: { innerHTML: "" },
+    labChromaticityChart: { innerHTML: "" },
+    labBody: { innerHTML: "" },
+  });
+  const labRows = [
+    { label: "SML_Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 94, a: 0, b: -3 }, referenceLab: { l: 92, a: 0, b: -3 }, deltaE: 1, status: "Pass" },
+    { label: "SML_C_100", cmyk: { c: 100, m: 0, y: 0, k: 0 }, lab: { l: 58, a: -36, b: -47 }, referenceLab: { l: 54, a: -36, b: -49 }, deltaE: 4, status: "Pass" },
+    { label: "SML_Red", cmyk: { c: 0, m: 100, y: 100, k: 0 }, lab: { l: 49, a: 63, b: 39 }, referenceLab: { l: 46, a: 67, b: 43 }, deltaE: 5, status: "Fail" },
+    { label: "SML_CMY_Black", cmyk: { c: 100, m: 100, y: 100, k: 0 }, lab: { l: 29, a: -1, b: -4 }, referenceLab: { l: 22, a: 0, b: -2 }, deltaE: 7, status: "Fail" },
+  ];
+
+  renderAnalyze(state({
+    standard: { name: "ISO 12647-2:2007 Offset", deltaE: { warning: 5, fail: 5 } },
+    labRows,
+    results: [],
+    safetyIssues: [],
+    diagnosis: { level: "warning", title: "测试诊断", ratio: 45, messages: [] },
+  }), localEls);
+
+  const visibleHtml = `${localEls.labBody.innerHTML}\n${localEls.labDetailBody.innerHTML}`;
+  assert.doesNotMatch(visibleHtml, /SML_/);
+  assert.match(visibleHtml, /纸白/);
+  assert.match(visibleHtml, /C 实地/);
+  assert.match(visibleHtml, /MY 叠印/);
+  assert.match(visibleHtml, /CMY 叠印/);
 });
 
 test("renderAnalyze recognizes imported paper Lab for SCCA messaging", () => {
@@ -718,12 +762,147 @@ test("renderReport summarizes field report sections", () => {
 
   assert.match(localEls.reportSummary.innerHTML, /GRACoL2013 CRPC6|生产可补偿/);
   assert.match(localEls.reportSummary.innerHTML, /作业库/);
+  assert.equal(localEls.reportAuditComparison.hidden, false);
+  assert.match(localEls.reportAuditComparison.innerHTML, /现场验厂报告输出/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /TVI \/ CTV 关键网点判定/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /Lab \/ ΔE 关键色块判定/);
   assert.match(localEls.reportG7Conclusion.innerHTML, /G7 未通过，需修正后复测/);
   assert.match(localEls.reportLabSummary.innerHTML, /最大 ΔE/);
   assert.match(localEls.reportCurveSummary.innerHTML, /曲线质量|平均 \|TVI\/CTV 偏差\|/);
   assert.match(localEls.reportRunCompare.innerHTML, /已解决/);
   assert.doesNotMatch(localEls.reportRunCompare.innerHTML, /<strong>Run 对比/);
   assert.equal(localEls.printReportButton.disabled, false);
+});
+
+test("renderReport hides imported SML sample ids in production Lab table", () => {
+  const localEls = els({
+    modeSelect: { value: "tvi" },
+    targetSelect: { value: "isoA" },
+    jobCustomerInput: { value: "SML Viet Nam" },
+    jobPressInput: { value: "XL-75-6C" },
+  });
+  renderReport(state({
+    standard: { name: "ISO 12647-2:2007 Offset", deltaE: { warning: 5, fail: 5 } },
+    labRows: [
+      { label: "SML_Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 94, a: 0, b: -3 }, referenceLab: { l: 92, a: 0, b: -3 }, deltaE: 1, status: "Pass" },
+      { label: "SML_C_100", cmyk: { c: 100, m: 0, y: 0, k: 0 }, lab: { l: 58, a: -36, b: -47 }, referenceLab: { l: 54, a: -36, b: -49 }, deltaE: 4, status: "Pass" },
+    ],
+    results: [],
+  }), localEls);
+
+  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /SML_/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /纸白/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /C 实地/);
+});
+
+test("renderReport adds SML source-audit comparison when audit report data is attached", () => {
+  const auditReport = JSON.parse(fs.readFileSync("samples/sml-printspec-audit-example.json", "utf8"));
+  const localEls = els({
+    modeSelect: { value: "tvi" },
+    targetSelect: { value: "isoA" },
+    jobCustomerInput: { value: "SML Viet Nam" },
+    jobPressInput: { value: "XL-75-6C" },
+    jobPaperInput: { value: "FSC 300LX3143B" },
+    jobDeviceInput: { value: "Mellow Colour PrintSpec" },
+  });
+  const localState = state({
+    auditReport,
+    standard: { name: "ISO 12647-2:2007 Offset", deltaE: { warning: 3.5, fail: 4.2 } },
+    measurements: [{ channel: "C", tone: 50, measuredTone: 67.2 }],
+    results: [{ channel: "C", tone: 50, measuredTone: 67.2, targetTone: 64.3, tviDelta: 2.9 }],
+  });
+
+  renderReport(localState, localEls);
+
+  assert.equal(localEls.reportAuditComparison.hidden, false);
+  assert.match(localEls.reportAuditComparison.innerHTML, /现场验厂报告输出/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /来源验厂报告复核/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /SML Viet Nam/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /Mellow Colour PrintSpec/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /三灰 ΔH|Lab ΔE|密度/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /网点扩张曲线/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /实地密度目标 \/ 实测/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /50% 密度目标 \/ 实测/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /<th>输入网点<\/th>[\s\S]*<th>C<\/th>[\s\S]*<th>M<\/th>[\s\S]*<th>Y<\/th>[\s\S]*<th>K<\/th>/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /25%[\s\S]*目标[\s\S]*9\.30%[\s\S]*实测[\s\S]*11\.30%/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /50% 四色密度[\s\S]*0\.49[\s\S]*0\.50/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /MY 叠印[\s\S]*46\.00, 67\.00, 47\.00[\s\S]*49\.39, 63\.46, 38\.72/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /≤ 5/);
+  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /W 5 \/ F 5/);
+  const toleranceBand = localEls.reportAuditComparison.innerHTML.match(/<path d="([^"]+)" fill="#0298bd" fill-opacity="0\.045"/);
+  assert.ok(toleranceBand, "expected cyan tolerance band path");
+  assert.match(toleranceBand[1], /\sC\s/, "target tolerance band should use smooth Bezier curves");
+  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /SML_/);
+  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /参考 SML/);
+});
+
+test("renderReport uses ISO 12647-2 SML density targets when only measurement Run data is loaded", () => {
+  const localEls = els({
+    modeSelect: { value: "tvi" },
+    targetSelect: { value: "isoA" },
+    jobCustomerInput: { value: "SML Viet Nam" },
+    jobPressInput: { value: "XL-75-6C" },
+  });
+  const measurements = ["C", "M", "Y", "K"].flatMap((channel, index) => [
+    { channel, tone: 50, density: [0.5, 0.5, 0.44, 0.53][index] },
+    { channel, tone: 100, density: [1.26, 1.27, 0.99, 1.6][index] },
+  ]);
+  const results = ["C", "M", "Y", "K"].flatMap((channel) => [25, 50, 75].map((tone) => ({
+    channel,
+    tone,
+    measuredTvi: tone === 50 ? 17 : 11,
+    targetTvi: tone === 50 ? 16 : 11.5,
+    tviDelta: tone === 50 ? 1 : -0.5,
+  })));
+
+  renderReport(state({
+    standard: { name: "ISO 12647-2:2007 Offset", deltaE: { warning: 5, fail: 5 } },
+    measurements,
+    results,
+  }), localEls);
+
+  assert.match(localEls.reportAuditComparison.innerHTML, /四色实地密度[\s\S]*1\.40[\s\S]*1\.45[\s\S]*1\.05[\s\S]*1\.70/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /50% 四色密度[\s\S]*0\.49[\s\S]*0\.50[\s\S]*0\.43[\s\S]*0\.54/);
+  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /四色实地密度[\s\S]*N\/A[\s\S]*1\.26/);
+});
+
+test("renderReport shows solid density ranges for standards without exact density targets", () => {
+  const localEls = els({
+    modeSelect: { value: "tvi" },
+    targetSelect: { value: "isoA" },
+  });
+  const measurements = [
+    { channel: "C", tone: 100, density: 1.35 },
+    { channel: "M", tone: 100, density: 1.42 },
+    { channel: "Y", tone: 100, density: 0.98 },
+    { channel: "K", tone: 100, density: 1.72 },
+  ];
+  const results = ["C", "M", "Y", "K"].flatMap((channel) => [25, 50, 75].map((tone) => ({
+    channel,
+    tone,
+    measuredTvi: tone === 50 ? 16.2 : 11.4,
+    targetTvi: tone === 50 ? 16 : 11.5,
+    tviDelta: tone === 50 ? 0.2 : -0.1,
+  })));
+
+  renderReport(state({
+    standard: {
+      name: "GRACoL2013 CRPC6",
+      solidDensityRanges: {
+        C: [1.25, 1.65],
+        M: [1.25, 1.65],
+        Y: [0.85, 1.15],
+        K: [1.45, 1.9],
+      },
+      deltaE: { warning: 3.5, fail: 4.2 },
+    },
+    measurements,
+    results,
+  }), localEls);
+
+  assert.match(localEls.reportAuditComparison.innerHTML, /四色实地密度[\s\S]*1\.25-1\.65[\s\S]*1\.35/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /四色实地密度[\s\S]*0\.85-1\.15[\s\S]*0\.98/);
+  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /四色实地密度[\s\S]*N\/A[\s\S]*1\.35/);
 });
 
 test("renderReport compares only runs from the current job", () => {

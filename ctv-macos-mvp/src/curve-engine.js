@@ -57,7 +57,15 @@ export function calculateCompensation(measurements, options) {
       const metric = resolveMeasurementMetric(item, mode);
       const measuredTvi = metric.delta;
       if (!Number.isFinite(measuredTvi)) return null;
-      const targetTvi = interpolate(targetPoints, item.tone);
+      let channelTargetPoints = targetPoints;
+      if (options.standardId === "sml_printspec_xl75_6c") {
+        if (item.channel === "K") {
+          channelTargetPoints = TARGETS.isoB.points;
+        } else {
+          channelTargetPoints = TARGETS.isoA.points;
+        }
+      }
+      const targetTvi = interpolate(channelTargetPoints, item.tone);
       const measuredTone = metric.tone;
       const targetTone = clamp(item.tone + targetTvi, 0, 100);
       const tviDelta = measuredTvi - targetTvi;
@@ -85,7 +93,18 @@ export function calculateCompensation(measurements, options) {
 
   const grouped = groupByChannel(rows);
   return Object.values(grouped)
-    .flatMap((items) => finalizeChannel(items, { smooth, outputGrid, targetPoints }))
+    .flatMap((items) => {
+      const channel = items[0]?.channel;
+      let channelTargetPoints = targetPoints;
+      if (options.standardId === "sml_printspec_xl75_6c") {
+        if (channel === "K") {
+          channelTargetPoints = TARGETS.isoB.points;
+        } else {
+          channelTargetPoints = TARGETS.isoA.points;
+        }
+      }
+      return finalizeChannel(items, { smooth, outputGrid, targetPoints: channelTargetPoints });
+    })
     .sort((a, b) => a.channel.localeCompare(b.channel) || a.tone - b.tone);
 }
 

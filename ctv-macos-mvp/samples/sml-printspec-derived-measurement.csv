@@ -1,0 +1,29 @@
+sample_id,patch_type,channel,input_tone,measured_tone,measured_tvi,cmyk_c,cmyk_m,cmyk_y,cmyk_k,lab_l,lab_a,lab_b,density,source,note
+SML_Paper,paper,,,,,0,0,0,0,94.21,0.64,-3.19,0.07,SML PrintSpec audit report,Report-derived paper white
+SML_C_0,tone,C,0,0,0,0,0,0,0,,,,0.07,SML PrintSpec audit report,Report-derived TVI and density
+SML_C_25,tone,C,25,36.3,11.3,25,0,0,0,,,,0.25,SML PrintSpec audit report,Report-derived TVI and density
+SML_C_50,tone,C,50,67.2,17.2,50,0,0,0,,,,0.50,SML PrintSpec audit report,Report-derived TVI and density
+SML_C_75,tone,C,75,87.0,12.0,75,0,0,0,,,,0.80,SML PrintSpec audit report,Report-derived TVI and density
+SML_C_100,solid,C,100,100,0,100,0,0,0,57.68,-35.80,-47.25,1.26,SML PrintSpec audit report,Report-derived solid Lab and density
+SML_M_0,tone,M,0,0,0,0,0,0,0,,,,0.07,SML PrintSpec audit report,Report-derived TVI and density
+SML_M_25,tone,M,25,36.2,11.2,0,25,0,0,,,,0.25,SML PrintSpec audit report,Report-derived TVI and density
+SML_M_50,tone,M,50,67.1,17.1,0,50,0,0,,,,0.50,SML PrintSpec audit report,Report-derived TVI and density
+SML_M_75,tone,M,75,89.4,14.4,0,75,0,0,,,,0.86,SML PrintSpec audit report,Report-derived TVI and density
+SML_M_100,solid,M,100,100,0,0,100,0,0,50.23,71.94,-6.34,1.27,SML PrintSpec audit report,Report-derived solid Lab and density
+SML_Y_0,tone,Y,0,0,0,0,0,0,0,,,,0.05,SML PrintSpec audit report,Report-derived TVI and density
+SML_Y_25,tone,Y,25,34.8,9.8,0,0,25,0,,,,0.21,SML PrintSpec audit report,Report-derived TVI and density
+SML_Y_50,tone,Y,50,66.9,16.9,0,0,50,0,,,,0.44,SML PrintSpec audit report,Report-derived TVI and density
+SML_Y_75,tone,Y,75,87.7,12.7,0,0,75,0,,,,0.70,SML PrintSpec audit report,Report-derived TVI and density
+SML_Y_100,solid,Y,100,100,0,0,0,100,0,88.36,-6.09,88.14,0.99,SML PrintSpec audit report,Report-derived solid Lab and density
+SML_K_0,tone,K,0,0,0,0,0,0,0,,,,0.07,SML PrintSpec audit report,Report-derived TVI and density
+SML_K_25,tone,K,25,36.5,11.5,0,0,0,25,,,,0.26,SML PrintSpec audit report,Report-derived TVI and density
+SML_K_50,tone,K,50,67.3,17.3,0,0,0,50,,,,0.53,SML PrintSpec audit report,Report-derived TVI and density
+SML_K_75,tone,K,75,89.1,14.1,0,0,0,75,,,,0.94,SML PrintSpec audit report,Report-derived TVI and density
+SML_K_100,solid,K,100,100,0,0,0,0,100,17.96,0.35,0.21,1.60,SML PrintSpec audit report,Report-derived solid Lab and density
+SML_Red,overprint,,,,,0,100,100,0,49.39,63.46,38.72,,SML PrintSpec audit report,Report-derived overprint Lab MY
+SML_Green,overprint,,,,,100,0,100,0,52.15,-59.55,25.17,,SML PrintSpec audit report,Report-derived overprint Lab CY
+SML_Violet,overprint,,,,,100,100,0,0,28.14,16.12,-44.93,,SML PrintSpec audit report,Report-derived overprint Lab CM
+SML_CMY_Black,overprint,,,,,100,100,100,0,28.52,-1.45,-4.10,,SML PrintSpec audit report,Report-derived overprint Lab CMY
+SML_Light_Grey,gray_balance,,,,,,,,,76.61,2.20,-1.91,,SML PrintSpec audit report,Report-derived gray balance Lab no CMYK recipe in report photo
+SML_Mid_Grey,gray_balance,,,,,,,,,60.86,2.33,-1.50,,SML PrintSpec audit report,Report-derived gray balance Lab no CMYK recipe in report photo
+SML_Dark_Grey,gray_balance,,,,,,,,,43.31,0.81,-2.35,,SML PrintSpec audit report,Report-derived gray balance Lab no CMYK recipe in report photo

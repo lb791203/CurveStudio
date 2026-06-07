@@ -1,0 +1,25 @@
+ISO28178
+"ORIGINATOR ""CurveStudio"""
+"FILE_DESCRIPTOR ""SML PrintSpec audit target Lab / XL-75-6C"""
+"CREATED ""2026-06-03"""
+"MEASUREMENT_CONDITION ""M0"""
+"ILLUMINANT ""D50"""
+"OBSERVER ""2 degree"""
+"DENSITY_FILTER ""Status T"""
+"NOTE ""Target Lab values transcribed from SML Viet Nam PrintSpec audit report photos. Use for customer/audit report verification only."""
+NUMBER_OF_FIELDS 8
+BEGIN_DATA_FORMAT
+SAMPLE_ID CMYK_C CMYK_M CMYK_Y CMYK_K LAB_L LAB_A LAB_B
+END_DATA_FORMAT
+NUMBER_OF_SETS 9
+BEGIN_DATA
+Paper 0 0 0 0 92.00 0.00 -3.00
+C_solid 100 0 0 0 54.00 -36.00 -49.00
+M_solid 0 100 0 0 46.00 72.00 -5.00
+Y_solid 0 0 100 0 87.00 -6.00 90.00
+K_solid 0 0 0 100 16.00 0.00 0.00
+CM 100 100 0 0 24.00 16.00 -45.00
+CY 100 0 100 0 49.00 -66.00 24.00
+MY 0 100 100 0 46.00 67.00 47.00
+CMY 100 100 100 0 22.00 0.00 0.00
+END_DATA

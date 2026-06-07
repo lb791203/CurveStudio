@@ -75,6 +75,13 @@ const BROAD_SOLID_DENSITY_RANGES = {
   K: [0.95, 1.95],
 };
 
+const SML_ISO_12647_2_2007_DENSITY_TARGETS = {
+  C: { 0: 0.08, 25: 0.25, 50: 0.49, 75: 0.85, 100: 1.4 },
+  M: { 0: 0.08, 25: 0.25, 50: 0.5, 75: 0.86, 100: 1.45 },
+  Y: { 0: 0.06, 25: 0.22, 50: 0.43, 75: 0.72, 100: 1.05 },
+  K: { 0: 0.08, 25: 0.28, 50: 0.54, 75: 0.94, 100: 1.7 },
+};
+
 const CRPC_STANDARDS = Array.from({ length: 7 }, (_, index) => {
   const crpc = index + 1;
   return {
@@ -98,6 +105,17 @@ const BUILT_IN_STANDARD_LIBRARY = [
     referencePath: "./reference-data/standards/patchtool/FOGRA39.txt",
     solidDensityRanges: COATED_SOLID_DENSITY_RANGES,
     ...acceptancePreset("fograProcess"),
+  },
+  {
+    id: "sml_printspec_xl75_6c",
+    name: "ISO 12647-2:2007 Offset",
+    printCondition: "ISO 12647-2:2007 Offset Status T / Paper 2 Matt / Curve A+B / Black / Status T",
+    target: "isoA",
+    referencePath: "./reference-data/standards/customer-audit/SML-PrintSpec-XL75-6C.txt",
+    solidDensityRanges: COATED_SOLID_DENSITY_RANGES,
+    densityTargets: SML_ISO_12647_2_2007_DENSITY_TARGETS,
+    ...acceptancePreset("isoTviOnly"),
+    deltaE: { warning: 5, fail: 5 },
   },
   {
     id: "iso_tvi_a",
@@ -175,7 +193,7 @@ export function makeCustomStandard(base = {}, fields = {}) {
   const name = String(fields.name || base.name || "自定义印刷标准").trim() || "自定义印刷标准";
   return normalizeCustomStandard({
     ...cloneStandard(base),
-    id: fields.id || `custom_${Date.now()}`,
+    id: fields.id || base.id || `custom_${Date.now()}`,
     name,
     printCondition: String(fields.printCondition || base.printCondition || "Custom print condition").trim(),
     target: fields.target || base.target || "isoA",
@@ -190,7 +208,7 @@ export function addOrUpdateCustomStandard(standard) {
   if (!normalized) return getCustomStandards();
   customStandards = [
     normalized,
-    ...customStandards.filter((item) => item.id !== normalized.id),
+    ...customStandards.filter((item) => item.id !== normalized.id && !sameImportedStandard(item, normalized)),
   ];
   STANDARD_LIBRARY = [...BUILT_IN_STANDARD_LIBRARY, ...customStandards];
   return getCustomStandards();
@@ -270,14 +288,37 @@ function formatTone(value) {
 function normalizeCustomStandard(item) {
   if (!item || typeof item !== "object") return null;
   const id = String(item.id || "").trim() || `custom_${Date.now()}`;
+  const defaults = {
+    ...acceptancePreset("isoTviOnly"),
+    solidDensityRanges: BROAD_SOLID_DENSITY_RANGES,
+  };
+  const source = cloneStandard(item);
   return {
-    ...cloneStandard(item),
+    ...defaults,
+    ...source,
     id,
     name: String(item.name || "自定义印刷标准").trim() || "自定义印刷标准",
     printCondition: String(item.printCondition || "Custom print condition").trim(),
     target: item.target || "isoA",
+    deltaE: {
+      ...defaults.deltaE,
+      ...(source.deltaE || {}),
+    },
+    g7: {
+      ...defaults.g7,
+      ...(source.g7 || {}),
+    },
+    toneTolerances: source.toneTolerances || defaults.toneTolerances,
+    solidDensityRanges: source.solidDensityRanges || defaults.solidDensityRanges,
     custom: true,
   };
+}
+
+function sameImportedStandard(a, b) {
+  if (!a?.custom || !b?.custom) return false;
+  if (!Array.isArray(a.referenceRows) || !Array.isArray(b.referenceRows)) return false;
+  return String(a.name || "") === String(b.name || "")
+    && String(a.printCondition || "") === String(b.printCondition || "");
 }
 
 function cloneStandard(item) {

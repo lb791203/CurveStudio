@@ -33,6 +33,66 @@ export function labText(lab) {
   return lab ? `${num(lab.l)}, ${num(lab.a)}, ${num(lab.b)}` : "";
 }
 
+export function displayPatchLabel(row = {}) {
+  const cmyk = row.cmyk || {};
+  const c = numericCmyk(cmyk.c);
+  const m = numericCmyk(cmyk.m);
+  const y = numericCmyk(cmyk.y);
+  const k = numericCmyk(cmyk.k);
+  if ([c, m, y, k].every(Number.isFinite)) {
+    if (near(c, 0) && near(m, 0) && near(y, 0) && near(k, 0)) return t("paper_white_label", "纸白");
+    if (near(c, 100) && near(m, 0) && near(y, 0) && near(k, 0)) return t("patch_c_solid", "C 实地");
+    if (near(c, 0) && near(m, 100) && near(y, 0) && near(k, 0)) return t("patch_m_solid", "M 实地");
+    if (near(c, 0) && near(m, 0) && near(y, 100) && near(k, 0)) return t("patch_y_solid", "Y 实地");
+    if (near(c, 0) && near(m, 0) && near(y, 0) && near(k, 100)) return t("patch_k_solid", "K 实地");
+    if (near(c, 100) && near(m, 100) && near(y, 0) && near(k, 0)) return t("patch_cm_overprint", "CM 叠印");
+    if (near(c, 100) && near(m, 0) && near(y, 100) && near(k, 0)) return t("patch_cy_overprint", "CY 叠印");
+    if (near(c, 0) && near(m, 100) && near(y, 100) && near(k, 0)) return t("patch_my_overprint", "MY 叠印");
+    if (near(c, 100) && near(m, 100) && near(y, 100) && near(k, 0)) return t("patch_cmy_overprint", "CMY 叠印");
+
+    const toneChannel = [
+      ["C", c, m, y, k],
+      ["M", m, c, y, k],
+      ["Y", y, c, m, k],
+      ["K", k, c, m, y],
+    ].find(([, tone, otherA, otherB, otherC]) => tone > 0 && !near(tone, 100) && near(otherA, 0) && near(otherB, 0) && near(otherC, 0));
+    if (toneChannel) return `${toneChannel[0]} ${Number(toneChannel[1]).toFixed(0)}%`;
+  }
+
+  const label = String(row.label || row.sampleId || row.sample_id || row.name || "");
+  return importedPatchLabel(label) || label || t("patch_label", "色块");
+}
+
+function importedPatchLabel(label) {
+  const normalized = String(label || "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (/paper/.test(normalized)) return t("paper_white_label", "纸白");
+  if (/(^|_)c_100$/.test(normalized)) return t("patch_c_solid", "C 实地");
+  if (/(^|_)m_100$/.test(normalized)) return t("patch_m_solid", "M 实地");
+  if (/(^|_)y_100$/.test(normalized)) return t("patch_y_solid", "Y 实地");
+  if (/(^|_)k_100$/.test(normalized)) return t("patch_k_solid", "K 实地");
+  if (/violet|blue/.test(normalized)) return t("patch_cm_overprint", "CM 叠印");
+  if (/green/.test(normalized)) return t("patch_cy_overprint", "CY 叠印");
+  if (/red/.test(normalized)) return t("patch_my_overprint", "MY 叠印");
+  if (/cmy[_ -]?black/.test(normalized)) return t("patch_cmy_overprint", "CMY 叠印");
+  if (/light[_ -]?gr[ae]y/.test(normalized)) return t("gray_25_label", "三色灰 25%");
+  if (/mid[_ -]?gr[ae]y|middle[_ -]?gr[ae]y/.test(normalized)) return t("gray_50_label", "三色灰 50%");
+  if (/dark[_ -]?gr[ae]y/.test(normalized)) return t("gray_75_label", "三色灰 75%");
+  const tone = normalized.match(/(^|_)([cmyk])_(\d{1,3})(_|$)/);
+  if (tone) return `${tone[2].toUpperCase()} ${tone[3]}%`;
+  return "";
+}
+
+function numericCmyk(value) {
+  if (value === "" || value === null || value === undefined) return NaN;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : NaN;
+}
+
+function near(value, target) {
+  return Math.abs(Number(value) - target) < 0.01;
+}
+
 export function renderImportAudit(audit) {
   if (audit.kind === "empty" || (audit.title === "未导入数据" && !audit.rawRowCount && !audit.measurementCount && !audit.usableCount)) {
     return `
