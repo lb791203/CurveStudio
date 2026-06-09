@@ -1,4 +1,4 @@
-import { groupByChannel, number } from "./shared.js";
+import { groupByChannel, number, metadataLooksReference } from "./shared.js";
 import { formatManualActionZh } from "./formatters.js";
 import { densityFromSpectralRow, labFromSpectralRow, labFromXyz, xyzFromSpectralRow } from "./spectral-color.js?v=20260520-patchmap";
 
@@ -619,7 +619,7 @@ function resolveMeasurementMetric(item, mode) {
     };
   }
   if (Number.isFinite(item.density)) {
-    const delta = densityToApproxTvi(item.density, item.tone);
+    const delta = densityToApproxTvi(item.density, item.tone, item.channel);
     return {
       name: mode === "ctv" ? "TVI fallback" : "TVI",
       method: "density_without_solid_fallback",
@@ -630,8 +630,10 @@ function resolveMeasurementMetric(item, mode) {
   return { name: mode === "ctv" ? "CTV" : "TVI", method: "missing", tone: NaN, delta: NaN };
 }
 
-function densityToApproxTvi(density, tone) {
-  const solidDensity = Math.max(1.2, density);
+const FALLBACK_SOLID_DENSITY = { C: 1.40, M: 1.45, Y: 1.05, K: 1.70 };
+
+function densityToApproxTvi(density, tone, channel) {
+  const solidDensity = Math.max(FALLBACK_SOLID_DENSITY[channel] || 1.2, density);
   const apparent = 100 * (1 - 10 ** (-density)) / (1 - 10 ** (-solidDensity));
   return clamp(apparent - tone, -20, 40);
 }
@@ -821,18 +823,7 @@ function isColorimetricMeasurementCandidate(row, context) {
   return /(measure|instrument|manual|scan|press|run|sample)/.test(role);
 }
 
-function metadataLooksReference(metadata = {}) {
-  const text = [
-    metadata.descriptor,
-    metadata.file_descriptor,
-    metadata.originator,
-    metadata.devcalstd,
-    metadata.target_type,
-    metadata.print_conditions,
-    metadata.copyright,
-  ].flat().filter(Boolean).join(" ").toLowerCase();
-  return /\breference\b|color characterization|print condition|fogra|gracol|snap|tr00|ansi cgats/.test(text);
-}
+
 
 function spotColorToneValue(toneVector, paperVector, solidVector) {
   const full = vectorDistance(solidVector, paperVector);
@@ -1036,12 +1027,17 @@ function preserveCorrectionDirection(items) {
   });
 }
 
+function protectionMaxMove(tone) {
+  if (tone <= 5) return 2;
+  if (tone <= 15) return 2 + ((tone - 5) / 10) * 16;  // 线性过渡 2→18
+  if (tone >= 90) return 3;
+  if (tone >= 75) return 3 + ((90 - tone) / 15) * 15;  // 线性过渡 18→3
+  return 18;  // 中间色调保持全局限制
+}
+
 function protectToneEnds(items) {
   return items.map((row) => {
-    let maxMove = Infinity;
-    if (row.tone <= 10) maxMove = 3;
-    if (row.tone >= 80) maxMove = 5;
-    if (!Number.isFinite(maxMove)) return row;
+    const maxMove = protectionMaxMove(row.tone);
     const limited = clamp(row.outputTone, row.tone - maxMove, row.tone + maxMove);
     return { ...row, outputTone: clamp(limited, 0, 100), correction: limited - row.tone };
   });

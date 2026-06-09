@@ -1,5 +1,5 @@
 import { cmykFromManualRow, cmykKey, labFromRow } from "./standards.js";
-import { average, groupByChannel, number } from "./shared.js";
+import { average, groupByChannel, number, rawCmyk, isLikelyG7GrayCandidate, metadataLooksReference } from "./shared.js";
 import { labFromSpectralRow } from "./spectral-color.js";
 import { buildNpdcVerification, summarizeNpdc, buildGrayVerification, summarizeGrayBalance, summarizeWeightedDeltaL, buildColorspaceVerification, classifyColorspacePatches } from "./g7-targets.js?v=20260522-g7-verify";
 
@@ -806,18 +806,7 @@ function isExplicitSolidDensity(row) {
   return row.tone >= 99.9;
 }
 
-function metadataLooksReference(metadata = {}) {
-  const text = [
-    metadata.descriptor,
-    metadata.file_descriptor,
-    metadata.originator,
-    metadata.devcalstd,
-    metadata.target_type,
-    metadata.print_conditions,
-    metadata.copyright,
-  ].flat().filter(Boolean).join(" ").toLowerCase();
-  return /\breference\b|color characterization|print condition|fogra|gracol|snap|tr00|ansi cgats/.test(text);
-}
+
 
 function maxFinite(values) {
   const finite = values.filter(Number.isFinite);
@@ -892,15 +881,7 @@ function hasCmykTuple(row) {
   return Boolean(rawCmyk(row));
 }
 
-function isLikelyG7GrayCandidate(row) {
-  const cmyk = rawCmyk(row);
-  if (!cmyk) return false;
-  const { c, m, y, k } = cmyk;
-  if (k > 0.01 || c <= 0 || m <= 0 || y <= 0) return false;
-  const myClose = Math.abs(m - y) <= 2.5;
-  const cInRange = c >= m - 3 && c <= m + 10 && c >= y - 3 && c <= y + 10;
-  return myClose && cInRange;
-}
+
 
 function classifyG7Patches(rows) {
   const paper = rows.filter(isPaperPatch).length;
@@ -996,14 +977,7 @@ function completenessRow(item, count, required, ok) {
   return { item, count, required, status: ok ? "Pass" : "Missing" };
 }
 
-function rawCmyk(row) {
-  const c = number(row.cmyk_c ?? row.c);
-  const m = number(row.cmyk_m ?? row.m);
-  const y = number(row.cmyk_y ?? row.y);
-  const k = number(row.cmyk_k ?? row.k);
-  if ([c, m, y, k].some((value) => !Number.isFinite(value))) return null;
-  return { c, m, y, k };
-}
+
 
 function isPaperPatch(row) {
   const cmyk = rawCmyk(row);
