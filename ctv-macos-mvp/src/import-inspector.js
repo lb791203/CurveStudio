@@ -1,4 +1,4 @@
-import { groupByChannel, number } from "./shared.js";
+import { groupByChannel, number, rawCmyk, isLikelyG7GrayCandidate } from "./shared.js";
 
 const CHANNELS = ["C", "M", "Y", "K"];
 const REQUIRED_TONES = [25, 50, 75];
@@ -145,14 +145,7 @@ function classifyRawRows(rows) {
   };
 }
 
-function rawCmyk(row) {
-  const c = number(row.cmyk_c ?? row.c);
-  const m = number(row.cmyk_m ?? row.m);
-  const y = number(row.cmyk_y ?? row.y);
-  const k = number(row.cmyk_k ?? row.k);
-  if ([c, m, y, k].some((value) => !Number.isFinite(value))) return null;
-  return { c, m, y, k };
-}
+
 
 function isPaperPatch(row) {
   const cmyk = rawCmyk(row);
@@ -172,13 +165,7 @@ function isKOnlyPatch(row) {
   return Boolean(cmyk) && cmyk.k > 0 && cmyk.k < 100 && Math.abs(cmyk.c) < 0.01 && Math.abs(cmyk.m) < 0.01 && Math.abs(cmyk.y) < 0.01;
 }
 
-function isLikelyG7GrayCandidate(row) {
-  const cmyk = rawCmyk(row);
-  if (!cmyk) return false;
-  const { c, m, y, k } = cmyk;
-  if (k > 0.01 || c <= 0 || m <= 0 || y <= 0) return false;
-  return Math.abs(m - y) <= 2.5 && c <= m + 2.5 && c <= y + 2.5;
-}
+
 
 function hasRawLab(row) {
   return [row.lab_l, row.lab_a, row.lab_b].every((value) => Number.isFinite(number(value)));
