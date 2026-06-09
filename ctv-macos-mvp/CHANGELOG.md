@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.2 - 2026-06-09
+
+- Refactored styles.css with CSS Design Tokens system and merged overrides back into core styles, reducing `!important` occurrences.
+- Unified button heights and control sizing across all features.
+- Aligned G7 gray balance candidate heuristics across import-inspector and analysis-engine, extracting duplicate logic to shared.
+- Adjusted Yellow channel fallback solid density and implemented progressive smooth limits for compensation curves.
+- Expanded Status-T, spectral, and Delta E test coverage.
+
 ## 1.0.1 - 2026-06-08
 
 - Optimize field audit report layout, scoring logic, standard curves, and unify UI button styles.
