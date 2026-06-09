@@ -214,7 +214,9 @@ export function summarizeWeightedDeltaL(rows, tolerances = {}) {
 export function g7ToneWeight(tone) {
   const numeric = number(tone);
   if (!Number.isFinite(numeric)) return NaN;
-  return 1 - Math.max(0, ((numeric - 50) / 50) * 0.75);
+  let w = 1 - Math.max(0, ((numeric - 50) / 50) * 0.75);
+  if (numeric < 5) w *= 0.5 + (numeric / 5) * 0.5;
+  return w;
 }
 
 export function neutralPrintDensityFromL(sampleL, paperL = DEFAULT_G7_PAPER_L) {

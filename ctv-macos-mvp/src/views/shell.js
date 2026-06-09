@@ -150,16 +150,18 @@ export function renderRuns(state, els) {
               <small>${escapeHtml(t("points_curve_label", "测点 / 曲线点"))}</small>
               <strong>${job.latest.measurements || job.latest.archive?.measurements?.length || 0} / ${job.latest.results || job.latest.archive?.results?.length || 0}</strong>
             </span>
+          </button>
+          <div class="run-card-footer">
             <span class="job-run-statuses">
               <span class="status ${statusClass(job.latest.g7Status || job.latest.metrics?.g7Status)}">${escapeHtml(job.latest.g7Status || job.latest.metrics?.g7Status || t("g7_not_run_label", "未运行"))}</span>
               <span class="status ${job.latest.curveQualityStatus === "Ready" ? "pass" : job.latest.curveQualityStatus === "Blocked" ? "fail" : "warning"}">${escapeHtml(job.latest.curveQualityStatus || job.latest.metrics?.curveQualityStatus || "Curve")}</span>
             </span>
-          </button>
-          <div class="run-card-actions">
-            <button class="secondary-mini" type="button" data-job-select-key="${escapeAttr(job.key)}">${escapeHtml(t("view_runs_button", "查看 Run"))}</button>
-            <button class="secondary-mini" type="button" data-job-export-key="${escapeAttr(job.key)}">${escapeHtml(t("export_job_button", "导出作业"))}</button>
-            <button class="secondary-mini" type="button" data-job-rename-key="${escapeAttr(job.key)}">${escapeHtml(t("rename_job_button", "重命名作业"))}</button>
-            <button class="danger-mini" type="button" data-job-delete-key="${escapeAttr(job.key)}">${escapeHtml(t("delete_job_button", "删除作业"))}</button>
+            <div class="run-card-actions">
+              <button class="secondary-mini" type="button" data-job-select-key="${escapeAttr(job.key)}">${escapeHtml(t("view_runs_button", "查看 Run"))}</button>
+              <button class="secondary-mini" type="button" data-job-export-key="${escapeAttr(job.key)}">${escapeHtml(t("export_job_button", "导出作业"))}</button>
+              <button class="secondary-mini" type="button" data-job-rename-key="${escapeAttr(job.key)}">${escapeHtml(t("rename_job_button", "重命名作业"))}</button>
+              <button class="danger-mini" type="button" data-job-delete-key="${escapeAttr(job.key)}">${escapeHtml(t("delete_job_button", "删除作业"))}</button>
+            </div>
           </div>
         </article>
       `),
@@ -896,7 +898,7 @@ function auditLineChart(title, rows, options = {}) {
         ${channels.map((channel) => `<span><i style="background:${auditChannelColor(channel)}"></i>${channel}</span>`).join("")}
       </div>
       <svg viewBox="0 0 360 220" role="img" aria-label="${escapeAttr(title)}">
-        <rect x="0" y="0" width="360" height="220" rx="8" fill="#fff" />
+        <rect x="0" y="0" width="360" height="220" rx="8" fill="var(--surface)" />
         ${grid}
         <line x1="${bounds.x}" y1="${bounds.y + bounds.h}" x2="${bounds.x + bounds.w}" y2="${bounds.y + bounds.h}" class="audit-chart-axis" />
         <line x1="${bounds.x}" y1="${bounds.y}" x2="${bounds.x}" y2="${bounds.y + bounds.h}" class="audit-chart-axis" />
@@ -952,7 +954,7 @@ function auditLabChart(title, rows) {
         <span><i class="measured-point"></i>${escapeHtml(t("measured_label", "实测"))}</span>
       </div>
       <svg viewBox="0 0 360 220" role="img" aria-label="${escapeAttr(title)}">
-        <rect x="0" y="0" width="360" height="220" rx="8" fill="#fff" />
+        <rect x="0" y="0" width="360" height="220" rx="8" fill="var(--surface)" />
         <line x1="45" y1="112" x2="315" y2="112" class="audit-chart-axis" />
         <line x1="180" y1="27" x2="180" y2="197" class="audit-chart-axis" />
         ${[-100, -50, 0, 50, 100].map((value) => `<line x1="${x(value)}" y1="27" x2="${x(value)}" y2="197" class="audit-chart-grid-line" /><line x1="45" y1="${y(value)}" x2="315" y2="${y(value)}" class="audit-chart-grid-line" />`).join("")}
@@ -964,7 +966,7 @@ function auditLabChart(title, rows) {
           const measuredY = y(row.measuredLab?.b);
           return `
             <line x1="${targetX}" y1="${targetY}" x2="${measuredX}" y2="${measuredY}" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="4 3" />
-            <circle cx="${targetX}" cy="${targetY}" r="3.8" fill="#fff" stroke="#64748b" stroke-width="2" />
+            <circle cx="${targetX}" cy="${targetY}" r="3.8" fill="var(--surface)" stroke="#64748b" stroke-width="2" />
             <circle cx="${measuredX}" cy="${measuredY}" r="3.8" fill="${patchColor(row.label)}" stroke="#fff" stroke-width="1.2" />
           `;
         }).join("")}

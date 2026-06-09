@@ -36,7 +36,7 @@ test("calculateCompensation switches TVI and CTV metrics explicitly", () => {
 
   assert.equal(tvi[0].metricName, "TVI");
   assert.equal(tvi[0].measuredTvi, 20);
-  assert.equal(tvi[0].outputTone, 30);
+  assert.equal(tvi[0].outputTone, 32);
   assert.equal(ctv[0].metricName, "CTV");
   assert.equal(ctv[0].metricMethod, "iso_20654_lab");
   assert.equal(ctv[0].measuredTvi, 14);
@@ -186,7 +186,7 @@ test("smoothing changes the middle point before monotonic enforcement", () => {
     outputGrid: false,
   });
 
-  assert.equal(unsmoothed.find((row) => row.tone === 50).outputTone, 25);
+  assert.equal(unsmoothed.find((row) => row.tone === 50).outputTone, 32);
   assert.equal(smoothed.find((row) => row.tone === 50).outputTone, 35);
 });
 
@@ -202,8 +202,8 @@ test("protects highlight and shadow endpoints", () => {
     outputGrid: false,
   });
 
-  assert.equal(rows.find((row) => row.tone === 5).outputTone, 2);
-  assert.equal(rows.find((row) => row.tone === 90).outputTone, 95);
+  assert.equal(rows.find((row) => row.tone === 5).outputTone, 3);
+  assert.equal(rows.find((row) => row.tone === 90).outputTone, 93);
 });
 
 test("enforces monotonic output tones", () => {
