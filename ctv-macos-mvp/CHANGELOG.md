@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.4 - 2026-06-09
+
+- Translated all text nodes and buttons inside the Product Center dialog (Help, Updates, About) into English when switching languages.
+- Wrapped the software update status text inside the card and fixed the height of the Product Center modal to 560px to prevent size jumping when switching tabs.
+
 ## 1.0.3 - 2026-06-09
 
 - Renamed the fourth sidebar navigation tab and help description from "报告与导出" to "验证报告" to ensure visual consistency with other 4-character tabs.

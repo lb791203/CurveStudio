@@ -4495,6 +4495,7 @@ body.dark-theme .theme-toggle-btn:hover {
 
 .product-info-modal {
   width: min(920px, 100%);
+  height: 560px;
   max-height: min(780px, calc(100vh - 48px));
   grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
@@ -4556,6 +4557,13 @@ body.dark-theme .theme-toggle-btn:hover {
 
 .product-info-panel.active {
   display: grid;
+}
+
+.update-card-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
 }
 
 .info-hero,
