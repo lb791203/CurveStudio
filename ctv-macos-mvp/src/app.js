@@ -492,7 +492,7 @@ function attachEvents() {
   els.checkUpdateButton?.addEventListener("click", () => {
     setProductInfoTab("updates");
     if (els.updateStatusText) {
-      els.updateStatusText.textContent = "当前版本 1.0.2；在线更新服务尚未启用。市场版将通过应用市场更新，官网版后续接入检查更新。";
+      els.updateStatusText.textContent = "当前版本 1.0.3；在线更新服务尚未启用。市场版将通过应用市场更新，官网版后续接入检查更新。";
     }
   });
   window.addEventListener("keydown", (event) => {
@@ -1749,7 +1749,7 @@ function switchView(view) {
     acquisition: t("step_acquisition", "第 1 步：导入测量"),
     diagnose: t("step_diagnose", "第 2 步：分析诊断"),
     curves: t("step_curves", "第 3 步：生成曲线"),
-    delivery: t("step_delivery", "第 4 步：报告与导出")
+    delivery: t("step_delivery", "第 4 步：验证报告")
   };
   const stepIndicator = document.getElementById("currentStepName");
   if (stepIndicator) {

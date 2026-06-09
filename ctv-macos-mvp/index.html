@@ -33,7 +33,7 @@
           <button class="nav-button" type="button" data-step-button="setup" data-translate="nav_setup"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>标准设置</button>
           <button class="nav-button" type="button" data-step-button="diagnose" data-translate="nav_diagnose"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line><path d="M3 20h18"></path></svg></span>分析诊断</button>
           <button class="nav-button" type="button" data-step-button="curves" data-translate="nav_curves"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"></path><circle cx="18.7" cy="8" r="1.5" fill="currentColor"></circle><circle cx="13.6" cy="13.2" r="1.5" fill="currentColor"></circle><circle cx="10.8" cy="10.5" r="1.5" fill="currentColor"></circle></svg></span>生成曲线</button>
-          <button class="nav-button" type="button" data-step-button="delivery" data-translate="nav_delivery"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></span>报告与导出</button>
+          <button class="nav-button" type="button" data-step-button="delivery" data-translate="nav_delivery"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></span>验证报告</button>
         </nav>
 
         <section class="panel control-panel-widget">
@@ -1027,7 +1027,7 @@
                 <p>版本、帮助文档和更新说明集中管理；计算算法变化会在更新说明中单独列出。</p>
                 <div class="product-version-row">
                   <span>当前版本</span>
-                  <strong>1.0.2</strong>
+                  <strong>1.0.3</strong>
                   <span>构建日期</span>
                   <strong>2026-06-09</strong>
                 </div>
@@ -1071,7 +1071,7 @@
           <section class="product-info-panel active" data-product-info-panel="help">
             <div class="info-hero">
               <span>快速开始</span>
-              <strong>按文件导入、诊断、生成曲线、报告与导出的现场流程使用。</strong>
+              <strong>按文件导入、诊断、生成曲线、验证报告的现场流程使用。</strong>
             </div>
             <div class="info-grid">
               <article>
@@ -1101,12 +1101,17 @@
             <div class="update-status-card">
               <div>
                 <span>当前版本</span>
-                <strong>CurveStudio 1.0.2</strong>
+                <strong>CurveStudio 1.0.3</strong>
               </div>
               <button id="checkUpdateButton" type="button">检查更新</button>
             </div>
             <p id="updateStatusText" class="update-status-text">当前为本地预览版本；在线更新服务尚未启用，市场版将走各应用市场更新机制。</p>
             <div class="release-note-list">
+              <article>
+                <span>1.0.3</span>
+                <strong>统一侧边栏“验证报告”标签</strong>
+                <p>将原“报告与导出”变更为“验证报告”，使侧边栏所有步骤标题均保持一致的 4 字长度，排版更为工整。</p>
+              </article>
               <article>
                 <span>1.0.2</span>
                 <strong>优化UI设计系统、统一按钮与提升核心算法精度</strong>
@@ -1140,7 +1145,7 @@
               </div>
             </div>
             <div class="about-facts">
-              <div><span>版本</span><strong>1.0.2</strong></div>
+              <div><span>版本</span><strong>1.0.3</strong></div>
               <div><span>构建日期</span><strong>2026-06-09</strong></div>
               <div><span>数据处理</span><strong>默认本地处理，不上传测量文件</strong></div>
               <div><span>计算能力</span><strong>TVI、CTV、G7、Status-T、ΔE、P2P51</strong></div>

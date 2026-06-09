@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.3 - 2026-06-09
+
+- Renamed the fourth sidebar navigation tab and help description from "报告与导出" to "验证报告" to ensure visual consistency with other 4-character tabs.
+
 ## 1.0.2 - 2026-06-09
 
 - Refactored styles.css with CSS Design Tokens system and merged overrides back into core styles, reducing `!important` occurrences.
