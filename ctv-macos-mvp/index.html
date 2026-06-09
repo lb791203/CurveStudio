@@ -1027,14 +1027,14 @@
                 <p>版本、帮助文档和更新说明集中管理；计算算法变化会在更新说明中单独列出。</p>
                 <div class="product-version-row">
                   <span>当前版本</span>
-                  <strong>1.0.3</strong>
+                  <strong>1.0.4</strong>
                   <span>构建日期</span>
                   <strong>2026-06-09</strong>
                 </div>
                 <div class="inline-actions product-actions">
-                  <button id="settingsUpdateButton" type="button">检查更新</button>
-                  <button id="settingsHelpButton" class="secondary-action" type="button">帮助文档</button>
-                  <button id="settingsAboutButton" class="secondary-action" type="button">关于</button>
+                  <button id="settingsUpdateButton" type="button" data-translate="btn_check_update">检查更新</button>
+                  <button id="settingsHelpButton" class="secondary-action" type="button" data-translate="btn_help_docs">帮助文档</button>
+                  <button id="settingsAboutButton" class="secondary-action" type="button" data-translate="btn_about">关于</button>
                 </div>
               </div>
               <div class="summary-box">
@@ -1057,80 +1057,85 @@
       <section class="modal-card product-info-modal" role="dialog" aria-modal="true" aria-labelledby="productInfoTitle">
         <div class="modal-title-row">
           <div>
-            <h2 id="productInfoTitle">CurveStudio 产品中心</h2>
-            <p>帮助文档、软件升级和版本信息。</p>
+            <h2 id="productInfoTitle" data-translate="product_info_title">CurveStudio 产品中心</h2>
+            <p data-translate="product_info_desc">帮助文档、软件升级和版本信息。</p>
           </div>
           <button id="productInfoCloseButton" class="icon-button" type="button" aria-label="关闭">×</button>
         </div>
         <div class="product-info-tabs" role="tablist" aria-label="产品信息">
-          <button class="product-info-tab active" type="button" data-product-info-tab="help">帮助文档</button>
-          <button class="product-info-tab" type="button" data-product-info-tab="updates">软件升级</button>
-          <button class="product-info-tab" type="button" data-product-info-tab="about">关于</button>
+          <button class="product-info-tab active" type="button" data-product-info-tab="help" data-translate="tab_help">帮助文档</button>
+          <button class="product-info-tab" type="button" data-product-info-tab="updates" data-translate="tab_updates">软件升级</button>
+          <button class="product-info-tab" type="button" data-product-info-tab="about" data-translate="tab_about">关于</button>
         </div>
         <div class="product-info-body">
           <section class="product-info-panel active" data-product-info-panel="help">
             <div class="info-hero">
-              <span>快速开始</span>
-              <strong>按文件导入、诊断、生成曲线、验证报告的现场流程使用。</strong>
+              <span data-translate="help_hero_tag">快速开始</span>
+              <strong data-translate="help_hero_text">按文件导入、诊断、生成曲线、验证报告的现场流程使用。</strong>
             </div>
             <div class="info-grid">
               <article>
-                <strong>数据采集</strong>
-                <p>导入 CGATS / IT8 / P2P51 / TC1617 测量文件；软件会检查色块、Lab、密度和可计算曲线点。</p>
+                <strong data-translate="help_grid_1_title">数据采集</strong>
+                <p data-translate="help_grid_1_text">导入 CGATS / IT8 / P2P51 / TC1617 测量文件；软件会检查色块、Lab、密度和可计算曲线点。</p>
               </article>
               <article>
-                <strong>分析诊断</strong>
-                <p>查看 KPI、纸白/实地/叠印验收、Lab a*b* 色度图和完整 ΔE 明细。</p>
+                <strong data-translate="help_grid_2_title">分析诊断</strong>
+                <p data-translate="help_grid_2_text">查看 KPI、纸白/实地/叠印验收、Lab a*b* 色度图和完整 ΔE 明细。</p>
               </article>
               <article>
-                <strong>曲线生成</strong>
-                <p>生成 RIP 可录入网点，检查网点扩大、容差、补偿模拟和曲线安全。</p>
+                <strong data-translate="help_grid_3_title">曲线生成</strong>
+                <p data-translate="help_grid_3_text">生成 RIP 可录入网点，检查网点扩大、容差、补偿模拟和曲线安全。</p>
               </article>
               <article>
-                <strong>交付归档</strong>
-                <p>保存 Job / Run，导出 CSV、CGATS、项目档案和现场报告，便于复测对比。</p>
+                <strong data-translate="help_grid_4_title">交付归档</strong>
+                <p data-translate="help_grid_4_text">保存 Job / Run，导出 CSV、CGATS、项目档案和现场报告，便于复测对比。</p>
               </article>
             </div>
             <details class="info-details">
-              <summary>常见提示说明</summary>
-              <p>P2P51 的 25/75 阶调点可能由测量曲线插值生成，这属于正常导表结构，不代表文件不可用。</p>
-              <p>Status-E、真实设备 SDK 和完整认证级 G7 自动补偿仍处在后续阶段；当前报告会明确标注未启用能力。</p>
+              <summary data-translate="help_faq_title">常见提示说明</summary>
+              <p data-translate="help_faq_text1">P2P51 的 25/75 阶调点可能由测量曲线插值生成，这属于正常导表结构，不代表文件不可用。</p>
+              <p data-translate="help_faq_text2">Status-E、真实设备 SDK 和完整认证级 G7 自动补偿仍处在后续阶段；当前报告会明确标注未启用能力。</p>
             </details>
           </section>
           <section class="product-info-panel" data-product-info-panel="updates">
             <div class="update-status-card">
-              <div>
-                <span>当前版本</span>
-                <strong>CurveStudio 1.0.3</strong>
+              <div class="update-card-left">
+                <span data-translate="update_status_version_label">当前版本</span>
+                <strong>CurveStudio 1.0.4</strong>
+                <p id="updateStatusText" class="update-status-text" data-translate="update_status_initial_text">当前为本地预览版本；在线更新服务尚未启用，市场版将走各应用市场更新机制。</p>
               </div>
-              <button id="checkUpdateButton" type="button">检查更新</button>
+              <button id="checkUpdateButton" type="button" data-translate="btn_check_update">检查更新</button>
             </div>
-            <p id="updateStatusText" class="update-status-text">当前为本地预览版本；在线更新服务尚未启用，市场版将走各应用市场更新机制。</p>
             <div class="release-note-list">
               <article>
+                <span>1.0.4</span>
+                <strong data-translate="release_1_0_4_title">产品中心中英文翻译及布局优化</strong>
+                <p data-translate="release_1_0_4_text">支持产品中心（帮助文档/更新说明/关于）在中英文切换时全量翻译；优化更新卡片布局并固定 modal 高度为 560px，彻底消除切换标签页时的高度抖动突兀感。</p>
+              </article>
+              <article>
                 <span>1.0.3</span>
-                <strong>统一侧边栏“验证报告”标签</strong>
-                <p>将原“报告与导出”变更为“验证报告”，使侧边栏所有步骤标题均保持一致的 4 字长度，排版更为工整。</p>
+                <strong data-translate="release_1_0_3_title">统一侧边栏“验证报告”标签</strong>
+                <p data-translate="release_1_0_3_text">将原“报告与导出”变更为“验证报告”，使侧边栏所有步骤标题均保持一致的 4 字长度，排版更为工整。</p>
               </article>
               <article>
                 <span>1.0.2</span>
-                <strong>优化UI设计系统、统一按钮与提升核心算法精度</strong>
-                <p>重构 CSS 设计变量并整合样式，统一按钮高度与控件尺寸；对齐 G7 灰平衡候选点算法；升级 Yellow 通道保底实地密度；优化补偿曲线渐进式平滑保护；提升测试覆盖率。</p>
+                <strong data-translate="release_1_0_2_title">优化UI设计系统、统一按钮与提升核心算法精度</strong>
+                <p data-translate="release_1_0_2_text">重构 CSS 设计变量并整合样式，统一按钮高度与控件尺寸；对齐 G7 灰平衡候选点算法；升级 Yellow 通道保底实地密度；优化补偿曲线渐进式平滑保护；提升测试覆盖率。</p>
               </article>
               <article>
                 <span>1.0.1</span>
-                <strong>优化现场验收报告、导入与测量体验</strong>
-                <p>优化报告布局、标准曲线、统一按钮风格；支持在标准库直接导入 ICC 参考；优化手动测量和视图跳转；重命名报告导出步骤。</p>
+                <strong data-translate="release_1_0_1_title">优化现场验收报告、导入与测量体验</strong>
+                <p data-translate="release_1_0_1_text">优化报告布局、标准曲线、统一按钮风格；支持在标准库直接导入 ICC 参考；优化手动测量和视图跳转；重命名报告导出步骤。</p>
               </article>
               <article>
                 <span>0.1.12</span>
-                <strong>G7 / P2P51 / 曲线页打磨</strong>
-                <p>修正 G7 图表、P2P51 导入提示、Lab a*b* 色度图、补偿模拟网点扩大视图和曲线表输出列。</p>
+                <strong data-translate="release_0_1_12_title">G7 / P2P51 / 曲线页打磨</strong>
+                <p data-translate="release_0_1_12_text">修正 G7 图表、P2P51 导入提示、Lab a*b* 色度图、补偿模拟网点扩大视图和曲线表输出列。</p>
               </article>
               <article>
-                <span>后续计划</span>
-                <strong>稳定版升级通道</strong>
-                <p>官网版接入检查更新；市场版遵循各平台更新；算法变更会单独列出影响范围。</p>
+                <span data-translate="release_future_tag">后续计划</span>
+                <strong data-translate="release_future_title">稳定版升级通道</strong>
+                <p data-translate="release_future_text">官网版接入检查更新；市场版遵循各平台更新；算法变更会单独列出影响范围。</p>
               </article>
             </div>
           </section>
@@ -1140,24 +1145,24 @@
                 <span class="about-mark">CS</span>
               </div>
               <div>
-                <h3>CurveStudio</h3>
-                <p>TVI / CTV / G7 曲线生成与现场验收工具</p>
+                <h3 data-translate="about_title">CurveStudio</h3>
+                <p data-translate="about_subtitle">TVI / CTV / G7 曲线生成与现场验收工具</p>
               </div>
             </div>
             <div class="about-facts">
-              <div><span>版本</span><strong>1.0.3</strong></div>
-              <div><span>构建日期</span><strong>2026-06-09</strong></div>
-              <div><span>数据处理</span><strong>默认本地处理，不上传测量文件</strong></div>
-              <div><span>计算能力</span><strong>TVI、CTV、G7、Status-T、ΔE、P2P51</strong></div>
+              <div><span data-translate="about_version">版本</span><strong>1.0.4</strong></div>
+              <div><span data-translate="about_build_date">构建日期</span><strong>2026-06-09</strong></div>
+              <div><span data-translate="about_data_handling">数据处理</span><strong data-translate="about_data_handling_val">默认本地处理，不上传测量文件</strong></div>
+              <div><span data-translate="about_capabilities">计算能力</span><strong data-translate="about_capabilities_val">TVI、CTV、G7、Status-T、ΔE、P2P51</strong></div>
             </div>
             <div class="info-grid compact">
               <article>
-                <strong>算法声明</strong>
-                <p>涉及补偿曲线、G7、Status-T、CTV 或 ΔE 判定的变化，会在更新说明中明确记录。</p>
+                <strong data-translate="about_grid_1_title">算法声明</strong>
+                <p data-translate="about_grid_1_text">涉及补偿曲线、G7、Status-T、CTV 或 ΔE 判定的变化，会在更新说明中明确记录。</p>
               </article>
               <article>
-                <strong>支持信息</strong>
-                <p>后续将补充官网文档、隐私说明、许可清单和诊断信息导出。</p>
+                <strong data-translate="about_grid_2_title">支持信息</strong>
+                <p data-translate="about_grid_2_text">后续将补充官网文档、隐私说明、许可清单和诊断信息导出。</p>
               </article>
             </div>
           </section>
