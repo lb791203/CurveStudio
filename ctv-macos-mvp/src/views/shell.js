@@ -9,13 +9,7 @@ import { algorithmDescription, deltaFormulaLabel } from "../ui-labels.js";
 import { displayPatchLabel, num, statusClass } from "./helpers.js?v=20260604-patch-labels-1";
 import { targetName, visibleWarnings } from "./data.js?v=20260525-statusbar-pass-1";
 import { buildAuditReportComparison } from "../audit-report.js";
-
-const SML_ISO_12647_2_2007_DENSITY_TARGETS = {
-  C: { 0: 0.08, 25: 0.25, 50: 0.49, 75: 0.85, 100: 1.4 },
-  M: { 0: 0.08, 25: 0.25, 50: 0.5, 75: 0.86, 100: 1.45 },
-  Y: { 0: 0.06, 25: 0.22, 50: 0.43, 75: 0.72, 100: 1.05 },
-  K: { 0: 0.08, 25: 0.28, 50: 0.54, 75: 0.94, 100: 1.7 },
-};
+import { SML_ISO_12647_2_2007_DENSITY_TARGETS } from "../standards.js";
 
 export function renderShell(state, els) {
   const channels = channelsPresent(state.measurements);
@@ -451,6 +445,7 @@ function renderProductionAuditReport(state, els) {
   ]);
   const standardLabel = state.standard?.name || t("not_selected", "Not selected");
   const condition = state.importInfo?.metadata?.measurement_condition || state.settings?.measurementCondition || t("unspecified_label", "Unspecified");
+  const sourceSummary = reportTargetSourceSummary(state);
 
   return `
     <div class="audit-report-head audit-production-head">
@@ -458,6 +453,7 @@ function renderProductionAuditReport(state, els) {
         <strong>${escapeHtml(t("production_audit_report_title", "现场验厂报告输出"))}</strong>
         <p>${escapeHtml(t("production_audit_report_help", "参考客户验厂报告结构，将当前 Run 转成可打印的客户/验厂报告：摘要、判定、TVI/CTV、Lab/ΔE、密度与复测状态。"))}</p>
         <small>${escapeHtml(t("production_audit_report_standard_note", "报告以当前软件选择的印刷标准、容差、ΔE 公式和测量条件生成。"))}</small>
+        <small>${escapeHtml(sourceSummary)}</small>
       </div>
       <div class="audit-score-card ${statusClass(reportStatus)}">
         <span>${escapeHtml(t("overall_result_label", "总判定"))}</span>
@@ -551,6 +547,20 @@ function renderProductionAuditReport(state, els) {
   `;
 }
 
+function reportTargetSourceSummary(state) {
+  const toneSource = state.auditReport
+    ? t("audit_report_customer_source", "客户验厂报告")
+    : state.standard?.targetSource || t("audit_report_standard_source", "当前印刷标准");
+  const labSource = state.auditReport
+    ? t("audit_report_customer_lab_source", "客户验厂报告 Lab 目标")
+    : state.standard?.labReferenceSource || t("audit_report_standard_lab_source", "当前标准 Lab 参考");
+  const densitySource = state.auditReport
+    ? t("audit_report_customer_density_source", "客户验厂报告密度目标")
+    : state.standard?.densityTargetSource || t("audit_report_process_density_source", "OK 样/过程控制密度范围");
+  const toleranceSource = state.standard?.toleranceSource || state.standard?.acceptancePreset || t("audit_report_current_tolerance_source", "当前标准容差");
+  return `${t("audit_report_target_source_label", "目标来源")}: ${toneSource} / Lab: ${labSource} / ${t("audit_report_density_source_label", "密度来源")}: ${densitySource} / ${t("audit_report_tolerance_source_label", "容差来源")}: ${toleranceSource}`;
+}
+
 function auditMetaCard(label, value, level = "") {
   return `
     <div class="audit-meta-card ${level || ""}">
@@ -578,6 +588,7 @@ function productionToneRows(state, els) {
           measuredValue,
           delta,
           tolerance,
+          targetSource: "Customer audit report",
           status: reportToleranceStatus(Math.abs(delta), tolerance),
         };
       }).filter((row) => Number.isFinite(row.targetValue) || Number.isFinite(row.measuredValue));
@@ -613,6 +624,7 @@ function productionToneRows(state, els) {
         measuredValue,
         delta,
         tolerance,
+        targetSource: state.standard?.targetSource || "Print standard",
         status: reportToleranceStatus(Math.abs(delta), tolerance),
       };
     }).filter(Boolean)
@@ -720,6 +732,7 @@ function productionDensityRows(state) {
           tone,
           target,
           targetRange,
+          targetSource: state.standard?.densityTargetSource || "Customer audit report density target",
           measured,
           delta: measured - target,
           status: tone === 100 ? densityTargetStatus(measured, { value: target, range: targetRange }) : "Reference",
@@ -744,6 +757,7 @@ function productionDensityRows(state) {
         tone: roundedTone,
         target: Number.isFinite(target) ? target : null,
         targetRange: targetInfo.range,
+        targetSource: targetInfo.source,
         measured: density,
         delta,
         status: densityTargetStatus(density, targetInfo),
@@ -761,13 +775,29 @@ function standardDensityTargetInfo(standard, channel, tone) {
     standard?.densityTargets?.[channel]?.[tone],
   );
   const range = tone === 100 ? standardDensityRange(standard, channel) : null;
-  if (Number.isFinite(direct)) return { value: direct, range };
+  if (Number.isFinite(direct)) {
+    return {
+      value: direct,
+      range,
+      source: standard?.densityTargetSource || t("audit_report_standard_density_source", "Standard density target"),
+    };
+  }
   const standardText = `${standard?.name || ""} ${standard?.printCondition || ""}`;
   if (/ISO\s*12647-2:2007\s*Offset/i.test(standardText)) {
     const smlTarget = auditNumber(SML_ISO_12647_2_2007_DENSITY_TARGETS[channel]?.[tone]);
-    if (Number.isFinite(smlTarget)) return { value: smlTarget, range };
+    if (Number.isFinite(smlTarget)) {
+      return {
+        value: smlTarget,
+        range,
+        source: t("audit_report_customer_density_source", "Customer audit report density target"),
+      };
+    }
   }
-  return { value: NaN, range };
+  return {
+    value: NaN,
+    range,
+    source: standard?.densityTargetSource || t("audit_report_process_density_source", "OK print/process-control density range"),
+  };
 }
 
 function standardDensityRange(standard, channel) {

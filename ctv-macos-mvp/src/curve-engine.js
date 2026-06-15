@@ -12,12 +12,37 @@ const CHANNEL_FIELD_ALIASES = {
 };
 
 export const TARGETS = {
-  isoA: { name: "ISO TVI A", points: [[0, 0], [10, 6], [20, 10], [30, 13], [40, 15], [50, 16], [60, 15], [70, 13], [80, 10], [90, 6], [100, 0]] },
-  isoB: { name: "ISO TVI B", points: [[0, 0], [10, 5], [20, 8], [30, 11], [40, 13], [50, 14], [60, 13], [70, 11], [80, 8], [90, 5], [100, 0]] },
-  isoC: { name: "ISO TVI C", points: [[0, 0], [10, 7], [20, 12], [30, 16], [40, 18], [50, 19], [60, 18], [70, 16], [80, 12], [90, 7], [100, 0]] },
-  isoD: { name: "ISO TVI D", points: [[0, 0], [10, 8], [20, 14], [30, 18], [40, 21], [50, 22], [60, 21], [70, 18], [80, 14], [90, 8], [100, 0]] },
-  isoE: { name: "ISO TVI E", points: [[0, 0], [10, 9], [20, 16], [30, 21], [40, 24], [50, 25], [60, 24], [70, 21], [80, 16], [90, 9], [100, 0]] },
-  isoF: { name: "ISO TVI F", points: [[0, 0], [10, 10], [20, 18], [30, 24], [40, 27], [50, 28], [60, 27], [70, 24], [80, 18], [90, 10], [100, 0]] },
+  isoA: {
+    name: "ISO TVI A",
+    source: "ISO 12647-2:2013 Table 9",
+    polynomial: { a: -0.3650, b: 0.6730, c: -1.0108, d: 0.7029 },
+    points: [[0, 0], [5, 3.3], [10, 6.1], [20, 10.5], [30, 13.5], [40, 15.3], [50, 16.0], [60, 15.6], [70, 14.0], [80, 11.0], [90, 6.5], [95, 3.5], [100, 0]],
+  },
+  isoB: {
+    name: "ISO TVI B",
+    source: "ISO 12647-2:2013 Table 9",
+    polynomial: { a: -0.5877, b: 1.3575, c: -1.7678, d: 0.9980 },
+    points: [[0, 0], [5, 4.6], [10, 8.3], [20, 13.9], [30, 17.2], [40, 18.8], [50, 19.0], [60, 17.9], [70, 15.7], [80, 12.1], [90, 7.0], [95, 3.8], [100, 0]],
+  },
+  isoC: {
+    name: "ISO TVI C",
+    source: "ISO 12647-2:2013 Table 9",
+    polynomial: { a: -0.7854, b: 1.9934, c: -2.4956, d: 1.2876 },
+    points: [[0, 0], [5, 5.8], [10, 10.6], [20, 17.2], [30, 20.9], [40, 22.3], [50, 22.0], [60, 20.3], [70, 17.4], [80, 13.2], [90, 7.5], [95, 4.0], [100, 0]],
+  },
+  isoD: {
+    name: "ISO TVI D",
+    source: "ISO 12647-2:2013 Table 9",
+    polynomial: { a: -0.4441, b: 1.4386, c: -2.3805, d: 1.3860 },
+    points: [[0, 0], [5, 6.4], [10, 11.6], [20, 19.3], [30, 23.7], [40, 25.4], [50, 25.0], [60, 22.8], [70, 19.1], [80, 14.0], [90, 7.7], [95, 4.0], [100, 0]],
+  },
+  isoE: {
+    name: "ISO TVI E",
+    source: "ISO 12647-2:2013 Table 9",
+    polynomial: { a: -0.0438, b: 0.7664, c: -2.1929, d: 1.4703 },
+    points: [[0, 0], [5, 6.8], [10, 12.6], [20, 21.2], [30, 26.4], [40, 28.5], [50, 28.0], [60, 25.3], [70, 20.7], [80, 14.7], [90, 7.7], [95, 3.9], [100, 0]],
+  },
+  isoF: { name: "Legacy TVI F", source: "Legacy compatibility target; not ISO 12647-2:2013 Table 9", points: [[0, 0], [10, 10], [20, 18], [30, 24], [40, 27], [50, 28], [60, 27], [70, 24], [80, 18], [90, 10], [100, 0]] },
   linear: { name: "Linear CTV", points: [[0, 0], [100, 0]] },
   g7: { name: "G7 NPDC MVP", points: [[0, 0], [10, 4], [20, 8], [30, 11], [40, 13], [50, 14], [60, 13], [70, 11], [80, 8], [90, 4], [100, 0]] },
 };
@@ -25,8 +50,22 @@ export const TARGETS = {
 export function upsertTarget(id, target) {
   TARGETS[id] = {
     name: target.name || id,
+    source: target.source,
+    polynomial: target.polynomial,
     points: [...target.points].sort((a, b) => a[0] - b[0]),
   };
+}
+
+export function targetValueFor(targetId, tone, options = {}) {
+  const target = TARGETS[targetId] || TARGETS.isoA;
+  const numericTone = Number(tone);
+  if (!Number.isFinite(numericTone)) return NaN;
+  if (options.method === "polynomial" && target.polynomial) {
+    const x = clamp(numericTone, 0, 100) / 100;
+    const { a, b, c, d } = target.polynomial;
+    return 100 * (a * x ** 4 + b * x ** 3 + c * x ** 2 + d * x);
+  }
+  return interpolate(target.points, numericTone);
 }
 
 export function parseMeasurementText(text) {

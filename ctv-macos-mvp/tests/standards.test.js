@@ -57,7 +57,7 @@ test("reference-file custom standards receive default acceptance settings", () =
 
   assert.equal(stored.deltaE.fail, 5);
   assert.equal(stored.g7.enabled, false);
-  assert.equal(stored.toneTolerances.C.tvi[50], 5);
+  assert.equal(stored.toneTolerances.C.tvi[50], 4);
   assert.equal(stored.referenceRows.length, 2);
 });
 
@@ -93,6 +93,8 @@ test("standard presets carry their own acceptance tolerances", () => {
   const fogra = standardById("fogra39");
   const sml = standardById("sml_printspec_xl75_6c");
   const isoTvi = standardById("iso_tvi_b");
+  const pc1 = standardById("iso12647_2_2013_pc1");
+  const pc6 = standardById("iso12647_2_2013_pc6");
 
   assert.equal(gracol.acceptancePreset, "GRACoL / G7 field audit");
   assert.equal(gracol.toneTolerances.C.tvi[50], 4);
@@ -111,9 +113,21 @@ test("standard presets carry their own acceptance tolerances", () => {
   assert.equal(sml.deltaE.fail, 5);
   assert.equal(sml.g7.enabled, false);
 
-  assert.equal(isoTvi.acceptancePreset, "ISO TVI-only field audit");
-  assert.equal(isoTvi.toneTolerances.C.ctv[50], 4);
+  assert.equal(isoTvi.acceptancePreset, "ISO 12647-2 TVI field audit");
+  assert.equal(isoTvi.toneTolerances.C.tvi[25], 3);
+  assert.equal(isoTvi.toneTolerances.C.tvi[50], 4);
+  assert.equal(isoTvi.toneTolerances.C.tvi[75], 3);
+  assert.equal(isoTvi.toneTolerances.C.ctv[50], 3);
   assert.equal(isoTvi.g7.enabled, false);
+
+  assert.equal(pc1.target, "isoA");
+  assert.equal(pc1.toleranceSource, "ISO 12647-2:2013 Table 11");
+  assert.deepEqual(
+    pc1.referenceRows.find((row) => row.sample_id === "C"),
+    { sample_id: "C", cmyk_c: 100, cmyk_m: 0, cmyk_y: 0, cmyk_k: 0, lab_l: 56, lab_a: -36, lab_b: -51 },
+  );
+  assert.equal(pc6.target, "isoB");
+  assert.equal(pc6.printCondition, "PC6 / PS6 / CD6");
 });
 
 test("SML PrintSpec standard reference file contains report target Lab values", () => {
