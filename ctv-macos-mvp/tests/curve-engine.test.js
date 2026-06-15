@@ -7,6 +7,8 @@ import {
   parseImportText,
   spotColorToneValueFromLab,
   spotColorToneValueFromXyz,
+  TARGETS,
+  targetValueFor,
   toExportRows,
 } from "../src/curve-engine.js";
 
@@ -55,9 +57,20 @@ test("buildDiagnosticRows calculates deviation without production curve output",
 
   assert.equal(rows.length, 1);
   assert.equal(rows[0].measuredTvi, 22);
-  assert.equal(rows[0].targetTvi, 14);
-  assert.equal(rows[0].tviDelta, 8);
+  assert.equal(rows[0].targetTvi, 19);
+  assert.equal(rows[0].tviDelta, 3);
   assert.equal(rows[0].outputTone, undefined);
+});
+
+test("ISO 12647-2:2013 TVI targets use Table 9 values and polynomial metadata", () => {
+  assert.equal(TARGETS.isoA.source, "ISO 12647-2:2013 Table 9");
+  assert.equal(targetValueFor("isoA", 5), 3.3);
+  assert.equal(targetValueFor("isoA", 50), 16);
+  assert.equal(targetValueFor("isoB", 50), 19);
+  assert.equal(targetValueFor("isoC", 30), 20.9);
+  assert.equal(targetValueFor("isoD", 40), 25.4);
+  assert.equal(targetValueFor("isoE", 95), 3.9);
+  assert.ok(Math.abs(targetValueFor("isoA", 50, { method: "polynomial" }) - 16) < 0.1);
 });
 
 test("CTV mode marks fallback rows when colorimetric data is missing", () => {
