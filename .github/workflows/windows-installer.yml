@@ -36,6 +36,11 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
+      - name: Read package version
+        run: |
+          $version = node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version"
+          "CURVESTUDIO_VERSION=$version" >> $env:GITHUB_ENV
+
       - name: Cache Cargo registry and build
         uses: actions/cache@v4
         with:
@@ -59,6 +64,11 @@ jobs:
       - name: Build frontend dist
         run: npm run build:dist
 
+      - name: Clean stale installer bundles
+        run: |
+          Remove-Item -Recurse -Force src-tauri/target/release/bundle/nsis -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force src-tauri/target/release/bundle/msi -ErrorAction SilentlyContinue
+
       - name: Build Windows installers
         run: npm run tauri:build:windows
 
@@ -70,6 +80,6 @@ jobs:
         with:
           name: CurveStudio-windows-installers
           path: |
-            ctv-macos-mvp/src-tauri/target/release/bundle/nsis/*.exe
-            ctv-macos-mvp/src-tauri/target/release/bundle/msi/*.msi
+            ctv-macos-mvp/src-tauri/target/release/bundle/nsis/CurveStudio_${{ env.CURVESTUDIO_VERSION }}_*.exe
+            ctv-macos-mvp/src-tauri/target/release/bundle/msi/CurveStudio_${{ env.CURVESTUDIO_VERSION }}_*.msi
           if-no-files-found: error

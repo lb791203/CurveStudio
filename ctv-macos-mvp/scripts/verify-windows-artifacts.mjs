@@ -19,6 +19,7 @@ const expected = [
 
 const failures = [];
 const found = [];
+const ignored = [];
 
 function fail(message) {
   failures.push(message);
@@ -40,11 +41,24 @@ for (const artifact of expected) {
     continue;
   }
 
+  const currentVersionFiles = files.filter((file) => path.basename(file).includes(version));
+  if (!currentVersionFiles.length) {
+    fail(`${artifact.label} for version ${version} missing in ${path.join(bundleRoot, artifact.dir)}`);
+  }
+
   for (const file of files) {
     const stat = fs.statSync(file);
     const basename = path.basename(file);
     const relative = path.relative(root, file);
-    found.push(`${relative} (${stat.size} bytes)`);
+    const isCurrentVersion = basename.includes(version);
+    const record = `${relative} (${stat.size} bytes)`;
+
+    if (!isCurrentVersion) {
+      ignored.push(record);
+      continue;
+    }
+
+    found.push(record);
 
     if (stat.size < minBytes) {
       fail(`${artifact.label} is too small to trust: ${relative} (${stat.size} bytes)`);
@@ -63,8 +77,13 @@ for (const artifact of expected) {
 if (failures.length) {
   console.error(failures.map((message) => `- ${message}`).join("\n"));
   if (found.length) console.error(`Found artifacts:\n${found.map((item) => `  ${item}`).join("\n")}`);
+  if (ignored.length) console.error(`Ignored stale artifacts:\n${ignored.map((item) => `  ${item}`).join("\n")}`);
   process.exit(1);
 }
 
 console.log("Windows installer artifact verification passed.");
 console.log(found.map((item) => `- ${item}`).join("\n"));
+if (ignored.length) {
+  console.log("Ignored stale artifacts:");
+  console.log(ignored.map((item) => `- ${item}`).join("\n"));
+}
