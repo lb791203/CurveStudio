@@ -906,16 +906,34 @@ function auditLineChart(title, rows, options = {}) {
     const y = bounds.y + bounds.h - bounds.h * ratio;
     return `<line x1="${bounds.x}" y1="${y}" x2="${bounds.x + bounds.w}" y2="${y}" class="audit-chart-grid-line" />`;
   }).join("");
+  const bandPoints = tones.map((tone) => {
+    const matching = series
+      .map((item) => {
+        const idx = item.target.findIndex((point) => Math.abs(point.tone - tone) < 0.01);
+        if (idx < 0) return null;
+        const target = auditNumber(item.target[idx]?.value);
+        const tolerance = auditNumber(item.tolerance[idx]);
+        if (!Number.isFinite(target) || !Number.isFinite(tolerance)) return null;
+        return {
+          upper: target + tolerance,
+          lower: Math.max(0, target - tolerance),
+        };
+      })
+      .filter(Boolean);
+    if (!matching.length) return { tone, upper: NaN, lower: NaN };
+    return {
+      tone,
+      upper: Math.max(...matching.map((item) => item.upper)),
+      lower: Math.min(...matching.map((item) => item.lower)),
+    };
+  });
+  const bandUpperPath = straightPath(bandPoints.map((point) => ({ tone: point.tone, value: point.upper })), bounds);
+  const bandLowerPath = straightPath([...bandPoints].reverse().map((point) => ({ tone: point.tone, value: point.lower })), bounds);
+  const bandPath = bandUpperPath && bandLowerPath ? bandUpperPath + " L" + bandLowerPath.slice(1) : "";
   const paths = series.map((item) => {
     const color = auditChannelColor(item.channel);
-    const upperPoints = item.target.map((pt, idx) => ({ tone: pt.tone, value: pt.value + item.tolerance[idx] }));
-    const lowerPoints = item.target.map((pt, idx) => ({ tone: pt.tone, value: Math.max(0, pt.value - item.tolerance[idx]) }));
-    const upperPath = straightPath(upperPoints, bounds);
-    const lowerPath = straightPath([...lowerPoints].reverse(), bounds);
-    const envelopeD = upperPath && lowerPath ? upperPath + " L" + lowerPath.slice(1) : "";
 
     return `
-      ${envelopeD ? `<path d="${envelopeD} Z" fill="${color}" fill-opacity="0.045" stroke="none" />` : ""}
       <path d="${smoothLinePath(item.target, bounds)}" class="audit-chart-target-path" />
       <path d="${smoothLinePath(item.measured, bounds)}" fill="none" stroke="${color}" stroke-width="2.4" />
       ${item.measured.filter((point) => Number.isFinite(point.value)).map((point) => `<circle cx="${chartX(point.tone, bounds)}" cy="${chartY(point.value, bounds)}" r="2.6" fill="${color}" />`).join("")}
@@ -933,6 +951,7 @@ function auditLineChart(title, rows, options = {}) {
         ${grid}
         <line x1="${bounds.x}" y1="${bounds.y + bounds.h}" x2="${bounds.x + bounds.w}" y2="${bounds.y + bounds.h}" class="audit-chart-axis" />
         <line x1="${bounds.x}" y1="${bounds.y}" x2="${bounds.x}" y2="${bounds.y + bounds.h}" class="audit-chart-axis" />
+        ${bandPath ? `<path d="${bandPath} Z" fill="#64748b" fill-opacity="0.12" stroke="none" />` : ""}
         ${paths}
         ${[0, 25, 50, 75, 100].map((tone) => `<text x="${chartX(tone, bounds)}" y="207" text-anchor="middle" class="audit-chart-label">${tone}</text>`).join("")}
         ${[0, bounds.maxY / 2, bounds.maxY].map((value) => `<text x="32" y="${chartY(value, bounds) + 4}" text-anchor="end" class="audit-chart-label">${fmtAudit(value)}</text>`).join("")}
