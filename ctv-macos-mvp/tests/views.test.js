@@ -829,10 +829,10 @@ test("renderReport adds SML source-audit comparison when audit report data is at
   assert.match(localEls.reportAuditComparison.innerHTML, /MY 叠印[\s\S]*46\.00, 67\.00, 47\.00[\s\S]*49\.39, 63\.46, 38\.72/);
   assert.match(localEls.reportAuditComparison.innerHTML, /≤ 5/);
   assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /W 5 \/ F 5/);
-  const toleranceBand = localEls.reportAuditComparison.innerHTML.match(/<path d="([^"]+)" fill="#0298bd" fill-opacity="0\.045"/);
-  assert.ok(toleranceBand, "expected cyan tolerance band path");
-  assert.doesNotMatch(toleranceBand[1], /\sC\s/, "target tolerance band should use straight tolerance envelope segments");
-  assert.match(toleranceBand[1], /\sL\s/, "target tolerance band should contain straight line segments");
+  const toleranceBands = [...localEls.reportAuditComparison.innerHTML.matchAll(/<path d="([^"]+)" fill="#64748b" fill-opacity="0\.12"/g)];
+  assert.equal(toleranceBands.length, 1, "expected one shared neutral target tolerance band instead of overlapping channel bands");
+  assert.doesNotMatch(toleranceBands[0][1], /\sC\s/, "target tolerance band should use straight tolerance envelope segments");
+  assert.match(toleranceBands[0][1], /\sL\s/, "target tolerance band should contain straight line segments");
   assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /SML_/);
   assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /参考 SML/);
 });
