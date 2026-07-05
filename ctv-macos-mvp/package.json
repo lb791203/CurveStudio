@@ -12,8 +12,11 @@
     "verify:windows-artifacts": "node scripts/verify-windows-artifacts.mjs",
     "validate:fixtures": "node scripts/validate-importers.mjs",
     "verify:release": "npm run audit:release && npm test && npm run validate:fixtures && npm run build:dist",
-    "tauri:dev": "npx @tauri-apps/cli@latest dev",
-    "tauri:build": "npx @tauri-apps/cli@latest build",
-    "tauri:build:windows": "npx @tauri-apps/cli@latest build --config src-tauri/tauri.windows.conf.json"
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:build:windows": "tauri build --config src-tauri/tauri.windows.conf.json"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4"
   }
 }

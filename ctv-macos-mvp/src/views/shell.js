@@ -10,6 +10,7 @@ import { displayPatchLabel, num, statusClass } from "./helpers.js?v=20260604-pat
 import { targetName, visibleWarnings } from "./data.js?v=20260525-statusbar-pass-1";
 import { buildAuditReportComparison } from "../audit-report.js";
 import { SML_ISO_12647_2_2007_DENSITY_TARGETS } from "../standards.js";
+import { canUseDesktopFileDialog } from "../desktop-io.js";
 
 export function renderShell(state, els) {
   const channels = channelsPresent(state.measurements);
@@ -58,7 +59,7 @@ export function renderShell(state, els) {
   if (els.applyManualButton) els.applyManualButton.disabled = !state.manualRows.length;
   if (els.clearManualButton) els.clearManualButton.disabled = !state.manualRows.length;
   if (els.desktopOpenFileButton) {
-    els.desktopOpenFileButton.disabled = !Boolean(window.__TAURI__?.dialog?.open && window.__TAURI__?.core?.invoke);
+    els.desktopOpenFileButton.disabled = !canUseDesktopFileDialog();
     els.desktopOpenFileButton.title = els.desktopOpenFileButton.disabled
       ? t("desktop_open_browser_preview", "Use the file picker above in browser preview; the desktop app enables the native open dialog.")
       : t("desktop_open_native_dialog", "Open measurement files or project archives with the native macOS/Windows file dialog.");
@@ -909,8 +910,8 @@ function auditLineChart(title, rows, options = {}) {
     const color = auditChannelColor(item.channel);
     const upperPoints = item.target.map((pt, idx) => ({ tone: pt.tone, value: pt.value + item.tolerance[idx] }));
     const lowerPoints = item.target.map((pt, idx) => ({ tone: pt.tone, value: Math.max(0, pt.value - item.tolerance[idx]) }));
-    const upperPath = smoothLinePath(upperPoints, bounds);
-    const lowerPath = smoothLinePath([...lowerPoints].reverse(), bounds);
+    const upperPath = straightPath(upperPoints, bounds);
+    const lowerPath = straightPath([...lowerPoints].reverse(), bounds);
     const envelopeD = upperPath && lowerPath ? upperPath + " L" + lowerPath.slice(1) : "";
 
     return `
