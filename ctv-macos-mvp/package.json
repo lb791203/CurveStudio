@@ -14,7 +14,8 @@
     "verify:release": "npm run audit:release && npm test && npm run validate:fixtures && npm run build:dist",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "tauri:build:windows": "tauri build --config src-tauri/tauri.windows.conf.json"
+    "tauri:build:windows": "tauri build --config src-tauri/tauri.windows.conf.json",
+    "macos:release:notarize": "node scripts/notarize-macos.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.4"

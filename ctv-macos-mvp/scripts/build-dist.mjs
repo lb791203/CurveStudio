@@ -1,18 +1,31 @@
-import fs from "node:fs/promises";
+import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
 const dist = path.join(root, "dist");
 const entries = ["index.html", "src", "samples", "reference-data"];
 
-await fs.rm(dist, { recursive: true, force: true });
-await fs.mkdir(dist, { recursive: true });
+fs.rmSync(dist, { recursive: true, force: true });
+fs.mkdirSync(dist, { recursive: true });
 
 for (const entry of entries) {
-  await fs.cp(path.join(root, entry), path.join(dist, entry), {
-    recursive: true,
-    filter: (source) => !source.includes(`${path.sep}.DS_Store`),
-  });
+  const source = path.join(root, entry);
+  const target = path.join(dist, entry);
+  copyEntry(source, target);
 }
 
 console.log(`Built desktop frontend in ${path.relative(root, dist)}/`);
+
+function copyEntry(source, target) {
+  if (source.includes(`${path.sep}.DS_Store`)) return;
+  const stat = fs.statSync(source);
+  if (stat.isDirectory()) {
+    fs.mkdirSync(target, { recursive: true });
+    for (const child of fs.readdirSync(source)) {
+      copyEntry(path.join(source, child), path.join(target, child));
+    }
+    return;
+  }
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, fs.readFileSync(source));
+}
