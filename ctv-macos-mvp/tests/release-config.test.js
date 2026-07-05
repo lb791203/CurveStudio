@@ -40,6 +40,8 @@ test("macOS notarization workflow requires Developer ID, hardened runtime and st
   assert.match(notarizeScript, /Developer ID Application/);
   assert.match(notarizeScript, /APPLE_SIGNING_IDENTITY/);
   assert.match(notarizeScript, /APPLE_NOTARY_PROFILE/);
+  assert.match(notarizeScript, /delete env\.APPLE_SIGNING_IDENTITY/);
+  assert.match(notarizeScript, /COPYFILE_DISABLE/);
   assert.match(notarizeScript, /"notarytool",\s*"submit"/);
   assert.match(notarizeScript, /"stapler",\s*"staple"/);
   assert.match(notarizeScript, /"spctl",\s*\["--assess"/);
