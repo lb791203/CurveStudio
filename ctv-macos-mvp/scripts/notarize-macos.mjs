@@ -65,6 +65,14 @@ function removeIfExists(targetPath) {
   if (fs.existsSync(targetPath)) fs.rmSync(targetPath, { force: true, recursive: true });
 }
 
+function tauriBuildEnv() {
+  const env = { ...process.env, COPYFILE_DISABLE: "1" };
+  delete env.APPLE_SIGNING_IDENTITY;
+  delete env.APPLE_CERTIFICATE;
+  delete env.APPLE_CERTIFICATE_PASSWORD;
+  return env;
+}
+
 function createCleanDmg(signedAppPath, targetDmgPath) {
   const stage = fs.mkdtempSync(path.join(os.tmpdir(), "curvestudio-notary-stage."));
   const stagedApp = path.join(stage, "CurveStudio.app");
@@ -93,7 +101,9 @@ if (!identity) {
 verifyNotaryProfile(notaryProfile);
 
 run("npm", ["run", "verify:release"]);
-run("npm", ["run", "tauri:build"]);
+removeIfExists(appPath);
+removeIfExists(dmgPath);
+run("npm", ["run", "tauri:build"], { env: tauriBuildEnv() });
 
 run("xattr", ["-cr", appPath]);
 run("codesign", [
@@ -108,6 +118,7 @@ run("codesign", [
   entitlementsPath,
   appPath,
 ]);
+run("xattr", ["-cr", appPath]);
 run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath]);
 
 createCleanDmg(appPath, dmgPath);
@@ -116,7 +127,7 @@ run("xcrun", ["notarytool", "submit", dmgPath, "--keychain-profile", notaryProfi
 run("xcrun", ["stapler", "staple", dmgPath]);
 run("xcrun", ["stapler", "validate", dmgPath]);
 run("hdiutil", ["verify", dmgPath]);
-run("spctl", ["--assess", "--type", "open", "--verbose=4", dmgPath]);
+run("spctl", ["--assess", "--type", "open", "--context", "context:primary-signature", "--verbose=4", dmgPath]);
 
 const checksum = output("shasum", ["-a", "256", dmgPath]).trim();
 fs.writeFileSync(sumsPath, `${checksum}\n`);
