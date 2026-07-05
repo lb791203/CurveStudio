@@ -2,7 +2,7 @@
 
 macOS-first MVP for a print compensation curve tool. The first version is a local browser app so it can be used immediately on macOS and later wrapped with Tauri or SwiftUI.
 
-Current version: `1.0.4`. See [CHANGELOG.md](./CHANGELOG.md) for feature history.
+Current version: `1.0.5`. See [CHANGELOG.md](./CHANGELOG.md) for feature history.
 
 ## MVP scope
 

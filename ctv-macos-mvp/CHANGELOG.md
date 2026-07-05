@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.5 - 2026-07-05
+
+- Hardened desktop release packaging by pinning the Tauri CLI, adding a package lock, and disabling the global Tauri bridge.
+- Added stricter desktop file-command validation and updated the JavaScript bridge for Tauri's internal invoke API.
+- Blocked unfinished real-device SDK actions until vendor SDK/protocol integration is available.
+- Improved customer audit report layout, print behavior, and straight tolerance-band rendering for tone-gain charts.
+- Added release, bridge, SDK, and audit-report regression tests.
+
 ## 1.0.4 - 2026-06-09
 
 - Translated all text nodes and buttons inside the Product Center dialog (Help, Updates, About) into English when switching languages.
