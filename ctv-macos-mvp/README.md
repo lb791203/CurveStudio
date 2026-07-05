@@ -171,6 +171,22 @@ macOS uses the base Tauri config:
 npm run tauri:build
 ```
 
+For an externally distributable macOS build, install a `Developer ID Application`
+certificate in Keychain and save a notary profile once:
+
+```bash
+xcrun notarytool store-credentials curvestudio-notary --apple-id YOUR_APPLE_ID --team-id YOUR_TEAM_ID
+```
+
+Then build, sign with hardened runtime, notarize, staple, and verify the DMG:
+
+```bash
+APPLE_SIGNING_IDENTITY="Developer ID Application: YOUR NAME (TEAMID)" npm run macos:release:notarize
+```
+
+If `APPLE_SIGNING_IDENTITY` is omitted, the script uses the first valid
+`Developer ID Application` identity found in the login keychain.
+
 Windows uses the installer overlay config and should be run on a Windows machine or CI runner:
 
 ```bash
