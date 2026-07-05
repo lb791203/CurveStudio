@@ -4,6 +4,10 @@ export function isTauriAvailable() {
   return typeof window !== "undefined" && Boolean(window.__TAURI__ || window.__TAURI_INTERNALS__ || window.__TAURI_ENV__);
 }
 
+export function isRealSdkEnabled() {
+  return false;
+}
+
 export const DEVICE_ADAPTERS = [
   {
     id: "file",
@@ -21,12 +25,10 @@ export const DEVICE_ADAPTERS = [
   },
   {
     id: "sdk",
-    name: isTauriAvailable() ? "仪器 SDK" : "SDK 待接入",
-    status: isTauriAvailable() ? "Ready" : "Blocked",
-    description: isTauriAvailable()
-      ? "连接 Techkon (0x197B) 或 X-Rite (0x0981) USB 分光光度仪进行实时测量。"
-      : "等待 X-Rite / Techkon SDK、授权文件或通讯协议后启用。",
-    capabilities: ["connect", "disconnect", "calibrateWhite", "readPatch", "readStrip", "getDeviceInfo"],
+    name: "SDK 待接入",
+    status: "Blocked",
+    description: "真实 Techkon / X-Rite SDK、授权文件或通讯协议尚未完成接入；当前仅保留接口占位，不能用于现场验收测量。",
+    capabilities: ["plannedConnect", "plannedCalibrateWhite", "plannedReadPatch"],
   },
 ];
 
@@ -64,9 +66,9 @@ export function summarizeDeviceState(deviceState = {}, manualRows = []) {
     total: queue.length,
     next,
     manualInstrumentRows: manualRows.filter((row) => row.source === "仪器测量").length,
-    canConnect: adapter.capabilities.includes("connect") && (adapter.id !== "sdk" || isTauriAvailable()),
+    canConnect: adapter.capabilities.includes("connect") && (adapter.id !== "sdk" || isRealSdkEnabled()),
     canCalibrate: adapter.capabilities.includes("calibrateWhite") && Boolean(deviceState.connected),
-    canReadPatch: adapter.capabilities.includes("readPatch") && Boolean(deviceState.connected) && (adapter.id !== "sdk" || isTauriAvailable()),
+    canReadPatch: adapter.capabilities.includes("readPatch") && Boolean(deviceState.connected) && (adapter.id !== "sdk" || isRealSdkEnabled()),
     message: deviceState.message || adapter.description,
   };
 }
@@ -115,7 +117,7 @@ export function changeDeviceAdapterState(deviceState = {}, adapterId) {
     connected: false,
     calibrated: false,
     message: adapterId === "sdk"
-      ? (isTauriAvailable() ? "已选择仪器 SDK。请点击连接以寻找 USB HID 仪器。" : "SDK 待接入，暂不能在此模式下连接设备。")
+      ? "SDK 待接入，真实仪器协议未启用；请使用文件导入或模拟设备。"
       : "",
   };
 }
