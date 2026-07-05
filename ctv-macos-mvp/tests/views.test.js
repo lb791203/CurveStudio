@@ -831,7 +831,8 @@ test("renderReport adds SML source-audit comparison when audit report data is at
   assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /W 5 \/ F 5/);
   const toleranceBand = localEls.reportAuditComparison.innerHTML.match(/<path d="([^"]+)" fill="#0298bd" fill-opacity="0\.045"/);
   assert.ok(toleranceBand, "expected cyan tolerance band path");
-  assert.match(toleranceBand[1], /\sC\s/, "target tolerance band should use smooth Bezier curves");
+  assert.doesNotMatch(toleranceBand[1], /\sC\s/, "target tolerance band should use straight tolerance envelope segments");
+  assert.match(toleranceBand[1], /\sL\s/, "target tolerance band should contain straight line segments");
   assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /SML_/);
   assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /参考 SML/);
 });

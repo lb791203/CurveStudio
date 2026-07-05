@@ -111,3 +111,18 @@ test("device state transitions cover mock workflow and blocked SDK", () => {
   assert.equal(device.connected, false);
   assert.equal(device.calibrated, false);
 });
+
+test("SDK adapter stays blocked until real protocol integration is implemented", () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { __TAURI_INTERNALS__: { invoke: async () => [] } };
+
+  const device = changeDeviceAdapterState({ queue: buildMeasurementQueue("press-basic"), queueIndex: 0 }, "sdk");
+  const summary = summarizeDeviceState(device, []);
+  assert.equal(summary.adapter.status, "Blocked");
+  assert.equal(summary.canConnect, false);
+  assert.equal(summary.canCalibrate, false);
+  assert.equal(summary.canReadPatch, false);
+  assert.match(summary.message, /SDK|protocol|协议|not enabled/i);
+
+  globalThis.window = originalWindow;
+});

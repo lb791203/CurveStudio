@@ -18,11 +18,11 @@ import { renderShell as _renderShell, renderControlValues as _renderControlValue
 import { buildG7Compensation } from "./g7-compensation.js";
 import { renderCurveChart, renderMeasurementChart, renderLabChromaticityChart, renderG7Charts, renderCompensationSimulationChart } from "./chart-renderer.js?v=20260523-lab-fill";
 import { buildIccGenerationGate } from "./icc-generation-gate.js?v=20260525-statusbar-pass-1";
-import { DEVICE_ADAPTERS, buildMeasurementQueue, buildSdkMeasurementRow, calibrateDeviceState, changeDeviceAdapterState, connectDeviceState, disconnectDeviceState, readDevicePatchState, sdkDeviceLabel, isTauriAvailable } from "./device-adapter.js";
+import { DEVICE_ADAPTERS, buildMeasurementQueue, buildSdkMeasurementRow, calibrateDeviceState, changeDeviceAdapterState, connectDeviceState, disconnectDeviceState, readDevicePatchState, sdkDeviceLabel, isTauriAvailable, isRealSdkEnabled } from "./device-adapter.js";
 import { inspectImport } from "./import-inspector.js?v=20260525-statusbar-pass-1";
 import { buildIccStandardPair } from "./icc-pairing.js?v=20260521-icc-p4";
 import { parseIccProfile } from "./icc-profile.js?v=20260521-icc-p4";
-import { openTextFileDesktop, saveTextFileDesktop, saveBinaryFileDesktop } from "./desktop-io.js";
+import { canUseTauriCommandBridge, invokeTauriCommand, openTextFileDesktop, saveTextFileDesktop, saveBinaryFileDesktop } from "./desktop-io.js";
 import { buildIccExportPackage, exportMeasurementToCgats } from "./icc-generator.js";
 import { t, updateDomTranslations, getLanguage, setLanguage } from "./translations.js";
 import {
@@ -1150,11 +1150,11 @@ function changeDeviceAdapter() {
 }
 
 async function connectDevice() {
-  if (state.device.adapterId === "sdk" && isTauriAvailable()) {
+  if (state.device.adapterId === "sdk" && isRealSdkEnabled() && isTauriAvailable() && canUseTauriCommandBridge()) {
     state.device.message = "正在扫描 USB 仪器...";
     renderInstrument();
     try {
-      const devices = await window.__TAURI__.core.invoke("sdk_scan_devices");
+      const devices = await invokeTauriCommand("sdk_scan_devices");
       if (!devices || devices.length === 0) {
         state.device.connected = false;
         state.device.message = "未扫描到支持的 Techkon 或 X-Rite 仪器。";
@@ -1184,7 +1184,7 @@ function disconnectDevice() {
 }
 
 async function calibrateDevice() {
-  if (state.device.adapterId === "sdk" && isTauriAvailable()) {
+  if (state.device.adapterId === "sdk" && isRealSdkEnabled() && isTauriAvailable() && canUseTauriCommandBridge()) {
     if (!state.device.connected) {
       state.device.message = "请先连接设备。";
       renderInstrument();
@@ -1193,7 +1193,7 @@ async function calibrateDevice() {
     state.device.message = "正在校准白板，请勿移动设备...";
     renderInstrument();
     try {
-      const res = await window.__TAURI__.core.invoke("sdk_calibrate", {
+      const res = await invokeTauriCommand("sdk_calibrate", {
         vendorId: state.device.vendorId,
         productId: state.device.productId
       });
@@ -1212,7 +1212,7 @@ async function calibrateDevice() {
 }
 
 async function readDevicePatch() {
-  if (state.device.adapterId === "sdk" && isTauriAvailable()) {
+  if (state.device.adapterId === "sdk" && isRealSdkEnabled() && isTauriAvailable() && canUseTauriCommandBridge()) {
     if (!state.device.connected) {
       state.device.message = "请先连接设备。";
       renderInstrument();
@@ -1230,7 +1230,7 @@ async function readDevicePatch() {
         return;
       }
 
-      const res = await window.__TAURI__.core.invoke("sdk_read_patch", {
+      const res = await invokeTauriCommand("sdk_read_patch", {
         vendorId: state.device.vendorId,
         productId: state.device.productId
       });
