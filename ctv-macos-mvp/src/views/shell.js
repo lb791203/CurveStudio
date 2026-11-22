@@ -74,7 +74,7 @@ export function renderShell(state, els) {
     if (state.results.length) parts.push(statusBarItem(`${state.results.length} ${t("pts_curve", "曲线点")}`));
     const condition = state.importInfo?.metadata?.measurement_condition;
     if (condition) parts.push(statusBarItem(condition));
-    if (els.ratioInput) parts.push(statusBarItem(`${t("undercomp_status_prefix", "欠补偿")}${els.ratioInput.value}%`));
+    if (els.ratioInput) parts.push(statusBarItem(`${t("undercomp_status_prefix", "补偿强度")} ${els.ratioInput.value}%`));
     const press = els.jobPressInput?.value;
     if (press) parts.push(statusBarItem(press));
     parts.push(`<span class="status-bar-diagnosis ${state.diagnosis?.level || ""}" title="${escapeAttr(diagnosisTitle)}">${escapeHtml(diagnosisTitle)}</span>`);
@@ -248,7 +248,7 @@ export function renderExport(state, els) {
     <p>${escapeHtml(t("formula_label_short", "公式"))}: ${algorithmDescription(els.modeSelect.value)}</p>
     <p>${escapeHtml(t("rip_compatibility_label", "RIP 兼容"))}: ${escapeHtml(t("rip_compatibility_value", "RIP 手动录入表、RIP 导入 CSV；通用 CSV 可按 SCREEN Trueflow、Heidelberg Prinect、Agfa Apogee、Harlequin、Founder Flow、Esko 等系统的导入模板映射。"))}</p>
     <p>ΔE ${escapeHtml(t("formula_label_short", "公式"))}: ${deltaFormulaLabel(els.deltaFormulaSelect.value)}</p>
-    <p>${escapeHtml(t("ratio_label", "自定义欠补偿比例"))}: ${els.ratioInput.value}%</p>
+    <p>${escapeHtml(t("ratio_label", "补偿强度"))}: ${els.ratioInput.value}%</p>
     <p>${escapeHtml(t("gate_curve_quality", "曲线质量"))}: ${quality.status} / ${escapeHtml(t("curve_quality_warnings", "警告"))} ${quality.warnings} / ${escapeHtml(t("curve_quality_dangers", "严重"))} ${quality.dangers}</p>
     <p>G7: ${escapeHtml(state.g7?.status || t("g7_not_run_label", "未运行"))} / NPDC wΔL* ${num(state.g7?.weightedAverage)} / Gray wΔCh Max ${num(state.g7?.maxGrayCh)}</p>
     <p>${escapeHtml(t("icc_gate_label", "ICC 生成闸门"))}: <span class="status ${iccGate.level}">${escapeHtml(iccGate.title)}</span> / ${escapeHtml(iccGate.summary)}</p>
@@ -292,7 +292,7 @@ export function renderReport(state, els) {
     ${reportKpi(t("customer_press_label", "客户 / 机器"), `${translateDynamicText(els.jobCustomerInput.value || t("not_filled", "未填"))} / ${translateDynamicText(els.jobPressInput.value || t("not_filled", "未填"))}`)}
     ${reportKpi(t("standard_select_label", "标准"), state.standard?.name || t("not_selected", "未选择"))}
     ${reportKpi(t("algorithm_label", "算法"), `${els.modeSelect.value.toUpperCase()} / ${targetName(els.targetSelect.value)}`)}
-    ${reportKpi(t("ratio_label", "欠补偿比例"), `${els.ratioInput.value}%`)}
+    ${reportKpi(t("ratio_label", "补偿强度"), `${els.ratioInput.value}%`)}
     ${reportKpi(t("measurement_curve_points_label", "测量点 / 曲线点"), `${state.measurements.length} / ${state.results.length}`)}
     ${reportKpi(`ΔE ${t("formula_label_short", "公式")}`, deltaFormulaLabel(els.deltaFormulaSelect.value))}
     ${reportKpi("G7", g7.status || t("g7_not_run_label", "未运行"), statusClass(g7.status))}
@@ -328,7 +328,7 @@ export function renderReport(state, els) {
   els.reportCurveSummary.innerHTML = `
     <p><span class="status ${quality.status === "Ready" ? "pass" : quality.dangers ? "fail" : "warning"}">${escapeHtml(quality.status)}</span> ${escapeHtml(t("curve_quality_warnings", "Warnings"))} ${quality.warnings} / ${escapeHtml(t("curve_quality_dangers", "Severe"))} ${quality.dangers}</p>
     <p>${escapeHtml(t("avg_tvi_ctv_delta_label", "Average |TVI/CTV Delta|"))}: ${num(tvi.avgAbs)}% / ${escapeHtml(t("max_abs_delta_label", "Max |Delta|"))}: ${num(tvi.maxAbs)}% / ${escapeHtml(t("channel_label", "Channel"))}: ${channelsPresent(state.measurements).join(" ") || t("none_label", "None")}</p>
-    <p>${escapeHtml(t("production_diagnosis_label", "Production Diagnosis"))}: ${escapeHtml(translateDynamicText(state.diagnosis?.title || t("awaiting_diagnosis", "Awaiting diagnosis")))} / ${escapeHtml(t("suggested_undercomp_label", "Suggested Under-Comp"))}: ${escapeHtml(String(state.diagnosis?.ratio ?? els.ratioInput.value))}%</p>
+    <p>${escapeHtml(t("production_diagnosis_label", "Production Diagnosis"))}: ${escapeHtml(translateDynamicText(state.diagnosis?.title || t("awaiting_diagnosis", "Awaiting diagnosis")))} / ${escapeHtml(t("suggested_undercomp_label", "Suggested Strength"))}: ${escapeHtml(String(state.diagnosis?.ratio ?? els.ratioInput.value))}%</p>
     <p>${escapeHtml(t("explanation_label", "Explanation"))}: ${escapeHtml(t("curve_quality_explanation", "Chart control points come from measured points, interpolated points, endpoint protection, and locked points; curve quality checks flag jumps, reversals, over-correction, and manual-lock risks."))}</p>
   `;
 

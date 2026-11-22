@@ -63,8 +63,9 @@
             <input id="limitInput" type="number" min="1" max="40" step="1" value="18" />
           </label>
           <label>
-            欠补偿比例 %
-            <input id="ratioInput" type="number" min="0" max="100" step="5" value="50" />
+            补偿强度 %
+            <input id="ratioInput" type="number" min="0" max="100" step="5" value="50" aria-describedby="ratioHint" />
+            <small id="ratioHint" class="field-hint">100% 一次补满全部偏差。首次上机建议 40–60%，先看复测结果再加，避免补过头；系统会按诊断结果自动给出建议值。</small>
           </label>
           <button id="calculateButton" type="button">计算补偿曲线</button>
           <p id="ctvModeWarning" class="ctv-warning" hidden></p>
@@ -137,7 +138,7 @@
                     <th>测量点</th>
                     <th>曲线点</th>
                     <th>诊断</th>
-                    <th>欠补偿</th>
+                    <th>补偿强度</th>
                     <th>平均TVI偏差</th>
 	                    <th>最大ΔE</th>
 	                    <th>档案路径</th>
@@ -494,10 +495,16 @@
             </article>
             <article class="chart-panel">
               <div class="chart-title">
-                <h2>补偿输出曲线</h2>
-                <span>输入网点到输出网点</span>
+                <div>
+                  <h2>补偿输出曲线</h2>
+                  <span id="curveChartSubtitle">每个网点要加减多少（0 线 = 不调整）</span>
+                </div>
+                <nav class="segmented-toggle" aria-label="曲线视图">
+                  <button class="active" type="button" data-curve-view="adjustment">调整量</button>
+                  <button type="button" data-curve-view="output">输出曲线</button>
+                </nav>
               </div>
-              <svg id="curveChart" viewBox="0 0 720 420" role="img" aria-label="Compensation curve chart"></svg>
+              <svg id="curveChart" viewBox="0 0 720 420" role="img" aria-label="Compensation curve chart" data-curve-view="adjustment"></svg>
             </article>
           </section>
 
@@ -530,7 +537,6 @@
 	                    <th>曲线检查</th>
 	                    <th>锁定</th>
                     <th>来源</th>
-                    <th>算法来源</th>
                   </tr>
                 </thead>
                 <tbody id="resultBody"></tbody>
@@ -747,7 +753,7 @@
             <div class="table-title">
               <div>
                 <h2>Export 导出</h2>
-                <span>导出字段必须记录标准、算法、欠补偿比例和生成时间。</span>
+                <span>导出字段必须记录标准、算法、补偿强度和生成时间。</span>
               </div>
             </div>
             <div class="export-group-grid export-clean-grid">
@@ -910,7 +916,7 @@
                     <input id="settingsLimitInput" type="number" min="1" max="40" step="1" value="18" />
                   </label>
                   <label class="field-label">
-                    欠补偿比例 %
+                    补偿强度 %
                     <input id="settingsRatioInput" type="number" min="0" max="100" step="5" value="50" />
                   </label>
                 </div>

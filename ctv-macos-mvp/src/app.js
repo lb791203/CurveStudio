@@ -24,7 +24,7 @@ import { buildIccStandardPair } from "./icc-pairing.js?v=20260521-icc-p4";
 import { parseIccProfile } from "./icc-profile.js?v=20260521-icc-p4";
 import { canUseTauriCommandBridge, invokeTauriCommand, openTextFileDesktop, saveTextFileDesktop, saveBinaryFileDesktop } from "./desktop-io.js";
 import { buildIccExportPackage, exportMeasurementToCgats } from "./icc-generator.js";
-import { t, updateDomTranslations, getLanguage, setLanguage } from "./translations.js";
+import { t, translateDynamicText, updateDomTranslations, getLanguage, setLanguage } from "./translations.js";
 import {
   canCalculateCurve,
   defaultManualRow,
@@ -345,6 +345,11 @@ function attachEvents() {
     });
   }
 
+  document.querySelectorAll("[data-curve-view]").forEach((button) => {
+    if (button.tagName === "svg" || button === els.curveChart) return;
+    button.addEventListener("click", () => setCurveChartView(button.dataset.curveView));
+  });
+
   // Bind curve chart dragging events
   els.curveChart?.addEventListener("mousedown", handleCurveDragStart);
   els.compensationSimulationChart?.addEventListener("mousedown", handleCurveDragStart);
@@ -510,6 +515,10 @@ function attachEvents() {
   els.manualBody.addEventListener("click", deleteManualRow);
   els.manualBody.addEventListener("paste", pasteManualTable);
   els.resultBody.addEventListener("change", updateCurveOverride);
+  els.diagnosisCards?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-goto-view]");
+    if (button) switchView(button.dataset.gotoView);
+  });
   els.resultBody.addEventListener("input", updateCurveOverride);
   els.resultBody.addEventListener("keydown", handleCurveOutputKeydown);
   els.toneToleranceBody?.addEventListener("input", updateStandardToleranceFromUi);
@@ -1334,6 +1343,20 @@ function calculate(options = {}) {
   state.curveOverrides = pruneCurveOverrides(calculatedRows, state.curveOverrides);
   state.results = applyCurveOverrides(calculatedRows, state.curveOverrides);
   state.diagnosis = diagnosePress(state.results.length ? state.results : diagnosticRows, diagnosisOptions);
+  if (!state.results.length && !diagnosticRows.length && state.measurements.length) {
+    // Data was imported but the current curve mode cannot use it (e.g. a Lab-only P2P file in TVI/G7 mode).
+    const hasColorimetric = state.measurements.some((row) => Number.isFinite(row.colorimetricTone));
+    state.diagnosis = {
+      level: "mode",
+      title: "当前模式下没有可计算的阶调数据",
+      ratio: Number(els.ratioInput.value),
+      messages: [
+        hasColorimetric
+          ? "这份测量只有 Lab 数据，TVI 和 G7 模式需要密度或网点值；把曲线模式切换为 CTV 即可计算阶调曲线。G7 灰平衡结果请看“G7 灰平衡”页。"
+          : "测量文件里没有密度、网点值或 Lab 阶调数据，无法计算补偿曲线。",
+      ],
+    };
+  }
   state.labRows = buildLabVerificationRows({
     manualRows: state.manualRows,
     measurements: state.measurements,
@@ -2505,6 +2528,8 @@ function handleCurveDragMove(event) {
   if (!Number.isFinite(yVal)) return;
   if (activeDragPoint.dragKind === "compensation-simulation") {
     yVal = outputToneForSimulatedGain(activeDragPoint.channel, activeDragPoint.tone, yVal);
+  } else if (activeDragPoint.dragKind === "curve-adjustment") {
+    yVal = activeDragPoint.tone + yVal;
   }
   yVal = clampNumber(yVal, 0, 100, 0);
   yVal = Math.round(yVal * 10) / 10;
@@ -2590,6 +2615,22 @@ function outputToneForSimulatedGain(channel, tone, simulatedGain) {
     }
   }
   return Number(tone);
+}
+
+function setCurveChartView(view) {
+  if (!els.curveChart) return;
+  els.curveChart.dataset.curveView = view;
+  document.querySelectorAll("button[data-curve-view]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.curveView === view);
+  });
+  const subtitle = document.querySelector("#curveChartSubtitle");
+  if (subtitle) {
+    subtitle.textContent = translateDynamicText(view === "adjustment" ? "每个网点要加减多少（0 线 = 不调整）" : "输入网点到输出网点");
+  }
+  const filtered = state.activeCurveChannel && state.activeCurveChannel !== "all"
+    ? state.results.filter((row) => row.channel === state.activeCurveChannel)
+    : state.results;
+  renderCurveChart(els.curveChart, filtered, state.safetyIssues);
 }
 
 function renderCurveChartsOnly(filtered) {
