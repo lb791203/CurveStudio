@@ -98,7 +98,7 @@ export function calculateCompensation(measurements, options) {
   const rows = resolved
     .map(({ item, metric }) => {
       const measuredTvi = metric.delta;
-      const channelTargetPoints = channelTargetPointsFor(item.channel, targetPoints, options.channelTargets);
+      const channelTargetPoints = channelTargetPointsFor(item.channel, targetPoints, options.channelTargets, mode);
       const targetTvi = interpolate(channelTargetPoints, item.tone);
       const measuredTone = metric.tone;
       const targetTone = clamp(item.tone + targetTvi, 0, 100);
@@ -136,7 +136,7 @@ export function calculateCompensation(measurements, options) {
   return Object.values(grouped)
     .flatMap((items) => {
       const channel = items[0]?.channel;
-      const channelTargetPoints = channelTargetPointsFor(channel, targetPoints, options.channelTargets);
+      const channelTargetPoints = channelTargetPointsFor(channel, targetPoints, options.channelTargets, mode);
       return finalizeChannel(items, { smooth, outputGrid, targetPoints: channelTargetPoints });
     })
     .sort((a, b) => a.channel.localeCompare(b.channel) || a.tone - b.tone);
@@ -144,7 +144,9 @@ export function calculateCompensation(measurements, options) {
 
 // A standard may give some channels their own TVI target (e.g. K on curve B while
 // CMY use curve A): options.channelTargets = { K: "isoB" }.
-function channelTargetPointsFor(channel, targetPoints, channelTargets) {
+// Per-channel overrides are TVI aims; CTV and G7 modes use the selected curve for every channel.
+function channelTargetPointsFor(channel, targetPoints, channelTargets, mode = "tvi") {
+  if (mode !== "tvi") return targetPoints;
   const id = channelTargets?.[channel];
   return id && TARGETS[id] ? TARGETS[id].points : targetPoints;
 }
@@ -157,7 +159,7 @@ export function buildDiagnosticRows(measurements, options = {}) {
     .map((item) => {
       const metric = resolveMeasurementMetric(item, mode);
       if (!Number.isFinite(metric.delta)) return null;
-      const targetTvi = interpolate(channelTargetPointsFor(item.channel, targetPoints, options.channelTargets), item.tone);
+      const targetTvi = interpolate(channelTargetPointsFor(item.channel, targetPoints, options.channelTargets, mode), item.tone);
       return {
         ...item,
         measuredTone: metric.tone,

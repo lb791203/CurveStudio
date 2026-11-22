@@ -83,6 +83,16 @@ test("buildDiagnosticRows honors per-channel targets like the compensation path"
   }
 });
 
+test("per-channel TVI targets do not override the CTV target", () => {
+  const measurements = [{ channel: "C", tone: 50, measuredTone: 72, ctvTone: 50, colorimetricTone: 50 }];
+  const options = { mode: "ctv", target: "linear", channelTargets: { C: "isoA" } };
+  const diag = buildDiagnosticRows(measurements, options);
+  const comp = calculateCompensation(measurements, { ...options, compensationRatio: 100, smooth: 0, limit: 30 });
+
+  assert.equal(diag[0].targetTvi, 0);
+  assert.equal(comp.find((row) => row.tone === 50).targetTvi, 0);
+});
+
 test("ISO 12647-2:2013 TVI targets use Table 9 values and polynomial metadata", () => {
   assert.equal(TARGETS.isoA.source, "ISO 12647-2:2013 Table 9");
   assert.equal(targetValueFor("isoA", 5), 3.3);
