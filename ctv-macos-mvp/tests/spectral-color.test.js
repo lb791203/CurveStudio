@@ -18,8 +18,31 @@ test("spectral reflectance converts neutral white to D50 Lab", () => {
   assert.equal(Number(xyz.y.toFixed(3)), 100);
   assert.equal(Number(xyz.z.toFixed(3)), 82.521);
   assert.equal(Number(lab.l.toFixed(2)), 100);
-  assert.equal(Number(lab.a.toFixed(2)), 0);
-  assert.equal(Number(lab.b.toFixed(2)), 0);
+  assert.ok(Math.abs(lab.a) < 0.005);
+  assert.ok(Math.abs(lab.b) < 0.005);
+});
+
+test("spectral Lab keeps dark patches on the 0-100 scale", () => {
+  // ~1.3% reflectance everywhere: a K solid / 4C shadow. Y is about 1.3, which the
+  // old 0-1 scale guess multiplied by 100 and reported as L* > 100.
+  const row = Object.fromEntries(Array.from({ length: 36 }, (_, index) => [`nm${380 + index * 10}`, 0.013]));
+  const lab = labFromSpectralRow(row);
+  assert.ok(lab.l > 10 && lab.l < 13, `expected L* ~11.6, got ${lab.l}`);
+});
+
+test("spectral Lab matches i1iO2 instrument Lab within 0.05 dE00", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { parseImportText } = await import("../src/curve-engine.js");
+  const { deltaE2000 } = await import("../src/analysis-engine.js");
+  const text = await readFile(new URL("../reference-data/measurements/it8-random/IT8.7-4 CMYK random (i1iO2)_M0.txt", import.meta.url), "utf8");
+  const { rawRows } = parseImportText(text);
+  let worst = 0;
+  for (const row of rawRows.slice(0, 200)) {
+    const reported = { l: Number(row.lab_l), a: Number(row.lab_a), b: Number(row.lab_b) };
+    const spectralOnly = Object.fromEntries(Object.entries(row).filter(([key]) => /nm\d{3}$/i.test(key)));
+    worst = Math.max(worst, deltaE2000(reported, labFromSpectralRow(spectralOnly)));
+  }
+  assert.ok(worst < 0.05, `worst dE00 ${worst}`);
 });
 
 test("spectral reflectance accepts percent-scale values", () => {
@@ -84,3 +107,11 @@ test("spectral processing handles sparse wavelength data gracefully", () => {
   assert.ok(Number.isFinite(lab.l));
 });
 
+
+test("visual (K) density response follows the photopic curve", () => {
+  const flat = (value) => Array.from({ length: 36 }, (_, index) => ({ nm: 380 + index * 10, reflectance: value }));
+  const greenDip = flat(0.8).map((sample) => (sample.nm >= 540 && sample.nm <= 570 ? { ...sample, reflectance: 0.1 } : sample));
+  const blueDip = flat(0.8).map((sample) => (sample.nm >= 440 && sample.nm <= 470 ? { ...sample, reflectance: 0.1 } : sample));
+  // A dip where the eye is most sensitive must darken K density far more than a blue dip.
+  assert.ok(statusTReflectance(greenDip, "K") < statusTReflectance(blueDip, "K") - 0.2);
+});

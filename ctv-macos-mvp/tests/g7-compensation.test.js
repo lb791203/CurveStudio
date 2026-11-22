@@ -128,3 +128,21 @@ test("buildG7Compensation blocks when G7 data is unavailable", () => {
   assert.equal(preview.status, "Blocked");
   assert.equal(preview.rows.length, 0);
 });
+
+test("gray split corrects toward the gray target, not toward a*=b*=0", () => {
+  const base = ["C", "M", "Y"].map((channel) => ({ channel, tone: 50, outputTone: 50 }));
+  const g7 = {
+    status: "Preview",
+    npdcVerification: [],
+    grayVerification: [{
+      tone: 50, measuredL: 60, targetL: 60, deltaL: 0,
+      // Bluish OBA paper: target b* is -4 and the print sits exactly on it.
+      a: 0, b: -4, targetA: 0, targetB: -4, deltaA: 0, deltaB: 0,
+      weightedChroma: 0,
+    }],
+  };
+  const result = buildG7Compensation({ g7, baseRows: base });
+  const y = result.rows.find((row) => row.channel === "Y");
+  assert.equal(y.g7Delta, 0);
+  assert.equal(result.grayDiagnostics[0].weightedDeltaCh, 0);
+});

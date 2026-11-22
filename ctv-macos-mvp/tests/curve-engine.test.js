@@ -38,11 +38,13 @@ test("calculateCompensation switches TVI and CTV metrics explicitly", () => {
 
   assert.equal(tvi[0].metricName, "TVI");
   assert.equal(tvi[0].measuredTvi, 20);
-  assert.equal(tvi[0].outputTone, 32);
+  // Response 0->0, 50->70, 100->100; the input that prints 50% is 50 * 50 / 70.
+  assert.ok(Math.abs(tvi[0].outputTone - 250 / 7) < 1e-9);
+  assert.equal(tvi[0].correctionMethod, "inverse_response");
   assert.equal(ctv[0].metricName, "CTV");
   assert.equal(ctv[0].metricMethod, "iso_20654_lab");
   assert.equal(ctv[0].measuredTvi, 14);
-  assert.equal(ctv[0].outputTone, 36);
+  assert.ok(Math.abs(ctv[0].outputTone - 50 * 50 / 64) < 1e-9);
 });
 
 test("buildDiagnosticRows calculates deviation without production curve output", () => {
@@ -199,8 +201,11 @@ test("smoothing changes the middle point before monotonic enforcement", () => {
     outputGrid: false,
   });
 
-  assert.equal(unsmoothed.find((row) => row.tone === 50).outputTone, 32);
-  assert.equal(smoothed.find((row) => row.tone === 50).outputTone, 35);
+  // Inverse response: 50% prints at 80%, so aim 50% sits on the 25->50 segment.
+  assert.ok(Math.abs(unsmoothed.find((row) => row.tone === 50).outputTone - (25 + 25 * 25 / 55)) < 1e-9);
+  // The 75% patch is on target; the 50% outlier must not drag it.
+  assert.equal(unsmoothed.find((row) => row.tone === 75).outputTone, 75);
+  assert.ok(smoothed.find((row) => row.tone === 50).outputTone > unsmoothed.find((row) => row.tone === 50).outputTone);
 });
 
 test("protects highlight and shadow endpoints", () => {
@@ -313,4 +318,25 @@ test("parseImportText supports comma, tab, semicolon, whitespace and quoted head
     assert.equal(parsed.measurements[0].tone, 50);
     assert.ok(Number.isFinite(parsed.measurements[0].measuredTone));
   }
+});
+
+test("highlight compensation inverts the measured response instead of subtracting TVI", () => {
+  // Typical press: steep highlight response. Target ISO-style 10% -> 20%.
+  const measurements = [
+    { channel: "M", tone: 5, measuredTone: 11 },
+    { channel: "M", tone: 10, measuredTone: 25 },
+    { channel: "M", tone: 20, measuredTone: 40 },
+  ];
+  const [row10] = calculateCompensation(measurements, {
+    mode: "tvi",
+    target: "linear",
+    targetPoints: [[0, 0], [10, 10], [20, 15], [100, 0]],
+    compensationRatio: 100,
+    limit: 100,
+    outputGrid: false,
+  }).filter((row) => row.tone === 10);
+  // Need print 20%: between 5->11 and 10->25 => 5 + (20 - 11) * 5 / 14.
+  assert.ok(Math.abs(row10.theoreticalOutputTone - (5 + 9 * 5 / 14)) < 1e-9);
+  // The old shortcut (10 + 10 - 15 = 5) over-corrected by ~3.2 points.
+  assert.ok(row10.theoreticalOutputTone > 8);
 });
