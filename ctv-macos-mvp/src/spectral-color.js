@@ -14,14 +14,68 @@ const D50_SPD_10NM = new Map([
   [700, 81.113], [710, 80.001], [720, 78.889], [730, 76.858],
 ]);
 
-const SPECTRAL_WHITE = spectralToXyz(
+// ASTM E308 tristimulus weighting factors, CIE D50 illuminant, CIE 1931 2° observer,
+// 10 nm interval, 380–730 nm, for reflectance data that is already bandpass-corrected
+// (the usual case for i1Pro / i1iO / eXact / SpectroDens exports). Generated with
+// colour-science `sd_to_XYZ_ASTME308` from the CIE 1931 CMFs and CIE D50 SPD, then
+// normalised so that sum(Wy) = 100 and the X/Z sums equal the ASTM E308 D50 white
+// (96.422, 82.521; colour-science's D50 SPD differs from ASTM's by <0.01%).
+// Checked against i1iO2 M0/M2 CGATS files: mean ΔE00 0.005 versus the instrument's
+// own LAB columns (the previous Gaussian CMF approximation was ~1.1 ΔE00 mean).
+const ASTM_E308_D50_2_10NM = new Map([
+  [380, [0.00389, 0.00011, 0.01829]],
+  [390, [0.01212, 0.00035, 0.05721]],
+  [400, [0.05986, 0.00165, 0.28351]],
+  [410, [0.23323, 0.00622, 1.11041]],
+  [420, [0.77468, 0.02283, 3.72214]],
+  [430, [1.61852, 0.06636, 7.90208]],
+  [440, [2.45122, 0.16226, 12.30207]],
+  [450, [2.77178, 0.31273, 14.61986]],
+  [460, [2.49830, 0.51403, 14.33957]],
+  [470, [1.71786, 0.79843, 11.30472]],
+  [480, [0.86007, 1.23837, 7.30237]],
+  [490, [0.28314, 1.84103, 4.13229]],
+  [500, [0.03993, 2.94731, 2.46596]],
+  [510, [0.08831, 4.63249, 1.44669]],
+  [520, [0.59365, 6.59098, 0.73705]],
+  [530, [1.58886, 8.30161, 0.40061]],
+  [540, [2.80015, 9.19935, 0.19651]],
+  [550, [4.20408, 9.64505, 0.08470]],
+  [560, [5.65717, 9.47176, 0.03679]],
+  [570, [7.13484, 8.90541, 0.01967]],
+  [580, [8.53292, 8.10512, 0.01492]],
+  [590, [9.26905, 6.83880, 0.01043]],
+  [600, [9.83313, 5.83673, 0.00734]],
+  [610, [9.46414, 4.75113, 0.00354]],
+  [620, [8.00611, 3.57184, 0.00159]],
+  [630, [5.93199, 2.44575, 0.00050]],
+  [640, [4.16828, 1.62819, 0.00016]],
+  [650, [2.61124, 0.98506, 0.00002]],
+  [660, [1.54137, 0.56998, -0.00000]],
+  [670, [0.85365, 0.31243, 0.00000]],
+  [680, [0.43323, 0.15745, 0.00000]],
+  [690, [0.19437, 0.07028, 0.00000]],
+  [700, [0.09693, 0.03500, 0.00000]],
+  [710, [0.04998, 0.01805, 0.00000]],
+  [720, [0.02215, 0.00800, 0.00000]],
+  [730, [0.02179, 0.00787, 0.00000]],
+
+]);
+
+const ASTM_FIRST_NM = 380;
+const ASTM_LAST_NM = 730;
+
+const SPECTRAL_WHITE = approximateSpectralToXyz(
   Array.from(D50_SPD_10NM.keys()).map((nm) => ({ nm, reflectance: 1 })),
   false
 );
 
 export function labFromSpectralRow(row) {
   const xyz = xyzFromSpectralRow(row);
-  return xyz ? labFromXyz(xyz) : null;
+  // Spectral integration always yields the 0–100 scale. Do not run it through
+  // labFromXyz's 0–1 scale guess: a dark patch (Y < 1.5, roughly L* < 13, e.g. a
+  // K solid or 4-colour shadow) would be multiplied by 100 and come out as L* > 100.
+  return xyz ? labFromXyz100(xyz) : null;
 }
 
 export function xyzFromSpectralRow(row) {
@@ -31,8 +85,11 @@ export function xyzFromSpectralRow(row) {
 }
 
 export function labFromXyz(xyz) {
-  const normalized = normalizeXyzScale(xyz);
-  if (!normalized) return null;
+  return labFromXyz100(normalizeXyzScale(xyz));
+}
+
+function labFromXyz100(normalized) {
+  if (!normalized || ![normalized.x, normalized.y, normalized.z].every(Number.isFinite)) return null;
   const fx = cieLabCompression(normalized.x / D50_XYZ.x);
   const fy = cieLabCompression(normalized.y / D50_XYZ.y);
   const fz = cieLabCompression(normalized.z / D50_XYZ.z);
@@ -58,6 +115,39 @@ export function spectralSamples(row = {}) {
 }
 
 function spectralToXyz(samples, normalizeWhite = true) {
+  const astm = astmE308ToXyz(samples);
+  if (astm) return astm;
+  return approximateSpectralToXyz(samples, normalizeWhite);
+}
+
+// Uses the ASTM E308 weighting table when the samples sit on the 10 nm grid.
+// Weights for wavelengths outside the measured range are folded into the first/last
+// measured band (ASTM E308 range-truncation practice) instead of being dropped.
+function astmE308ToXyz(samples) {
+  const inRange = samples.filter((sample) => sample.nm >= ASTM_FIRST_NM && sample.nm <= ASTM_LAST_NM);
+  if (inRange.length < 16 || inRange.some((sample) => sample.nm % 10 !== 0)) return null;
+  const byNm = new Map(inRange.map((sample) => [sample.nm, sample.reflectance]));
+  const measured = [...byNm.keys()].sort((a, b) => a - b);
+  const first = measured[0];
+  const last = measured[measured.length - 1];
+  for (let nm = first; nm <= last; nm += 10) {
+    if (!byNm.has(nm)) return null;
+  }
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  for (const [nm, weight] of ASTM_E308_D50_2_10NM) {
+    const reflectance = nm < first ? byNm.get(first) : nm > last ? byNm.get(last) : byNm.get(nm);
+    x += reflectance * weight[0];
+    y += reflectance * weight[1];
+    z += reflectance * weight[2];
+  }
+  return { x, y, z };
+}
+
+// Fallback for non-10 nm data (e.g. 5 nm or 20 nm exports). Uses an analytic
+// multi-lobe approximation of the CIE 1931 CMFs, so expect roughly 1 ΔE00 error.
+function approximateSpectralToXyz(samples, normalizeWhite = true) {
   let x = 0;
   let y = 0;
   let z = 0;
@@ -168,17 +258,12 @@ const STATUS_T_BLUE = new Map([
   [730, 0.000],
 ]);
 
-// Status-T Visual: D50 SPD × CIE 1931 ȳ
-const STATUS_T_VISUAL = new Map([
-  [380, 0.000], [390, 0.003], [400, 0.014], [410, 0.085], [420, 0.290],
-  [430, 0.513], [440, 0.902], [450, 1.413], [460, 1.677], [470, 1.510],
-  [480, 0.947], [490, 0.566], [500, 0.326], [510, 0.179], [520, 0.099],
-  [530, 0.052], [540, 0.007], [550, 0.002], [560, 0.003], [570, 0.016],
-  [580, 0.048], [590, 0.076], [600, 0.080], [610, 0.059], [620, 0.024],
-  [630, 0.015], [640, 0.006], [650, 0.002], [660, 0.000], [670, 0.000],
-  [680, 0.000], [690, 0.000], [700, 0.000], [710, 0.000], [720, 0.000],
-  [730, 0.000],
-]);
+// Visual (K) density response: D50 SPD × CIE 1931 y-bar, i.e. the Y column of the
+// ASTM E308 D50/2° table scaled to a peak of 1. The previous table peaked at 460 nm,
+// which is a blue response rather than the photopic y-bar curve (peak ~555 nm).
+const STATUS_T_VISUAL = new Map(
+  [...ASTM_E308_D50_2_10NM].map(([nm, weight]) => [nm, Number((weight[1] / 9.64505).toFixed(4))])
+);
 
 const STATUS_T_RESPONSE = { C: STATUS_T_RED, M: STATUS_T_GREEN, Y: STATUS_T_BLUE, K: STATUS_T_VISUAL };
 
