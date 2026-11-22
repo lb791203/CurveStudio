@@ -51,8 +51,8 @@ test("macOS notarization workflow requires Developer ID, hardened runtime and st
 
 test("customer audit report comparison keeps TVI, Lab, gray and density evidence", () => {
   const comparison = buildAuditReportComparison({
-    job: { customerName: "SML Viet Nam", machineModel: "XL-75-6C" },
-    source: { software: "PrintSpec" },
+    job: { customerName: "Demo Customer", machineModel: "Press 6C" },
+    source: { software: "External audit tool" },
     standard: { name: "ISO 12647-2:2007 Offset" },
     auditSummary: { status: "Check" },
     auditRules: { tviDotGainTolerance: 5 },
@@ -99,7 +99,7 @@ test("customer audit report comparison keeps TVI, Lab, gray and density evidence
     ],
   });
 
-  assert.equal(comparison.title, "SML Viet Nam / XL-75-6C");
+  assert.equal(comparison.title, "Demo Customer / Press 6C");
   assert.equal(comparison.standard.name, "ISO 12647-2:2007 Offset");
   assert.equal(comparison.tviRows.length, 3);
   assert.equal(comparison.labRows.length, 2);

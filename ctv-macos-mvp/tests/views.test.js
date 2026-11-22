@@ -356,7 +356,7 @@ test("renderAnalyze summarizes only the fixed 9 key color patches", () => {
   assert.match(localEls.labDetailSummary.textContent, /可比 9\/29/);
 });
 
-test("renderAnalyze hides imported SML sample ids from customer-facing Lab tables", () => {
+test("renderAnalyze hides imported sample ids from customer-facing Lab tables", () => {
   const localEls = els({
     diagnosisCards: {
       innerHTML: "",
@@ -372,10 +372,10 @@ test("renderAnalyze hides imported SML sample ids from customer-facing Lab table
     labBody: { innerHTML: "" },
   });
   const labRows = [
-    { label: "SML_Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 94, a: 0, b: -3 }, referenceLab: { l: 92, a: 0, b: -3 }, deltaE: 1, status: "Pass" },
-    { label: "SML_C_100", cmyk: { c: 100, m: 0, y: 0, k: 0 }, lab: { l: 58, a: -36, b: -47 }, referenceLab: { l: 54, a: -36, b: -49 }, deltaE: 4, status: "Pass" },
-    { label: "SML_Red", cmyk: { c: 0, m: 100, y: 100, k: 0 }, lab: { l: 49, a: 63, b: 39 }, referenceLab: { l: 46, a: 67, b: 43 }, deltaE: 5, status: "Fail" },
-    { label: "SML_CMY_Black", cmyk: { c: 100, m: 100, y: 100, k: 0 }, lab: { l: 29, a: -1, b: -4 }, referenceLab: { l: 22, a: 0, b: -2 }, deltaE: 7, status: "Fail" },
+    { label: "DEMO_Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 94, a: 0, b: -3 }, referenceLab: { l: 92, a: 0, b: -3 }, deltaE: 1, status: "Pass" },
+    { label: "DEMO_C_100", cmyk: { c: 100, m: 0, y: 0, k: 0 }, lab: { l: 58, a: -36, b: -47 }, referenceLab: { l: 54, a: -36, b: -49 }, deltaE: 4, status: "Pass" },
+    { label: "DEMO_Red", cmyk: { c: 0, m: 100, y: 100, k: 0 }, lab: { l: 49, a: 63, b: 39 }, referenceLab: { l: 46, a: 67, b: 43 }, deltaE: 5, status: "Fail" },
+    { label: "DEMO_CMY_Black", cmyk: { c: 100, m: 100, y: 100, k: 0 }, lab: { l: 29, a: -1, b: -4 }, referenceLab: { l: 22, a: 0, b: -2 }, deltaE: 7, status: "Fail" },
   ];
 
   renderAnalyze(state({
@@ -387,7 +387,7 @@ test("renderAnalyze hides imported SML sample ids from customer-facing Lab table
   }), localEls);
 
   const visibleHtml = `${localEls.labBody.innerHTML}\n${localEls.labDetailBody.innerHTML}`;
-  assert.doesNotMatch(visibleHtml, /SML_/);
+  assert.doesNotMatch(visibleHtml, /DEMO_/);
   assert.match(visibleHtml, /纸白/);
   assert.match(visibleHtml, /C 实地/);
   assert.match(visibleHtml, /MY 叠印/);
@@ -774,36 +774,36 @@ test("renderReport summarizes field report sections", () => {
   assert.equal(localEls.printReportButton.disabled, false);
 });
 
-test("renderReport hides imported SML sample ids in production Lab table", () => {
+test("renderReport hides imported sample ids in production Lab table", () => {
   const localEls = els({
     modeSelect: { value: "tvi" },
     targetSelect: { value: "isoA" },
-    jobCustomerInput: { value: "SML Viet Nam" },
-    jobPressInput: { value: "XL-75-6C" },
+    jobCustomerInput: { value: "Demo Customer" },
+    jobPressInput: { value: "Press 6C" },
   });
   renderReport(state({
     standard: { name: "ISO 12647-2:2007 Offset", deltaE: { warning: 5, fail: 5 } },
     labRows: [
-      { label: "SML_Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 94, a: 0, b: -3 }, referenceLab: { l: 92, a: 0, b: -3 }, deltaE: 1, status: "Pass" },
-      { label: "SML_C_100", cmyk: { c: 100, m: 0, y: 0, k: 0 }, lab: { l: 58, a: -36, b: -47 }, referenceLab: { l: 54, a: -36, b: -49 }, deltaE: 4, status: "Pass" },
+      { label: "DEMO_Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 94, a: 0, b: -3 }, referenceLab: { l: 92, a: 0, b: -3 }, deltaE: 1, status: "Pass" },
+      { label: "DEMO_C_100", cmyk: { c: 100, m: 0, y: 0, k: 0 }, lab: { l: 58, a: -36, b: -47 }, referenceLab: { l: 54, a: -36, b: -49 }, deltaE: 4, status: "Pass" },
     ],
     results: [],
   }), localEls);
 
-  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /SML_/);
+  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /DEMO_/);
   assert.match(localEls.reportAuditComparison.innerHTML, /纸白/);
   assert.match(localEls.reportAuditComparison.innerHTML, /C 实地/);
 });
 
-test("renderReport adds SML source-audit comparison when audit report data is attached", () => {
-  const auditReport = JSON.parse(fs.readFileSync("samples/sml-printspec-audit-example.json", "utf8"));
+test("renderReport adds source-audit comparison when audit report data is attached", () => {
+  const auditReport = JSON.parse(fs.readFileSync("samples/audit-report-demo.json", "utf8"));
   const localEls = els({
     modeSelect: { value: "tvi" },
     targetSelect: { value: "isoA" },
-    jobCustomerInput: { value: "SML Viet Nam" },
-    jobPressInput: { value: "XL-75-6C" },
+    jobCustomerInput: { value: "Demo Customer" },
+    jobPressInput: { value: "Press 6C" },
     jobPaperInput: { value: "FSC 300LX3143B" },
-    jobDeviceInput: { value: "Mellow Colour PrintSpec" },
+    jobDeviceInput: { value: "External audit tool" },
   });
   const localState = state({
     auditReport,
@@ -817,8 +817,8 @@ test("renderReport adds SML source-audit comparison when audit report data is at
   assert.equal(localEls.reportAuditComparison.hidden, false);
   assert.match(localEls.reportAuditComparison.innerHTML, /现场验厂报告输出/);
   assert.match(localEls.reportAuditComparison.innerHTML, /来源验厂报告复核/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /SML Viet Nam/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /Mellow Colour PrintSpec/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /Demo Customer/);
+  assert.match(localEls.reportAuditComparison.innerHTML, /External audit tool/);
   assert.match(localEls.reportAuditComparison.innerHTML, /三灰 ΔH|Lab ΔE|密度/);
   assert.match(localEls.reportAuditComparison.innerHTML, /网点扩张曲线/);
   assert.match(localEls.reportAuditComparison.innerHTML, /实地密度目标 \/ 实测/);
@@ -833,16 +833,16 @@ test("renderReport adds SML source-audit comparison when audit report data is at
   assert.equal(toleranceBands.length, 1, "expected one shared neutral target tolerance band instead of overlapping channel bands");
   assert.doesNotMatch(toleranceBands[0][1], /\sC\s/, "target tolerance band should use straight tolerance envelope segments");
   assert.match(toleranceBands[0][1], /\sL\s/, "target tolerance band should contain straight line segments");
-  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /SML_/);
-  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /参考 SML/);
+  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /DEMO_/);
+  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /参考 DEMO/);
 });
 
-test("renderReport uses ISO 12647-2 SML density targets when only measurement Run data is loaded", () => {
+test("renderReport uses ISO 12647-2 audit demo density targets when only measurement Run data is loaded", () => {
   const localEls = els({
     modeSelect: { value: "tvi" },
     targetSelect: { value: "isoA" },
-    jobCustomerInput: { value: "SML Viet Nam" },
-    jobPressInput: { value: "XL-75-6C" },
+    jobCustomerInput: { value: "Demo Customer" },
+    jobPressInput: { value: "Press 6C" },
   });
   const measurements = ["C", "M", "Y", "K"].flatMap((channel, index) => [
     { channel, tone: 50, density: [0.5, 0.5, 0.44, 0.53][index] },

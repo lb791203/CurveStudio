@@ -1,12 +1,12 @@
 ISO28178
 "ORIGINATOR ""CurveStudio"""
-"FILE_DESCRIPTOR ""SML PrintSpec audit target Lab / XL-75-6C"""
+"FILE_DESCRIPTOR ""ISO 12647-2:2007 offset audit demo target Lab"""
 "CREATED ""2026-06-03"""
 "MEASUREMENT_CONDITION ""M0"""
 "ILLUMINANT ""D50"""
 "OBSERVER ""2 degree"""
 "DENSITY_FILTER ""Status T"""
-"NOTE ""Target Lab values transcribed from SML Viet Nam PrintSpec audit report photos. Use for customer/audit report verification only."""
+"NOTE ""Target Lab values for the ISO 12647-2:2007 offset audit demo. Demo data only."""
 NUMBER_OF_FIELDS 8
 BEGIN_DATA_FORMAT
 SAMPLE_ID CMYK_C CMYK_M CMYK_Y CMYK_K LAB_L LAB_A LAB_B

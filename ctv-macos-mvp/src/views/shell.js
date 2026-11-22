@@ -9,7 +9,7 @@ import { algorithmDescription, deltaFormulaLabel } from "../ui-labels.js";
 import { displayPatchLabel, num, statusClass } from "./helpers.js?v=20260604-patch-labels-1";
 import { targetName, visibleWarnings } from "./data.js?v=20260525-statusbar-pass-1";
 import { buildAuditReportComparison } from "../audit-report.js";
-import { SML_ISO_12647_2_2007_DENSITY_TARGETS } from "../standards.js";
+import { AUDIT_DEMO_ISO_12647_2_2007_DENSITY_TARGETS } from "../standards.js";
 import { canUseDesktopFileDialog } from "../desktop-io.js";
 
 export function renderShell(state, els) {
@@ -606,7 +606,7 @@ function productionToneRows(state, els) {
       let targetValue = Number.isFinite(Number(row.targetTvi))
         ? Number(row.targetTvi)
         : Number(row.targetTone) - Number(row.tone);
-      if (state.standard?.id === "sml_printspec_xl75_6c") {
+      if (state.standard?.id === "iso12647_2_2007_offset_audit_demo") {
         if (channel === "K") {
           if (tone === 25) targetValue = 12.1;
           else if (tone === 50) targetValue = 17.0;
@@ -785,10 +785,10 @@ function standardDensityTargetInfo(standard, channel, tone) {
   }
   const standardText = `${standard?.name || ""} ${standard?.printCondition || ""}`;
   if (/ISO\s*12647-2:2007\s*Offset/i.test(standardText)) {
-    const smlTarget = auditNumber(SML_ISO_12647_2_2007_DENSITY_TARGETS[channel]?.[tone]);
-    if (Number.isFinite(smlTarget)) {
+    const auditTarget = auditNumber(AUDIT_DEMO_ISO_12647_2_2007_DENSITY_TARGETS[channel]?.[tone]);
+    if (Number.isFinite(auditTarget)) {
       return {
-        value: smlTarget,
+        value: auditTarget,
         range,
         source: t("audit_report_customer_density_source", "Customer audit report density target"),
       };

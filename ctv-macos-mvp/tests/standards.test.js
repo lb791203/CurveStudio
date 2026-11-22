@@ -64,15 +64,15 @@ test("reference-file custom standards receive default acceptance settings", () =
 test("reimported reference standards replace older duplicates", () => {
   setCustomStandards([]);
   const first = makeCustomStandard({
-    id: "custom_old_sml",
+    id: "custom_old_audit_demo",
     name: "ISO 12647-2:2007 Offset",
-    printCondition: "SML PrintSpec audit target Lab / XL-75-6C",
+    printCondition: "ISO 12647-2:2007 offset audit demo target Lab",
     referenceRows: [{ cmyk_c: 0, cmyk_m: 0, cmyk_y: 0, cmyk_k: 0, lab_l: 92, lab_a: 0, lab_b: -3 }],
   });
   const second = makeCustomStandard({
-    id: "custom_iso-12647-2-2007-offset-sml-printspec-audit-target-lab-xl-75-6c",
+    id: "custom_iso-12647-2-2007-offset-audit-demo-target-lab",
     name: "ISO 12647-2:2007 Offset",
-    printCondition: "SML PrintSpec audit target Lab / XL-75-6C",
+    printCondition: "ISO 12647-2:2007 offset audit demo target Lab",
     referenceRows: [
       { cmyk_c: 0, cmyk_m: 0, cmyk_y: 0, cmyk_k: 0, lab_l: 92, lab_a: 0, lab_b: -3 },
       { cmyk_c: 100, cmyk_m: 0, cmyk_y: 0, cmyk_k: 0, lab_l: 54, lab_a: -36, lab_b: -49 },
@@ -90,8 +90,7 @@ test("reimported reference standards replace older duplicates", () => {
 
 test("standard presets carry their own acceptance tolerances", () => {
   const gracol = standardById("gracol2013_crpc6");
-  const fogra = standardById("fogra39");
-  const sml = standardById("sml_printspec_xl75_6c");
+  const auditDemo = standardById("iso12647_2_2007_offset_audit_demo");
   const isoTvi = standardById("iso_tvi_b");
   const pc1 = standardById("iso12647_2_2013_pc1");
   const pc6 = standardById("iso12647_2_2013_pc6");
@@ -102,16 +101,13 @@ test("standard presets carry their own acceptance tolerances", () => {
   assert.equal(gracol.deltaE.fail, 4.2);
   assert.equal(gracol.g7.enabled, true);
 
-  assert.equal(fogra.acceptancePreset, "FOGRA process-control field audit");
-  assert.equal(fogra.toneTolerances.C.tvi[50], 5);
-  assert.equal(fogra.toneTolerances.C.ctv[50], 4);
-  assert.equal(fogra.deltaE.fail, 5);
-  assert.equal(fogra.g7.enabled, false);
 
-  assert.equal(sml.name, "ISO 12647-2:2007 Offset");
-  assert.match(sml.referencePath, /SML-PrintSpec-XL75-6C\.txt$/);
-  assert.equal(sml.deltaE.fail, 5);
-  assert.equal(sml.g7.enabled, false);
+  assert.equal(standardById("fogra39").id, "gracol2013_crpc1"); // removed preset falls back
+  assert.equal(auditDemo.name, "ISO 12647-2:2007 Offset");
+  assert.match(auditDemo.referencePath, /iso12647-2-2007-offset-audit-demo\.txt$/);
+  assert.deepEqual(auditDemo.channelTargets, { K: "isoB" });
+  assert.equal(auditDemo.deltaE.fail, 5);
+  assert.equal(auditDemo.g7.enabled, false);
 
   assert.equal(isoTvi.acceptancePreset, "ISO 12647-2 TVI field audit");
   assert.equal(isoTvi.toneTolerances.C.tvi[25], 3);
@@ -130,8 +126,8 @@ test("standard presets carry their own acceptance tolerances", () => {
   assert.equal(pc6.printCondition, "PC6 / PS6 / CD6");
 });
 
-test("SML PrintSpec standard reference file contains report target Lab values", () => {
-  const text = fs.readFileSync("reference-data/standards/customer-audit/SML-PrintSpec-XL75-6C.txt", "utf8");
+test("audit demo standard reference file contains target Lab values", () => {
+  const text = fs.readFileSync("reference-data/standards/audit-demo/iso12647-2-2007-offset-audit-demo.txt", "utf8");
   const parsed = parseImportText(text);
   const map = buildPatchMap(parsed.rawRows);
 

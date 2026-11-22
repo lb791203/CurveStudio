@@ -75,7 +75,7 @@ const BROAD_SOLID_DENSITY_RANGES = {
   K: [0.95, 1.95],
 };
 
-export const SML_ISO_12647_2_2007_DENSITY_TARGETS = {
+export const AUDIT_DEMO_ISO_12647_2_2007_DENSITY_TARGETS = {
   C: { 0: 0.08, 25: 0.25, 50: 0.49, 75: 0.85, 100: 1.4 },
   M: { 0: 0.08, 25: 0.25, 50: 0.5, 75: 0.86, 100: 1.45 },
   Y: { 0: 0.06, 25: 0.22, 50: 0.43, 75: 0.72, 100: 1.05 },
@@ -207,27 +207,18 @@ const ISO_12647_2_2013_PC_STANDARDS = ISO_12647_2_2013_PC.map((pc) => ({
 const BUILT_IN_STANDARD_LIBRARY = [
   ...CRPC_STANDARDS,
   {
-    id: "fogra39",
-    name: "FOGRA39",
-    printCondition: "ISO coated reference",
-    target: "isoA",
-    targetSource: "FOGRA39 reference condition",
-    labReferenceSource: "FOGRA39 reference data",
-    referencePath: "./reference-data/standards/patchtool/FOGRA39.txt",
-    solidDensityRanges: COATED_SOLID_DENSITY_RANGES,
-    ...acceptancePreset("fograProcess"),
-  },
-  {
-    id: "sml_printspec_xl75_6c",
+    id: "iso12647_2_2007_offset_audit_demo",
     name: "ISO 12647-2:2007 Offset",
     printCondition: "ISO 12647-2:2007 Offset Status T / Paper 2 Matt / Curve A+B / Black / Status T",
     target: "isoA",
-    targetSource: "Customer audit report / PrintSpec Curve A+B",
-    labReferenceSource: "Customer audit report target Lab",
-    densityTargetSource: "Customer audit report target density",
-    referencePath: "./reference-data/standards/customer-audit/SML-PrintSpec-XL75-6C.txt",
+    // CMY follow TVI curve A, K follows curve B.
+    channelTargets: { K: "isoB" },
+    targetSource: "Audit report demo / Curve A (CMY) + B (K)",
+    labReferenceSource: "Audit report demo target Lab",
+    densityTargetSource: "Audit report demo target density",
+    referencePath: "./reference-data/standards/audit-demo/iso12647-2-2007-offset-audit-demo.txt",
     solidDensityRanges: COATED_SOLID_DENSITY_RANGES,
-    densityTargets: SML_ISO_12647_2_2007_DENSITY_TARGETS,
+    densityTargets: AUDIT_DEMO_ISO_12647_2_2007_DENSITY_TARGETS,
     ...acceptancePreset("isoTviOnly"),
     deltaE: { warning: 5, fail: 5 },
   },

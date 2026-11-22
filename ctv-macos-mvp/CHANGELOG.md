@@ -10,6 +10,10 @@
 - G7 weighting now follows the Idealliance formula (1.0 up to 50%, 0.25 at 100%, no extra highlight reduction) and G7 Grayscale/Targeted results are Pass/Fail only. Targeted uses ΔE00 with per-patch limits (substrate 3.0, CMY solids 3.5, K 5.0, overprints 4.2).
 - Only patches on the G7 gray ratio (M = Y = f(C)) are evaluated as CMY gray; equal-CMY ramps and P2P offset grays such as 30/30/30 or 20/12/12 no longer distort the gray-balance result.
 - G7 gray-balance split corrections now aim at the gray target (paper/standard tint) instead of a*=b*=0, and the gray diagnostics read the weighted ΔCh field that verification actually produces.
+- Removed third-party and customer data from the repository and the desktop bundle: G7 training-kit measurements, files copied from PatchTool and i1Profiler, CRPC ICC profiles, control-wedge references, Harmony curves, and customer field/audit files. Removed the reference-software study document.
+- Added `scripts/generate-demo-p2p.mjs` and a synthetic P2P51 press sheet (`samples/g7-p2p51-simulated.txt`) built from CGATS21-2 CRPC6 data for demos and tests.
+- Replaced the customer audit sample with an anonymized ISO 12647-2 audit demo; the standard now declares its per-channel TVI targets (`channelTargets: { K: "isoB" }`) instead of the curve engine checking a customer standard id.
+- Removed the built-in FOGRA39 preset (import the FOGRA characterization data as a custom standard instead).
 
 ## 1.0.5 - 2026-07-05
 
