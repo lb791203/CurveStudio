@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.6 - 2026-11-22
 
 - Spectral data is now converted to XYZ/Lab with ASTM E308 D50/2° 10 nm weighting factors. Against the i1iO2 M0/M2 fixtures the mean error versus the instrument's own Lab drops from about 1.1 ΔE00 to 0.005 ΔE00.
 - Fixed dark patches (Y < 1.5, roughly L* < 13) computed from spectral data being reported as L* > 100.
@@ -14,6 +14,10 @@
 - Added `scripts/generate-demo-p2p.mjs` and a synthetic P2P51 press sheet (`samples/g7-p2p51-simulated.txt`) built from CGATS21-2 CRPC6 data for demos and tests.
 - Replaced the customer audit sample with an anonymized ISO 12647-2 audit demo; the standard now declares its per-channel TVI targets (`channelTargets: { K: "isoB" }`) instead of the curve engine checking a customer standard id.
 - Removed the built-in FOGRA39 preset (import the FOGRA characterization data as a custom standard instead).
+- Projects saved with a preset that is no longer built in now reopen with their archived settings as a custom standard (with a warning to re-import the Lab reference) instead of silently switching to GRACoL CRPC1. Projects saved with the old audit preset id open with the renamed audit demo preset.
+- Per-channel TVI targets now also drive the press diagnosis and automatic compensation ratio, and are ignored in CTV and G7 modes.
+- The overall G7 result now uses the same Pass/Fail limits as the grayscale summaries (no Warning band for NPDC or gray balance).
+- Old release installers that bundled the removed reference data have been withdrawn; use 1.0.6 or later.
 
 ## 1.0.5 - 2026-07-05
 
