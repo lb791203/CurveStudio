@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { canUseDesktopFileDialog, canUseTauriCommandBridge, invokeTauriCommand, openTextFileDesktop, saveTextFileDesktop } from "../src/desktop-io.js";
+import {
+  canUseDesktopFileDialog,
+  canUseTauriCommandBridge,
+  invokeTauriCommand,
+  openTextFileDesktop,
+  saveBinaryFileDesktop,
+  saveTextFileDesktop,
+} from "../src/desktop-io.js";
 
 test("desktop file IO reports unavailable outside Tauri", async () => {
   const originalWindow = globalThis.window;
@@ -69,4 +76,99 @@ test("desktop file IO works without global Tauri API", async () => {
   assert.deepEqual(calls.map((call) => call[0]), ["plugin:dialog|save", "write_text_file", "plugin:dialog|open", "read_text_file", "sdk_scan_devices"]);
 
   globalThis.window = originalWindow;
+});
+
+test("desktop dialogs treat user cancellation as handled without invoking file commands", async () => {
+  const originalWindow = globalThis.window;
+  const commands = [];
+  try {
+    globalThis.window = {
+      __TAURI__: {
+        dialog: {
+          save: async () => null,
+          open: async () => ["/tmp/one.csv", "/tmp/two.csv"],
+        },
+        core: {
+          invoke: async (command) => commands.push(command),
+        },
+      },
+    };
+
+    assert.deepEqual(await saveTextFileDesktop({ filename: "demo.csv", contents: "K,50" }), {
+      handled: true,
+      path: "",
+      canceled: true,
+    });
+    assert.deepEqual(await openTextFileDesktop(), {
+      handled: true,
+      path: "",
+      contents: "",
+      canceled: true,
+    });
+    assert.deepEqual(commands, []);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test("desktop binary save converts bytes and selects the ICC filter", async () => {
+  const originalWindow = globalThis.window;
+  const calls = [];
+  try {
+    globalThis.window = {
+      __TAURI__: {
+        dialog: {
+          save: async (options) => {
+            calls.push(["save", options]);
+            return "/tmp/profile.icc";
+          },
+          open: async () => null,
+        },
+        core: {
+          invoke: async (command, payload) => calls.push([command, payload]),
+        },
+      },
+    };
+
+    const result = await saveBinaryFileDesktop({
+      filename: "profile.icc",
+      contents: new Uint8Array([0, 127, 255]),
+    });
+
+    assert.deepEqual(result, { handled: true, path: "/tmp/profile.icc" });
+    assert.deepEqual(calls[0][1].filters, [{ name: "ICC Profile", extensions: ["icc", "icm"] }]);
+    assert.deepEqual(calls[1], ["write_binary_file", { path: "/tmp/profile.icc", contents: [0, 127, 255] }]);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test("desktop file IO exposes bridge failures to the UI error boundary", async () => {
+  const originalWindow = globalThis.window;
+  try {
+    delete globalThis.window;
+    await assert.rejects(invokeTauriCommand("read_text_file"), /Tauri command bridge is unavailable/);
+
+    globalThis.window = {
+      __TAURI__: {
+        dialog: {
+          save: async () => "/tmp/demo.json",
+          open: async () => "/tmp/demo.json",
+        },
+        core: {
+          invoke: async (command) => {
+            throw new Error(`${command} denied`);
+          },
+        },
+      },
+    };
+
+    await assert.rejects(
+      saveTextFileDesktop({ filename: "demo.json", contents: "{}" }),
+      /write_text_file denied/
+    );
+    await assert.rejects(openTextFileDesktop(), /read_text_file denied/);
+  } finally {
+    globalThis.window = originalWindow;
+  }
 });

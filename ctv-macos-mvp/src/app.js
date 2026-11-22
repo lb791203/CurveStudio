@@ -48,6 +48,8 @@ import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
 import { STANDARD_LIBRARY, addOrUpdateCustomStandard, archivedStandardAsCustom, buildPatchMap, cmykKey, hasStandard, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260604-density-targets-1";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 import { auditMeasurementCsv } from "./audit-report.js";
+import { fetchJsonResource, fetchTextResource } from "./network.js";
+import { bindAsyncAction } from "./ui-actions.js";
 
 const CUSTOM_STANDARDS_KEY = "ctv-custom-standards";
 const HIDDEN_STANDARDS_KEY = "ctv-hidden-standards";
@@ -386,7 +388,9 @@ function attachEvents() {
   els.parseButton.addEventListener("click", parseAndCalculate);
   els.desktopOpenFileButton?.addEventListener("click", openWithDesktopDialog);
   els.calculateButton.addEventListener("click", () => calculate({ preserveRatio: true }));
-  els.loadSampleButton.addEventListener("click", loadSelectedSample);
+  bindAsyncAction(els.loadSampleButton, loadSelectedSample, {
+    errorPrefix: t("sample_load_failed", "示例数据加载失败"),
+  });
   els.addManualRowButton.addEventListener("click", addManualRow);
   els.templateFieldButton.addEventListener("click", () => addManualTemplate("field"));
   els.template2575Button.addEventListener("click", () => addManualTemplate("2575"));
@@ -659,9 +663,8 @@ async function loadStandard(id) {
     state.standardPatchMap = buildPatchMap(state.standard.referenceRows);
   } else if (state.standard.referencePath) {
     try {
-      const response = await fetch(state.standard.referencePath);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      state.standardImport = parseImportText(await response.text());
+      const text = await fetchTextResource(state.standard.referencePath, { label: "standard reference file" });
+      state.standardImport = parseImportText(text);
       state.standardPatchMap = buildPatchMap(state.standardImport.rawRows);
     } catch (error) {
       state.standardImport = { warnings: [`标准文件加载失败: ${error.message}`], rawRows: [] };
@@ -1059,8 +1062,7 @@ async function loadSelectedSample() {
     switchView("report");
     return;
   }
-  const response = await fetch(samplePaths[selected] || samplePaths.sample);
-  els.rawInput.value = await response.text();
+  els.rawInput.value = await fetchTextResource(samplePaths[selected] || samplePaths.sample, { label: "sample measurement" });
   state.auditReport = null;
   parseAndCalculate({ skipConfirm: true });
   if (selected === "ctvLab") {
@@ -1078,9 +1080,7 @@ async function loadSelectedSample() {
 }
 
 async function responseJson(path) {
-  const response = await fetch(path);
-  if (!response.ok) throw new Error(`Cannot load ${path}: ${response.status}`);
-  return response.json();
+  return fetchJsonResource(path);
 }
 
 async function loadManualPreset(key) {
@@ -1101,9 +1101,7 @@ async function loadManualPreset(key) {
 
 async function loadKbaPresets() {
   if (kbaPresetCache) return kbaPresetCache;
-  const response = await fetch("./samples/kba-presets.json");
-  if (!response.ok) throw new Error(`KBA preset load failed: HTTP ${response.status}`);
-  kbaPresetCache = await response.json();
+  kbaPresetCache = await fetchJsonResource("./samples/kba-presets.json", { label: "KBA preset" });
   return kbaPresetCache;
 }
 
