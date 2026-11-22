@@ -643,8 +643,8 @@ function persistCustomStandards(items) {
 }
 
 async function loadStandard(id) {
-  state.standardId = id;
   state.standard = cloneData(standardById(id));
+  state.standardId = state.standard.id;
   state.standardImport = null;
   state.standardPatchMap = new Map();
   state.iccProfile = null;

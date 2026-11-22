@@ -343,8 +343,14 @@ export function removeCustomStandard(id) {
   return getCustomStandards();
 }
 
+// Preset ids renamed in earlier releases; saved project archives may still reference them.
+const LEGACY_STANDARD_IDS = {
+  sml_printspec_xl75_6c: "iso12647_2_2007_offset_audit_demo",
+};
+
 export function standardById(id) {
-  return STANDARD_LIBRARY.find((item) => item.id === id) || STANDARD_LIBRARY[0];
+  const resolvedId = LEGACY_STANDARD_IDS[id] || id;
+  return STANDARD_LIBRARY.find((item) => item.id === resolvedId) || STANDARD_LIBRARY[0];
 }
 
 export function targetOptions() {
