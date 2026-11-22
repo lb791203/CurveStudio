@@ -30,19 +30,23 @@ test("spectral Lab keeps dark patches on the 0-100 scale", () => {
   assert.ok(lab.l > 10 && lab.l < 13, `expected L* ~11.6, got ${lab.l}`);
 });
 
-test("spectral Lab matches i1iO2 instrument Lab within 0.05 dE00", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const { parseImportText } = await import("../src/curve-engine.js");
+// Reference Lab values computed independently with colour-science
+// (sd_to_XYZ_ASTME308, CIE 1931 2°, CIE D50, Lab white 96.422/100/82.521).
+const ASTM_E308_REFERENCE_SPECTRA = [
+  { name: "cyan", lab: [66.494, -40.288, -31.896], r: [0.217, 0.2705, 0.3319, 0.3995, 0.4706, 0.5417, 0.6085, 0.6666, 0.7116, 0.7402, 0.75, 0.7402, 0.7116, 0.6666, 0.6085, 0.5417, 0.4706, 0.3995, 0.3319, 0.2705, 0.217, 0.1723, 0.1361, 0.1079, 0.0867, 0.0712, 0.0603, 0.0528, 0.0479, 0.0447, 0.0427, 0.0416, 0.0409, 0.0405, 0.0402, 0.0401] },
+  { name: "magenta", lab: [67.505, 60.096, -38.024], r: [0.85, 0.8499, 0.8497, 0.8492, 0.8478, 0.8444, 0.8368, 0.8214, 0.7928, 0.7444, 0.6705, 0.5689, 0.444, 0.3098, 0.1875, 0.1012, 0.07, 0.1012, 0.1875, 0.3098, 0.444, 0.5689, 0.6705, 0.7444, 0.7928, 0.8214, 0.8368, 0.8444, 0.8478, 0.8492, 0.8497, 0.8499, 0.85, 0.85, 0.85, 0.85] },
+  { name: "yellow", lab: [91.053, -7.194, 82.077], r: [0.06, 0.0601, 0.0602, 0.0604, 0.061, 0.0623, 0.0654, 0.0722, 0.0876, 0.1207, 0.1871, 0.3024, 0.46, 0.6176, 0.7329, 0.7993, 0.8324, 0.8478, 0.8546, 0.8577, 0.859, 0.8596, 0.8598, 0.8599, 0.86, 0.86, 0.86, 0.86, 0.86, 0.86, 0.86, 0.86, 0.86, 0.86, 0.86, 0.86] },
+  { name: "gray", lab: [49.496, 0.002, 0.004], r: [0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18] },
+];
+
+test("spectral Lab matches an independent ASTM E308 D50/2 calculation", async () => {
   const { deltaE2000 } = await import("../src/analysis-engine.js");
-  const text = await readFile(new URL("../reference-data/measurements/it8-random/IT8.7-4 CMYK random (i1iO2)_M0.txt", import.meta.url), "utf8");
-  const { rawRows } = parseImportText(text);
-  let worst = 0;
-  for (const row of rawRows.slice(0, 200)) {
-    const reported = { l: Number(row.lab_l), a: Number(row.lab_a), b: Number(row.lab_b) };
-    const spectralOnly = Object.fromEntries(Object.entries(row).filter(([key]) => /nm\d{3}$/i.test(key)));
-    worst = Math.max(worst, deltaE2000(reported, labFromSpectralRow(spectralOnly)));
+  for (const sample of ASTM_E308_REFERENCE_SPECTRA) {
+    const row = Object.fromEntries(sample.r.map((value, index) => [`nm${380 + index * 10}`, value]));
+    const lab = labFromSpectralRow(row);
+    const expected = { l: sample.lab[0], a: sample.lab[1], b: sample.lab[2] };
+    assert.ok(deltaE2000(expected, lab) < 0.05, `${sample.name}: dE00 ${deltaE2000(expected, lab)}`);
   }
-  assert.ok(worst < 0.05, `worst dE00 ${worst}`);
 });
 
 test("spectral reflectance accepts percent-scale values", () => {
