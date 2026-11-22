@@ -157,7 +157,7 @@ export function buildDiagnosticRows(measurements, options = {}) {
     .map((item) => {
       const metric = resolveMeasurementMetric(item, mode);
       if (!Number.isFinite(metric.delta)) return null;
-      const targetTvi = interpolate(targetPoints, item.tone);
+      const targetTvi = interpolate(channelTargetPointsFor(item.channel, targetPoints, options.channelTargets), item.tone);
       return {
         ...item,
         measuredTone: metric.tone,

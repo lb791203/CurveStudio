@@ -64,6 +64,25 @@ test("buildDiagnosticRows calculates deviation without production curve output",
   assert.equal(rows[0].outputTone, undefined);
 });
 
+test("buildDiagnosticRows honors per-channel targets like the compensation path", () => {
+  const measurements = [
+    { channel: "C", tone: 50, measuredTone: 72 },
+    { channel: "K", tone: 50, measuredTone: 72 },
+  ];
+  const options = { mode: "tvi", target: "isoA", channelTargets: { K: "isoB" } };
+  const rows = buildDiagnosticRows(measurements, options);
+  const compensation = calculateCompensation(measurements, { ...options, compensationRatio: 100, smooth: 0, limit: 30 });
+
+  const diagK = rows.find((row) => row.channel === "K");
+  const diagC = rows.find((row) => row.channel === "C");
+  assert.equal(diagK.targetTvi, 19);
+  assert.notEqual(diagC.targetTvi, diagK.targetTvi);
+  for (const diag of rows) {
+    const comp = compensation.find((row) => row.channel === diag.channel && row.tone === 50);
+    assert.equal(diag.targetTvi, comp.targetTvi);
+  }
+});
+
 test("ISO 12647-2:2013 TVI targets use Table 9 values and polynomial metadata", () => {
   assert.equal(TARGETS.isoA.source, "ISO 12647-2:2013 Table 9");
   assert.equal(targetValueFor("isoA", 5), 3.3);

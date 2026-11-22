@@ -103,6 +103,7 @@ test("standard presets carry their own acceptance tolerances", () => {
 
 
   assert.equal(standardById("fogra39").id, "gracol2013_crpc1"); // removed preset falls back
+  assert.equal(standardById("sml_printspec_xl75_6c").id, "iso12647_2_2007_offset_audit_demo"); // renamed preset keeps saved projects
   assert.equal(auditDemo.name, "ISO 12647-2:2007 Offset");
   assert.match(auditDemo.referencePath, /iso12647-2-2007-offset-audit-demo\.txt$/);
   assert.deepEqual(auditDemo.channelTargets, { K: "isoB" });
