@@ -5,6 +5,8 @@ import fs from "node:fs";
 import {
   STANDARD_LIBRARY,
   addOrUpdateCustomStandard,
+  archivedStandardAsCustom,
+  hasStandard,
   buildPatchMap,
   getCustomStandards,
   isCustomStandard,
@@ -137,4 +139,30 @@ test("audit demo standard reference file contains target Lab values", () => {
   assert.equal(map.get("0.00/0.00/0.00/0.00").lab.l, 92);
   assert.deepEqual(map.get("100.00/0.00/0.00/0.00").lab, { l: 54, a: -36, b: -49 });
   assert.deepEqual(map.get("100.00/100.00/0.00/0.00").lab, { l: 24, a: 16, b: -45 });
+});
+
+test("removed built-in presets restore from the archive snapshot instead of another print condition", () => {
+  setCustomStandards([]);
+  assert.equal(hasStandard("fogra39"), false);
+  assert.equal(hasStandard("sml_printspec_xl75_6c"), true);
+
+  const snapshot = {
+    id: "fogra39",
+    name: "FOGRA39",
+    printCondition: "ISO coated reference",
+    target: "isoA",
+    referencePath: "./reference-data/standards/patchtool/FOGRA39.txt",
+    deltaE: { warning: 3, fail: 5 },
+  };
+  const restored = archivedStandardAsCustom(snapshot);
+  addOrUpdateCustomStandard(restored);
+  const stored = standardById(restored.id);
+
+  assert.equal(stored.id, "custom_archived_fogra39");
+  assert.equal(stored.custom, true);
+  assert.match(stored.name, /FOGRA39/);
+  assert.equal(stored.printCondition, "ISO coated reference");
+  assert.equal(stored.deltaE.fail, 5);
+  assert.equal(stored.referencePath, undefined);
+  setCustomStandards([]);
 });

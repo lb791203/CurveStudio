@@ -45,7 +45,7 @@ import {
 import { clearStoredProject, compactProjectArchiveForRun, loadLastProject, loadStoredRuns, saveLastProject, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js?v=20260524-clear-current-run";
 import { buildCompensationSimulation } from "./compensation-simulation.js";
 import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
-import { STANDARD_LIBRARY, addOrUpdateCustomStandard, buildPatchMap, cmykKey, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260604-density-targets-1";
+import { STANDARD_LIBRARY, addOrUpdateCustomStandard, archivedStandardAsCustom, buildPatchMap, cmykKey, hasStandard, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260604-density-targets-1";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 import { auditMeasurementCsv } from "./audit-report.js";
 import { fetchJsonResource, fetchTextResource } from "./network.js";
@@ -2129,6 +2129,7 @@ function runIdentity(run, index) {
 }
 
 async function restoreProjectArchive(archive) {
+  let archiveStandardWarning = "";
   if (archive.targetSnapshot && archive.settings?.target && !targetOptions().some((item) => item.id === archive.settings.target)) {
     upsertTarget(archive.settings.target, archive.targetSnapshot);
     refreshTargetSelect(archive.settings.target);
@@ -2139,7 +2140,16 @@ async function restoreProjectArchive(archive) {
       persistCustomStandards(items);
       populateSelects();
     }
-    await loadStandard(archive.standard.id);
+    let standardId = archive.standard.id;
+    if (!archive.standard.custom && !hasStandard(standardId)) {
+      const replacement = archivedStandardAsCustom(archive.standard);
+      const items = addOrUpdateCustomStandard(replacement);
+      persistCustomStandards(items);
+      populateSelects();
+      standardId = replacement.id;
+      archiveStandardWarning = `项目使用的标准「${archive.standard.name || archive.standard.id}」已不再内置，已按存档设置恢复为自定义标准；请重新导入该标准的 Lab 参考数据。`;
+    }
+    await loadStandard(standardId);
   }
   state.iccProfile = archive.iccProfile || null;
   if (state.iccProfile && !state.iccProfile.error) {
@@ -2208,6 +2218,9 @@ async function restoreProjectArchive(archive) {
     warnings: [],
   };
   if (!state.importInfo.measurements?.length) state.importInfo.measurements = state.measurements;
+  if (archiveStandardWarning) {
+    state.importInfo = { ...state.importInfo, warnings: [...(state.importInfo.warnings || []), archiveStandardWarning] };
+  }
   els.rawInput.value = archive.rawInput || "";
   state.manualDirty = false;
   state.ratioAuto = false;
