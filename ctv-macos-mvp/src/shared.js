@@ -38,14 +38,38 @@ export function rawCmyk(row) {
   return { c, m, y, k };
 }
 
-export function isLikelyG7GrayCandidate(row) {
-  const cmyk = rawCmyk(row);
+// G7 CMY-only gray scale: M = Y = f(C) (Idealliance G7 P2P / ADS Appendix A).
+const G7_GRAY_MY_FOR_C = [
+  [0, 0], [2, 1.49], [4, 2.98], [6, 4.47], [8, 5.97], [10, 7.46], [15, 11.21],
+  [20, 15.01], [25, 18.88], [30, 22.84], [35, 26.9], [40, 31.11], [45, 35.46],
+  [50, 40], [55, 44.74], [60, 49.69], [65, 54.9], [70, 60.37], [75, 66.12],
+  [80, 72.19], [85, 78.59], [90, 85.34], [95, 92.47], [98, 96.94], [100, 100],
+];
+
+export function g7GrayMagentaYellowFor(c) {
+  const tone = Number(c);
+  if (!Number.isFinite(tone)) return NaN;
+  for (let i = 1; i < G7_GRAY_MY_FOR_C.length; i += 1) {
+    const [c1, my1] = G7_GRAY_MY_FOR_C[i - 1];
+    const [c2, my2] = G7_GRAY_MY_FOR_C[i];
+    if (tone <= c2) return my1 + (my2 - my1) * (tone - c1) / (c2 - c1);
+  }
+  return 100;
+}
+
+// True only for patches on the G7 gray ratio (tolerance 1% covers the rounded values
+// such as 25/19/19 or 75/66/66 used on some P2P versions). Equal-CMY ramps and the
+// P2P "offset" grays (e.g. 30/30/30, 20/12/12) are not G7 gray-balance patches.
+export function isG7GrayCmyk(cmyk) {
   if (!cmyk) return false;
   const { c, m, y, k } = cmyk;
-  if (k > 0.01 || c <= 0 || m <= 0 || y <= 0) return false;
-  const myClose = Math.abs(m - y) <= 2.5;
-  const cInRange = c >= m - 3 && c <= m + 10 && c >= y - 3 && c <= y + 10;
-  return myClose && cInRange;
+  if (!(Math.abs(k) < 0.01) || !(c > 0.01) || !(c < 99.99)) return false;
+  const aim = g7GrayMagentaYellowFor(c);
+  return Math.abs(m - aim) <= 1 && Math.abs(y - aim) <= 1;
+}
+
+export function isLikelyG7GrayCandidate(row) {
+  return isG7GrayCmyk(rawCmyk(row));
 }
 
 export function metadataLooksReference(metadata = {}) {

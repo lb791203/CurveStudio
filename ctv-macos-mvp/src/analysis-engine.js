@@ -1,5 +1,5 @@
 import { cmykFromManualRow, cmykKey, labFromRow } from "./standards.js";
-import { average, groupByChannel, number, rawCmyk, isLikelyG7GrayCandidate, metadataLooksReference } from "./shared.js";
+import { average, groupByChannel, number, rawCmyk, isLikelyG7GrayCandidate, isG7GrayCmyk, metadataLooksReference } from "./shared.js";
 import { labFromSpectralRow } from "./spectral-color.js";
 import { buildNpdcVerification, summarizeNpdc, buildGrayVerification, summarizeGrayBalance, summarizeWeightedDeltaL, buildColorspaceVerification, classifyColorspacePatches } from "./g7-targets.js?v=20260522-g7-verify";
 
@@ -475,13 +475,19 @@ export function g7Preview(options = {}) {
     chroma: Math.sqrt(row.lab.a ** 2 + row.lab.b ** 2),
     deltaE: row.deltaE,
   })).sort((a, b) => a.tone - b.tone || a.label.localeCompare(b.label));
-  const paperL = measuredPaperLab(g7LabRows)?.l;
+  const paperLab = measuredPaperLab(g7LabRows);
+  const paperL = paperLab?.l;
+  // G7 Grayscale is substrate-relative unless the caller explicitly asks for absolute.
+  const relative = options.g7Evaluation !== "absolute";
   const npdcVerification = buildNpdcVerification(actualKOnly, {
     paperL,
+    relative,
     standardPatchMap: options.standardPatchMap,
   });
   const grayVerification = buildGrayVerification(grayRows, {
     paperL,
+    paperLab,
+    relative,
     standardPatchMap: options.standardPatchMap,
   });
   const npdcSummary = summarizeNpdc(npdcVerification, tolerances);
@@ -560,7 +566,7 @@ export function g7Preview(options = {}) {
     npdcSummary,
     grayVerification,
     graySummary,
-    colorspaceRows: buildColorspaceVerification(classifyColorspacePatches([...rawRows, ...g7LabRows.map(function(r) { return Object.assign({}, r, { cmyk_c: r.cmyk && r.cmyk.c, cmyk_m: r.cmyk && r.cmyk.m, cmyk_y: r.cmyk && r.cmyk.y, cmyk_k: r.cmyk && r.cmyk.k }); })]), options.standardPatchMap, deltaEFn),
+    colorspaceRows: buildColorspaceVerification(classifyColorspacePatches([...rawRows, ...g7LabRows.map(function(r) { return Object.assign({}, r, { cmyk_c: r.cmyk && r.cmyk.c, cmyk_m: r.cmyk && r.cmyk.m, cmyk_y: r.cmyk && r.cmyk.y, cmyk_k: r.cmyk && r.cmyk.k }); })]), options.standardPatchMap, deltaE2000),
   };
 }
 
@@ -1013,12 +1019,7 @@ function isKOnlyCmyk(cmyk) {
 }
 
 function isLikelyG7GrayCmyk(cmyk) {
-  if (!cmyk) return false;
-  const { c, m, y, k } = cmyk;
-  if (k > 0.01 || c <= 0 || m <= 0 || y <= 0) return false;
-  const myClose = Math.abs(m - y) <= 2.5;
-  const cInRange = c >= m - 3 && c <= m + 10 && c >= y - 3 && c <= y + 10;
-  return myClose && cInRange;
+  return isG7GrayCmyk(cmyk);
 }
 
 function neutralGrayTone(row) {

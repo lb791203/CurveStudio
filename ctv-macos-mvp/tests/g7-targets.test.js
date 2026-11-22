@@ -36,9 +36,13 @@ test("classifyP2PPatch identifies K-only NPDC patches", () => {
 });
 
 test("classifyP2PPatch identifies gray balance candidates", () => {
-  // Classic CMY balanced: C slightly higher than M≈Y
+  // G7 gray ratio M = Y = f(C), including rounded P2P values
   assert.ok(classifyP2PPatch(50, 40, 40, 0).includes("gray_balance"));
-  assert.ok(classifyP2PPatch(25, 22, 22, 0).includes("gray_balance"));
+  assert.ok(classifyP2PPatch(25, 19, 19, 0).includes("gray_balance"));
+  assert.ok(classifyP2PPatch(75, 66.12, 66.12, 0).includes("gray_balance"));
+  // Equal-CMY ramps and P2P offset grays are not G7 gray-balance patches
+  assert.ok(!classifyP2PPatch(30, 30, 30, 0).includes("gray_balance"));
+  assert.ok(!classifyP2PPatch(20, 12, 12, 0).includes("gray_balance"));
   // Not balanced
   assert.ok(!classifyP2PPatch(50, 10, 40, 0).includes("gray_balance"));
   // Has K - not gray balance
@@ -92,11 +96,48 @@ test("buildNpdcVerification can use selected standard K-only Lab as target", () 
   ]);
   const [row] = buildNpdcVerification([
     { channel: "K", tone: 50, lab: { l: 61, a: 0, b: 0 } },
-  ], { paperL: 95, standardPatchMap });
+  ], { paperL: 95, standardPatchMap, relative: false });
 
   assert.equal(row.targetSource, "standard");
   assert.equal(row.targetL, 60);
   assert.equal(row.deltaL, 1);
+  assert.equal(row.evaluation, "absolute");
+});
+
+test("G7 NPDC is substrate-relative: a lighter/darker paper does not shift the result", () => {
+  const standardPatchMap = new Map([
+    ["0.00/0.00/0.00/0.00", { cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: 0 } }],
+    ["0.00/0.00/0.00/50.00", { cmyk: { c: 0, m: 0, y: 0, k: 50 }, lab: { l: 60, a: 0, b: 0 } }],
+  ]);
+  // Same relative tone reproduction as the reference, printed on a paper of L* 92:
+  // the patch has the same Y ratio to its paper as the reference 50% has to L* 95.
+  const sameRatioL = (() => {
+    const y = (l) => ((l + 16) / 116) ** 3;
+    const ratio = y(60) / y(95);
+    return 116 * Math.cbrt(y(92) * ratio) - 16;
+  })();
+  const [relative] = buildNpdcVerification([{ channel: "K", tone: 50, lab: { l: sameRatioL } }], { paperL: 92, standardPatchMap });
+  const [absolute] = buildNpdcVerification([{ channel: "K", tone: 50, lab: { l: sameRatioL } }], { paperL: 92, standardPatchMap, relative: false });
+  assert.equal(relative.evaluation, "substrate_relative");
+  assert.ok(Math.abs(relative.deltaL) < 1e-9);
+  assert.ok(Math.abs(absolute.deltaL) > 1.5);
+});
+
+test("G7 gray aim follows the paper tint: paper x 0.5 at the 50% HR patch", () => {
+  const [row] = buildGrayVerification([
+    { label: "HR", cmyk: { c: 50, m: 40, y: 40, k: 0 }, lab: { l: 58, a: 0.5, b: -2 } },
+  ], { paperL: 95, paperLab: { l: 95, a: 1, b: -4 } });
+  assert.equal(row.grayAimSource, "substrate_relative");
+  assert.equal(row.targetA, 0.5);
+  assert.equal(row.targetB, -2);
+  assert.equal(row.chroma, 0);
+});
+
+test("g7ToneWeight follows the Idealliance formula", () => {
+  assert.equal(g7ToneWeight(2), 1);
+  assert.equal(g7ToneWeight(50), 1);
+  assert.equal(g7ToneWeight(75), 0.625);
+  assert.equal(g7ToneWeight(100), 0.25);
 });
 
 test("neutralPrintDensityFromL converts L* to print density relative to paper", () => {
@@ -137,7 +178,8 @@ test("summarizeWeightedDeltaL uses per-patch weighted absolute errors", () => {
     { tone: 50, weightedDeltaL: 1 },
     { tone: 100, weightedDeltaL: 2.5 },
   ], { npdcAverage: 1.5, npdcMax: 3 });
-  assert.equal(summary.status, "Warning");
+  // Average 1.75 > 1.5: G7 is pass/fail, there is no warning band.
+  assert.equal(summary.status, "Fail");
   assert.equal(summary.weightedMax, 2.5);
 });
 
@@ -188,13 +230,13 @@ test("summarizeGrayBalance fails when exceeding max threshold", () => {
   assert.equal(summary.status, "Fail");
 });
 
-test("summarizeGrayBalance warns when between avg pass and fail", () => {
+test("summarizeGrayBalance fails when the weighted average exceeds 1.5", () => {
   const rows = [
     { label: "G1", chroma: 1.8 },
     { label: "G2", chroma: 2.2 },
   ];
   const summary = summarizeGrayBalance(rows);
-  assert.equal(summary.status, "Warning");
+  assert.equal(summary.status, "Fail");
 });
 
 // ─── Colorspace Verification ───
