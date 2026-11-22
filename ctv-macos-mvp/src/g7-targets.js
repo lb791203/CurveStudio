@@ -1,7 +1,7 @@
 // G7 certification target definitions and verification helpers.
 // Reference: IDEAlliance G7 Specification, ISO 12647-2.
 
-import { average, number } from "./shared.js";
+import { average, number, isG7GrayCmyk } from "./shared.js";
 
 // ─── G7 P2P Patch Classification ───
 
@@ -20,10 +20,7 @@ export function classifyP2PPatch(c, m, y, k) {
   if (c >= 99.9 && m >= 99.9 && [y, k].every((v) => Math.abs(v) < 0.01)) categories.push("overprint", "blue");
   if (c >= 99.9 && m >= 99.9 && y >= 99.9 && Math.abs(k) < 0.01) categories.push("overprint", "cmy");
   if (k > 0.01 && k < 99.9 && [c, m, y].every((v) => Math.abs(v) < 0.01)) categories.push("npdc");
-  if (k < 0.01 && c > 0.01 && m > 0.01 && y > 0.01
-    && Math.abs(m - y) <= 2.5 && c >= m - 3 && c <= m + 10) {
-    categories.push("gray_balance");
-  }
+  if (isG7GrayCmyk({ c, m, y, k })) categories.push("gray_balance");
   return categories.length ? categories : ["other"];
 }
 
@@ -59,23 +56,39 @@ export function g7NpdcLTarget(tone) {
     + (G7_NPDC_L_TARGET.get(upper) - G7_NPDC_L_TARGET.get(lower)) * ratio;
 }
 
+// G7 Grayscale is substrate-relative: every patch is zeroed on the measured paper
+// (relative ND = ND(patch) - ND(paper)) and expressed as relative L*, then compared
+// with the reference NPDC expressed the same way (relative to the reference paper).
+// Without this, a press sheet on paper with L* 93 fails the highlights even when its
+// tone reproduction is perfect. Pass `relative: false` for the old absolute check.
 export function buildNpdcVerification(kRows, options = {}) {
   const paperL = Number.isFinite(number(options.paperL)) ? number(options.paperL) : DEFAULT_G7_PAPER_L;
+  const relative = options.relative !== false && Number.isFinite(number(options.paperL));
+  const referencePaperL = standardPaperL(options.standardPatchMap);
   return kRows
     .filter((row) => Number.isFinite(row.tone))
     .map((row) => {
       const targetLab = targetKOnlyLab(row, options.standardPatchMap);
-      const targetL = targetLab?.l ?? g7NpdcLTarget(row.tone);
-      const measuredL = Number.isFinite(row.lab?.l) ? row.lab.l : NaN;
+      const absoluteTargetL = targetLab?.l ?? g7NpdcLTarget(row.tone);
+      const absoluteMeasuredL = Number.isFinite(row.lab?.l) ? row.lab.l : NaN;
+      const measuredL = relative ? relativeL(absoluteMeasuredL, paperL) : absoluteMeasuredL;
+      const targetL = relative
+        ? relativeL(absoluteTargetL, targetLab ? referencePaperL : DEFAULT_G7_PAPER_L)
+        : absoluteTargetL;
       const deltaL = Number.isFinite(measuredL) ? measuredL - targetL : NaN;
       const weight = g7ToneWeight(row.tone);
       const signedWeightedDeltaL = Number.isFinite(deltaL) ? deltaL * weight : NaN;
-      const measuredNpdc = neutralPrintDensityFromL(measuredL, paperL);
-      const targetNpdc = neutralPrintDensityFromL(targetL, paperL);
+      const measuredNpdc = neutralPrintDensityFromL(absoluteMeasuredL, paperL);
+      const targetNpdc = relative
+        ? neutralPrintDensityFromL(targetL, 100)
+        : neutralPrintDensityFromL(targetL, paperL);
       return {
         tone: row.tone,
         measuredL,
         targetL,
+        absoluteMeasuredL,
+        absoluteTargetL,
+        evaluation: relative ? "substrate_relative" : "absolute",
         targetLab,
         targetSource: targetLab ? "standard" : "fallback",
         measuredNpdc,
@@ -104,11 +117,7 @@ export function summarizeNpdc(rows, tolerances = {}) {
     maxDeltaL: deltas.length ? Math.max(...deltas) : NaN,
     weightedAverage,
     weightedMax,
-    status: weighted.length
-      ? (weightedAverage <= averageLimit && weightedMax <= maxLimit) ? "Pass"
-        : (weightedAverage > maxLimit || weightedMax > maxLimit * 2) ? "Fail"
-        : "Warning"
-      : "Missing",
+    status: weighted.length ? g7PassFail(weightedAverage, weightedMax, averageLimit, maxLimit) : "Missing",
   };
 }
 
@@ -123,31 +132,51 @@ export const G7_GRAY_TOLERANCES = {
 
 export function buildGrayVerification(grayRows, options = {}) {
   const paperL = Number.isFinite(number(options.paperL)) ? number(options.paperL) : DEFAULT_G7_PAPER_L;
+  const paperLab = isLab(options.paperLab) ? options.paperLab : null;
+  const relative = options.relative !== false && Number.isFinite(number(options.paperL));
+  const referencePaperL = standardPaperL(options.standardPatchMap);
   return grayRows
     .filter((row) => row.lab)
     .map((row) => {
       const tone = neutralGrayTone(row);
       const targetLab = targetGrayLab(row, options.standardPatchMap);
-      const targetL = targetLab?.l ?? (Number.isFinite(tone) ? g7NpdcLTarget(tone) : NaN);
-      const deltaL = Number.isFinite(row.lab.l) && Number.isFinite(targetL) ? row.lab.l - targetL : NaN;
+      const absoluteTargetL = targetLab?.l ?? (Number.isFinite(tone) ? g7NpdcLTarget(tone) : NaN);
+      const absoluteMeasuredL = number(row.lab.l);
+      const measuredL = relative ? relativeL(absoluteMeasuredL, paperL) : absoluteMeasuredL;
+      const targetL = relative
+        ? relativeL(absoluteTargetL, targetLab ? referencePaperL : DEFAULT_G7_PAPER_L)
+        : absoluteTargetL;
+      const deltaL = Number.isFinite(measuredL) && Number.isFinite(targetL) ? measuredL - targetL : NaN;
       const measuredA = number(row.lab.a);
       const measuredB = number(row.lab.b);
-      const targetA = Number.isFinite(number(targetLab?.a)) ? number(targetLab.a) : 0;
-      const targetB = Number.isFinite(number(targetLab?.b)) ? number(targetLab.b) : 0;
+      // Substrate-relative gray: the aim keeps a fading share of the paper tint,
+      // a*b* = paper a*b* x (1 - C/100). Published G7 guidance gives paper x 0.5 for
+      // the 50C/40M/40Y HR patch; the linear form between 0 and 100% is assumed.
+      const grayAim = relative && paperLab && Number.isFinite(tone)
+        ? { a: paperLab.a * (1 - clampTone(tone) / 100), b: paperLab.b * (1 - clampTone(tone) / 100) }
+        : null;
+      const targetA = grayAim ? grayAim.a : Number.isFinite(number(targetLab?.a)) ? number(targetLab.a) : 0;
+      const targetB = grayAim ? grayAim.b : Number.isFinite(number(targetLab?.b)) ? number(targetLab.b) : 0;
       const deltaA = Number.isFinite(measuredA) ? measuredA - targetA : NaN;
       const deltaB = Number.isFinite(measuredB) ? measuredB - targetB : NaN;
       const chroma = Number.isFinite(deltaA) && Number.isFinite(deltaB) ? Math.sqrt(deltaA ** 2 + deltaB ** 2) : NaN;
       const measuredChroma = Number.isFinite(measuredA) && Number.isFinite(measuredB) ? Math.sqrt(measuredA ** 2 + measuredB ** 2) : NaN;
       const weight = g7ToneWeight(tone);
       const signedWeightedDeltaL = Number.isFinite(deltaL) ? deltaL * weight : NaN;
-      const measuredNpdc = neutralPrintDensityFromL(row.lab.l, paperL);
-      const targetNpdc = neutralPrintDensityFromL(targetL, paperL);
+      const measuredNpdc = neutralPrintDensityFromL(absoluteMeasuredL, paperL);
+      const targetNpdc = relative
+        ? neutralPrintDensityFromL(targetL, 100)
+        : neutralPrintDensityFromL(targetL, paperL);
       return {
         label: row.label,
         tone,
         cmyk: row.cmyk,
-        measuredL: row.lab.l,
+        measuredL,
         targetL,
+        absoluteMeasuredL,
+        absoluteTargetL,
+        evaluation: relative ? "substrate_relative" : "absolute",
+        grayAimSource: grayAim ? "substrate_relative" : targetLab ? "standard" : "neutral",
         targetLab,
         targetSource: targetLab ? "standard" : "fallback",
         measuredNpdc,
@@ -188,9 +217,7 @@ export function summarizeGrayBalance(rows, tolerances = {}) {
     maxChroma: max,
     weightedAverage,
     weightedMax,
-    status: weightedAverage <= averageLimit && weightedMax <= maxLimit ? "Pass"
-      : weightedAverage > maxLimit || weightedMax > maxLimit * 2 ? "Fail"
-      : "Warning",
+    status: g7PassFail(weightedAverage, weightedMax, averageLimit, maxLimit),
   };
 }
 
@@ -205,18 +232,41 @@ export function summarizeWeightedDeltaL(rows, tolerances = {}) {
     count: weighted.length,
     weightedAverage,
     weightedMax,
-    status: weightedAverage <= averageLimit && weightedMax <= maxLimit ? "Pass"
-      : weightedAverage > maxLimit || weightedMax > maxLimit * 2 ? "Fail"
-      : "Warning",
+    status: g7PassFail(weightedAverage, weightedMax, averageLimit, maxLimit),
   };
 }
 
+// Idealliance G7 weighting: w = 1 - max(0, (tone - 50) / 50 x 0.75), i.e. 1.0 up to
+// 50% and falling linearly to 0.25 at 100%. There is no extra highlight reduction.
 export function g7ToneWeight(tone) {
   const numeric = number(tone);
   if (!Number.isFinite(numeric)) return NaN;
-  let w = 1 - Math.max(0, ((numeric - 50) / 50) * 0.75);
-  if (numeric < 5) w *= 0.5 + (numeric / 5) * 0.5;
-  return w;
+  return 1 - Math.max(0, ((numeric - 50) / 50) * 0.75);
+}
+
+// G7 Grayscale is pass/fail: weighted average and weighted max must both be in limit.
+function g7PassFail(weightedAverage, weightedMax, averageLimit, maxLimit) {
+  if (!Number.isFinite(weightedAverage) || !Number.isFinite(weightedMax)) return "Missing";
+  return weightedAverage <= averageLimit && weightedMax <= maxLimit ? "Pass" : "Fail";
+}
+
+// L* of a sample relative to the paper: Y / Y(paper) on the L* scale, which is what a
+// spectrophotometer reports when zeroed on the substrate (paper = 100).
+export function relativeL(sampleL, paperL) {
+  const sampleY = labLToRelativeY(sampleL);
+  const paperY = labLToRelativeY(paperL);
+  if (!Number.isFinite(sampleY) || !Number.isFinite(paperY) || paperY <= 0) return NaN;
+  const ratio = sampleY / paperY;
+  return ratio > (6 / 29) ** 3 ? 116 * Math.cbrt(ratio) - 16 : 903.3 * ratio;
+}
+
+function standardPaperL(standardPatchMap) {
+  const lab = standardPatchMap?.get?.(localCmykKey({ c: 0, m: 0, y: 0, k: 0 }))?.lab;
+  return isLab(lab) ? lab.l : DEFAULT_G7_PAPER_L;
+}
+
+function clampTone(tone) {
+  return Math.min(100, Math.max(0, number(tone)));
 }
 
 export function neutralPrintDensityFromL(sampleL, paperL = DEFAULT_G7_PAPER_L) {
@@ -283,6 +333,10 @@ function isKOnlyTarget(cmyk) {
   return nearZero(cmyk.c) && nearZero(cmyk.m) && nearZero(cmyk.y);
 }
 
+// Reference lookup only: characterization sets such as CRPC6 IT8.7/4 hold just a few
+// patches exactly on the G7 gray ratio, so the reference L* curve for CMY gray is
+// interpolated over the near-neutral C >= M = Y patches as before. Measured patches
+// are still selected strictly by isG7GrayCmyk.
 function isGrayTarget(cmyk) {
   return nearZero(cmyk.k) && cmyk.c > 0.01 && cmyk.m > 0.01 && cmyk.y > 0.01
     && Math.abs(cmyk.m - cmyk.y) <= 2.5 && cmyk.c >= cmyk.m - 3 && cmyk.c <= cmyk.m + 10;
@@ -308,6 +362,21 @@ function labLToRelativeY(lValue) {
 
 // ─── G7 Colorspace Compliance ───
 
+// G7 Targeted tolerances (dE00, press): substrate 3.0, C/M/Y solids 3.5, K solid 5.0,
+// R/G/B overprints 4.2. CMY 3-colour overprint has no Targeted limit; 4.2 is used as
+// a review guide. Pass/fail only.
+const G7_TARGETED_TOLERANCE = {
+  paper: 3.0,
+  c_solid: 3.5,
+  m_solid: 3.5,
+  y_solid: 3.5,
+  k_solid: 5.0,
+  red: 4.2,
+  green: 4.2,
+  blue: 4.2,
+  cmy: 4.2,
+};
+
 export function buildColorspaceVerification(patches, standardPatchMap, deltaEFn) {
   const spec = [
     { cat: "paper", label: "纸白", cmyk: "0.00/0.00/0.00/0.00" },
@@ -327,13 +396,15 @@ export function buildColorspaceVerification(patches, standardPatchMap, deltaEFn)
     const ref = standardPatchMap?.get(cmyk);
     if (!ref?.lab) return { category: cat, label, measuredLab: patch.lab, deltaE: NaN, status: "Missing Target" };
     const dE = deltaEFn(patch.lab, ref.lab);
+    const tolerance = G7_TARGETED_TOLERANCE[cat];
     return {
       category: cat,
       label,
       measuredLab: patch.lab,
       referenceLab: ref.lab,
       deltaE: dE,
-      status: dE <= 3.5 ? "Pass" : dE <= 5.0 ? "Warning" : "Fail",
+      tolerance,
+      status: dE <= tolerance ? "Pass" : "Fail",
     };
   });
 }
