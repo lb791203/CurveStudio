@@ -353,6 +353,24 @@ export function standardById(id) {
   return STANDARD_LIBRARY.find((item) => item.id === resolvedId) || STANDARD_LIBRARY[0];
 }
 
+export function hasStandard(id) {
+  const resolvedId = LEGACY_STANDARD_IDS[id] || id;
+  return STANDARD_LIBRARY.some((item) => item.id === resolvedId);
+}
+
+// A saved project may reference a built-in preset that has since been removed (e.g. FOGRA39).
+// Keep its archived settings as a custom standard instead of silently switching print condition;
+// the bundled Lab reference file is gone, so the user has to import reference data again.
+export function archivedStandardAsCustom(snapshot = {}) {
+  const { referencePath, ...rest } = snapshot;
+  return makeCustomStandard(rest, {
+    id: `custom_archived_${String(snapshot.id || "standard").replace(/[^a-z0-9_-]/gi, "_")}`,
+    name: `${snapshot.name || snapshot.id || "存档标准"}（存档）`,
+    printCondition: snapshot.printCondition,
+    target: snapshot.target,
+  });
+}
+
 export function targetOptions() {
   return Object.entries(TARGETS).map(([id, target]) => ({ id, name: target.name }));
 }
