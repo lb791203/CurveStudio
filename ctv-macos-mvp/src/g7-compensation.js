@@ -170,9 +170,13 @@ function buildGrayDiagnostics(sourceRows) {
       tone: clamp(number(row.tone), MIN_TONE, MAX_TONE),
       a: number(row.a),
       b: number(row.b),
+      // Correct toward the gray target, not toward a*=b*=0: the target follows the
+      // paper/standard tint, so a bluish OBA sheet must not be "fixed" by adding Y.
+      deltaA: grayOffset(row, "a"),
+      deltaB: grayOffset(row, "b"),
       deltaL: number(row.deltaL),
       weightedDeltaL: number(row.weightedDeltaL),
-      weightedDeltaCh: number(row.weightedDeltaCh),
+      weightedDeltaCh: number(row.weightedChroma ?? row.weightedDeltaCh),
       hint: grayBalanceHint(row),
     }))
     .sort((a, b) => a.tone - b.tone);
@@ -206,8 +210,8 @@ function kNpdcDelta(row, reference, maxG7Delta) {
 
 function graySplitDelta(channel, gray, maxG7Delta) {
   if (!gray) return 0;
-  const a = number(gray.a);
-  const b = number(gray.b);
+  const a = number(gray.deltaA);
+  const b = number(gray.deltaB);
   let delta = 0;
   if (Number.isFinite(a)) {
     const aExcess = Math.max(0, Math.abs(a) - GRAY_CHROMA_DEADBAND) * GRAY_SPLIT_SCALE;
@@ -277,10 +281,18 @@ function npdcHint(row) {
   return "接近 NPDC 目标";
 }
 
+function grayOffset(row, axis) {
+  const delta = number(axis === "a" ? row.deltaA : row.deltaB);
+  if (Number.isFinite(delta)) return delta;
+  const measured = number(row[axis]);
+  const target = number(axis === "a" ? row.targetA : row.targetB);
+  return Number.isFinite(target) ? measured - target : measured;
+}
+
 function grayBalanceHint(row) {
   const parts = [];
-  const a = number(row.a);
-  const b = number(row.b);
+  const a = grayOffset(row, "a");
+  const b = grayOffset(row, "b");
   if (Number.isFinite(a) && a > 3) parts.push("偏红/偏品");
   if (Number.isFinite(a) && a < -3) parts.push("偏绿/偏青");
   if (Number.isFinite(b) && b > 3) parts.push("偏黄");
