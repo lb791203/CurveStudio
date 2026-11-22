@@ -35,22 +35,72 @@ export function renderMeasurementChart(svg, results, targetRows, mode) {
   });
 }
 
-export function renderCurveChart(svg, results, safetyIssues = []) {
+// view "adjustment" plots output − input so small corrections are readable;
+// view "output" plots the classic input → output transfer curve.
+export function renderCurveChart(svg, results, safetyIssues = [], options = {}) {
+  const view = options.view || svg?.dataset?.curveView || "adjustment";
   const quality = qualityByPoint(safetyIssues);
+  const adjustment = view === "adjustment";
   const series = groupSeries(results, (row) => ({
     x: row.tone,
-    y: row.outputTone,
+    y: adjustment ? row.outputTone - row.tone : row.outputTone,
     tooltip: curveTooltip(row, quality.get(pointKey(row.channel, row.tone))),
     locked: row.overrideLocked,
     quality: quality.get(pointKey(row.channel, row.tone))?.level,
+    dragKind: adjustment ? "curve-adjustment" : undefined,
   }));
+  if (!adjustment) {
+    drawChart(svg, series, {
+      yMin: 0,
+      yMax: 100,
+      yTicks: [0, 20, 40, 60, 80, 100],
+      yLabel: translateDynamicText("输出网点 %"),
+      interactivePoints: true,
+      reference: [{ name: translateDynamicText("不调整"), points: [{ x: 0, y: 0 }, { x: 100, y: 100 }], color: "#9ca3af" }],
+    });
+    return;
+  }
+  const deltas = results.map((row) => Number(row.outputTone) - Number(row.tone)).filter(Number.isFinite);
+  const { limit, step } = adjustmentAxis(Math.max(0, ...deltas.map(Math.abs)));
+  const ticks = [];
+  for (let value = -limit; value <= limit + 1e-9; value += step) ticks.push(Number(value.toFixed(6)));
   drawChart(svg, series, {
-    yMin: 0,
-    yMax: 100,
-    yLabel: translateDynamicText("输出网点 %"),
+    yMin: -limit,
+    yMax: limit,
+    yTicks: ticks,
+    yTickFormatter: (value) => (value > 0 ? `+${value}` : String(value)),
+    yLabel: translateDynamicText("调整量（输出 − 输入）%"),
     interactivePoints: true,
-    reference: [{ name: "Identity", points: [{ x: 0, y: 0 }, { x: 100, y: 100 }], color: "#9ca3af" }],
+    reference: [{ name: translateDynamicText("不调整"), points: [{ x: 0, y: 0 }, { x: 100, y: 0 }], color: "#9ca3af" }],
+    referenceDots: false,
   });
+}
+
+function adjustmentAxis(maxAbs) {
+  const target = Math.max(2, maxAbs * 1.15);
+  const options = [[2, 1], [4, 1], [6, 2], [8, 2], [10, 2], [15, 5], [20, 5], [30, 10], [40, 10], [50, 10]];
+  const [limit, step] = options.find(([candidate]) => target <= candidate) || options[options.length - 1];
+  return { limit, step };
+}
+
+// Round tick values (steps of 1, 2, 2.5, 5 × 10^n), at most `maxTicks` lines.
+export function niceTicks(min, max, maxTicks = 9) {
+  const span = Number(max) - Number(min);
+  if (!Number.isFinite(span) || span <= 0) return [Number(min) || 0];
+  const raw = span / (maxTicks - 1);
+  const magnitude = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((candidate) => candidate >= raw) || 10 * magnitude;
+  const first = Math.ceil(min / step - 1e-9) * step;
+  const ticks = [];
+  for (let value = first; value <= max + step * 1e-6; value += step) ticks.push(Number(value.toFixed(6)));
+  return ticks;
+}
+
+function niceAxisMax(value, min = 0) {
+  const ticks = niceTicks(min, value);
+  const step = ticks.length > 1 ? ticks[1] - ticks[0] : 1;
+  const last = ticks[ticks.length - 1];
+  return last >= value - 1e-9 ? last : last + step;
 }
 
 export function renderCompensationSimulationChart(svg, rows = []) {
@@ -119,7 +169,7 @@ export function renderCompensationSimulationChart(svg, rows = []) {
     ...dotGainRows.flatMap((row) => [row.currentGain, row.targetGain, row.simulatedGain]),
   ].filter(Number.isFinite);
   const min = 0;
-  const max = Math.max(35, niceCeil(Math.max(...values, 0) * 1.08));
+  const max = niceAxisMax(Math.max(30, Math.max(...values, 0) * 1.08));
   drawChart(svg, series, {
     width: 960,
     height: 420,
@@ -352,6 +402,12 @@ function drawChart(svg, series, config) {
   const width = config.width || 720;
   const height = config.height || 420;
   const pad = { left: 58, right: 24, top: 42, bottom: 48 };
+  const legendLayout = layoutLegend(legendItems(series, config.reference || [], {
+    C: chartColor("C"), M: chartColor("M"), Y: chartColor("Y"), K: chartColor("K"),
+    a: chartColor("a"), b: chartColor("b"), Gray: chartColor("Gray"),
+  }, config.bands || []), pad.left, width - pad.right);
+  // Keep the legend above the plot area: push the plot down when the legend wraps.
+  pad.top = Math.max(pad.top, legendLayout.bottom + 16);
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
   const xScale = (x) => pad.left + (x / 100) * plotW;
@@ -367,7 +423,7 @@ function drawChart(svg, series, config) {
   };
 
   const xTicks = config.xTicks || [0, 25, 50, 75, 100];
-  const yTicks = config.yTicks || Array.from({ length: 6 }, (_, i) => config.yMin + ((config.yMax - config.yMin) / 5) * i);
+  const yTicks = config.yTicks || niceTicks(config.yMin, config.yMax);
   const yTickFormatter = config.yTickFormatter || ((value) => Number.isInteger(value) ? String(value) : String(Math.round(value)));
   const grid = xTicks.map((x) => `
     <line x1="${xScale(x)}" y1="${pad.top}" x2="${xScale(x)}" y2="${height - pad.bottom}" class="grid" />
@@ -403,17 +459,7 @@ function drawChart(svg, series, config) {
       <title>${escapeHtml(point.tooltip || `${item.name} ${fmt(point.x)} / ${fmt(point.y)}`)}</title>
     </circle>
   `)).join("");
-  let legendX = pad.left;
-  let legendY = 28;
-  const legend = legendItems(series, config.reference || [], colors, config.bands || []).map((item) => {
-    const itemWidth = Math.max(76, 40 + String(item.name || "").length * 12);
-    if (legendX + itemWidth > width - pad.right) {
-      legendX = pad.left;
-      legendY += 18;
-    }
-    const x = legendX;
-    const y = legendY;
-    legendX += itemWidth;
+  const legend = legendLayout.items.map(({ item, x, y }) => {
     return `
     <g class="chart-legend" transform="translate(${x} ${y})">
       ${item.type === "band"
@@ -623,7 +669,7 @@ function measurementAxis(series, target, band, mode) {
     ...band.flatMap((point) => [Number(point.low), Number(point.high)]),
   ].filter(Number.isFinite);
   if (mode !== "ctv") {
-    return { min: 0, max: Math.max(35, niceCeil(Math.max(...values, 0) * 1.08)) };
+    return { min: 0, max: niceAxisMax(Math.max(30, Math.max(...values, 0) * 1.08)) };
   }
   const low = Math.min(...values, -3);
   const high = Math.max(...values, 3);
@@ -685,6 +731,24 @@ function toleranceBands() {
     { min: -6, max: 6, color: "#f59e0b", opacity: 0.08 },
     { min: -3, max: 3, color: "#22c55e", opacity: 0.10 },
   ];
+}
+
+function layoutLegend(items, left, right) {
+  let legendX = left;
+  let legendY = 22;
+  const placed = items.map((item) => {
+    const name = String(item.name || "");
+    const wide = [...name].reduce((sum, char) => sum + (char.charCodeAt(0) > 255 ? 12 : 7), 0);
+    const itemWidth = Math.max(56, 36 + wide);
+    if (legendX + itemWidth > right && legendX > left) {
+      legendX = left;
+      legendY += 18;
+    }
+    const entry = { item, x: legendX, y: legendY };
+    legendX += itemWidth;
+    return entry;
+  });
+  return { items: placed, bottom: legendY + 6 };
 }
 
 function legendItems(series, references, colors, bands = []) {
