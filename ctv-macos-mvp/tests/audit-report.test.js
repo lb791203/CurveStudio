@@ -4,9 +4,9 @@ import fs from "node:fs";
 import { buildAuditReportComparison, auditMeasurementCsv } from "../src/audit-report.js";
 import { parseImportText } from "../src/curve-engine.js";
 
-const report = JSON.parse(fs.readFileSync("samples/sml-printspec-audit-example.json", "utf8"));
+const report = JSON.parse(fs.readFileSync("samples/audit-report-demo.json", "utf8"));
 
-test("SML PrintSpec audit report example matches recomputed TVI and Lab values", () => {
+test("Demo audit report example matches recomputed TVI and Lab values", () => {
   const csv = auditMeasurementCsv(report);
   const parsed = parseImportText(csv);
   const comparison = buildAuditReportComparison(report);

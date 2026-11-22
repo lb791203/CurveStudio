@@ -174,6 +174,43 @@ test("g7Preview can validate complete manual-equivalent G7 data", () => {
   assert.ok(g7.verificationRows.every((row) => row.status === "Pass"));
 });
 
+test("g7Preview treats G7 grayscale overruns as Fail, not Warning", () => {
+  const results = [10, 20, 30, 40, 50].map((tone) => ({
+    channel: "K",
+    tone,
+    measuredTone: tone + 10,
+    targetTone: tone + 9,
+  }));
+  const labRows = [
+    { label: "Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: -2 }, deltaE: 1 },
+    ...["C", "M", "Y", "K"].map((channel) => ({
+      label: `${channel} 100%`,
+      cmyk: {
+        c: channel === "C" ? 100 : 0,
+        m: channel === "M" ? 100 : 0,
+        y: channel === "Y" ? 100 : 0,
+        k: channel === "K" ? 100 : 0,
+      },
+      lab: { l: 50, a: 0, b: 0 },
+      deltaE: 1,
+    })),
+    ...[25, 50, 75].map((tone) => ({
+      label: `Gray ${tone}`,
+      cmyk: { c: tone, m: tone, y: tone, k: 0 },
+      lab: { l: g7NpdcLTarget(tone), a: 2, b: -0.5 },
+      deltaE: 1,
+    })),
+  ];
+
+  const g7 = g7Preview({ results, labRows });
+  const grayAverage = g7.verificationRows.find((row) => row.item === "灰平衡 wΔCh 平均");
+
+  assert.ok(grayAverage.value > 1.5 && grayAverage.value <= 3, `weighted gray average ${grayAverage.value}`);
+  assert.equal(grayAverage.status, "Fail");
+  assert.equal(g7.status, "Fail");
+  assert.equal(g7.conclusion.level, "danger");
+});
+
 test("g7Preview keeps incomplete data from reporting false pass", () => {
   const g7 = g7Preview({
     results: [{ channel: "K", tone: 50, measuredTone: 64, targetTone: 64 }],

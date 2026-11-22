@@ -648,10 +648,11 @@ function buildG7VerificationRows({ missing, weightedDeltaLSummary, graySummary, 
     ];
   }
   return [
-    toleranceRow("NPDC wΔL* 平均", weightedDeltaLSummary.weightedAverage, tolerances.npdcAverage, tolerances.npdcMax, ""),
-    toleranceRow("NPDC wΔL* 最大", weightedDeltaLSummary.weightedMax, tolerances.npdcMax, tolerances.npdcMax * 2, ""),
-    toleranceRow("灰平衡 wΔCh 平均", graySummary.weightedAverage, tolerances.grayAverage, tolerances.grayMax, ""),
-    toleranceRow("灰平衡 wΔCh 最大", graySummary.weightedMax, tolerances.grayMax, tolerances.grayMax * 2, ""),
+    // G7 Grayscale (NPDC + gray balance) is strictly Pass/Fail per the G7 spec; no Warning band.
+    passFailRow("NPDC wΔL* 平均", weightedDeltaLSummary.weightedAverage, tolerances.npdcAverage),
+    passFailRow("NPDC wΔL* 最大", weightedDeltaLSummary.weightedMax, tolerances.npdcMax),
+    passFailRow("灰平衡 wΔCh 平均", graySummary.weightedAverage, tolerances.grayAverage),
+    passFailRow("灰平衡 wΔCh 最大", graySummary.weightedMax, tolerances.grayMax),
     toleranceRow("Lab 加权 ΔE", weightedDeltaE, tolerances.deltaEWeighted, tolerances.deltaEWeighted * 1.5, ""),
     toleranceRow("最大 ΔE", maxDeltaE, tolerances.deltaEMax, tolerances.deltaEMax, ""),
   ];
@@ -666,6 +667,12 @@ function toleranceRow(item, value, passLimit, failLimit, unit) {
       ? "接近或超过建议值，建议复核"
       : "超过失败阈值";
   return verificationRow(item, value, `Pass <=${passLimit}${unit} / Fail >${failLimit}${unit}`, status, message);
+}
+
+function passFailRow(item, value, limit) {
+  if (!Number.isFinite(value)) return verificationRow(item, value, `<=${limit}`, "Missing", "缺少可计算数据");
+  const status = value <= limit ? "Pass" : "Fail";
+  return verificationRow(item, value, `Pass <=${limit} / Fail >${limit}`, status, status === "Pass" ? "达标" : "超过 G7 灰阶容差");
 }
 
 function verificationRow(item, value, tolerance, status, message) {
