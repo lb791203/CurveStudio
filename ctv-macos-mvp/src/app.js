@@ -45,7 +45,7 @@ import {
 import { clearStoredProject, compactProjectArchiveForRun, loadLastProject, loadStoredRuns, saveLastProject, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js?v=20260524-clear-current-run";
 import { buildCompensationSimulation } from "./compensation-simulation.js";
 import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
-import { STANDARD_LIBRARY, addOrUpdateCustomStandard, buildPatchMap, cmykKey, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260604-density-targets-1";
+import { STANDARD_LIBRARY, addOrUpdateCustomStandard, archivedStandardAsCustom, buildPatchMap, cmykKey, hasStandard, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260604-density-targets-1";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 import { auditMeasurementCsv } from "./audit-report.js";
 
@@ -639,8 +639,8 @@ function persistCustomStandards(items) {
 }
 
 async function loadStandard(id) {
-  state.standardId = id;
   state.standard = cloneData(standardById(id));
+  state.standardId = state.standard.id;
   state.standardImport = null;
   state.standardPatchMap = new Map();
   state.iccProfile = null;
@@ -824,7 +824,7 @@ function standardNameFromImportedReference(imported, fileName) {
     imported?.metadata?.descriptor,
     imported?.metadata?.originator,
   ].filter(Boolean).join(" ");
-  if (/SML|PrintSpec|XL-75|ISO 12647-2/i.test(`${descriptor} ${fileName}`)) {
+  if (/audit demo|ISO 12647-2/i.test(`${descriptor} ${fileName}`)) {
     return "ISO 12647-2:2007 Offset";
   }
   return fileName.replace(/\.(txt|it8|cgats|csv)$/i, "").replace(/[-_]+/g, " ").trim() || "Imported Standard";
@@ -968,11 +968,11 @@ async function importMeasurementText(text, options = {}) {
 
 async function detectAuditReportForImport(text, sourceName = "") {
   const marker = `${sourceName || ""}\n${text || ""}`;
-  if (!/SML|PrintSpec|XL-75-6C|ISO 12647-2:2007/i.test(marker)) return null;
+  if (!/audit demo|ISO 12647-2:2007/i.test(marker)) return null;
   try {
-    return await responseJson("./samples/sml-printspec-audit-example.json");
+    return await responseJson("./samples/audit-report-demo.json");
   } catch (error) {
-    console.warn("SML audit report metadata could not be attached", error);
+    console.warn("Audit report metadata could not be attached", error);
     return null;
   }
 }
@@ -985,8 +985,8 @@ async function loadAuditReportStandard(report) {
     report?.job?.machineModel,
   ].filter(Boolean).join(" ");
   const match = STANDARD_LIBRARY.find((item) => (
-    item.id === "sml_printspec_xl75_6c" &&
-    /SML|PrintSpec|XL-75-6C|ISO 12647-2:2007/i.test(marker)
+    item.id === "iso12647_2_2007_offset_audit_demo" &&
+    /audit demo|ISO 12647-2:2007/i.test(marker)
   ));
   if (!match || state.standard?.id === match.id) return;
   await loadStandard(match.id);
@@ -1046,14 +1046,11 @@ async function loadSelectedSample() {
   const samplePaths = {
     sample: "./samples/sample-measurements.csv",
     ctvLab: "./samples/ctv-lab-demo.csv",
-    kba162Curve5Run1: "./reference-data/measurements/kba162-customer/kba162-p2p51-curve5-run1.txt",
-    kba162Curve5Run2: "./reference-data/measurements/kba162-customer/kba162-p2p51-curve5-run2.txt",
-    p2p51: "./reference-data/measurements/g7-training/P2P51_2019-01-24_13h28_M1_3-2.txt",
-    tc1617: "./reference-data/measurements/g7-training/G7_T1617_P2_1_M1.txt",
-    smlPrintSpecAudit: "./samples/sml-printspec-audit-example.json",
+    p2p51: "./samples/g7-p2p51-simulated.txt",
+    auditDemo: "./samples/audit-report-demo.json",
   };
-  if (selected === "smlPrintSpecAudit") {
-    const report = await responseJson(samplePaths.smlPrintSpecAudit);
+  if (selected === "auditDemo") {
+    const report = await responseJson(samplePaths.auditDemo);
     state.auditReport = report;
     await loadAuditReportStandard(report);
     els.rawInput.value = auditMeasurementCsv(report);
@@ -1072,17 +1069,11 @@ async function loadSelectedSample() {
     calculate({ preserveRatio: true });
     switchView("curve");
   }
-  if (selected === "p2p51" || selected === "tc1617") {
+  if (selected === "p2p51") {
     els.modeSelect.value = "g7";
     els.targetSelect.value = "g7";
     calculate({ preserveRatio: true });
     switchView("g7");
-  }
-  if (selected === "kba162Curve5Run1" || selected === "kba162Curve5Run2") {
-    els.modeSelect.value = "ctv";
-    els.targetSelect.value = "linear";
-    calculate({ preserveRatio: true });
-    switchView("measurement");
   }
 }
 
@@ -1368,6 +1359,7 @@ function calculationOptions() {
     smooth: els.smoothInput.value,
     limit: els.limitInput.value,
     standardId: state.standard?.id,
+    channelTargets: state.standard?.channelTargets,
   };
 }
 
@@ -2139,6 +2131,7 @@ function runIdentity(run, index) {
 }
 
 async function restoreProjectArchive(archive) {
+  let archiveStandardWarning = "";
   if (archive.targetSnapshot && archive.settings?.target && !targetOptions().some((item) => item.id === archive.settings.target)) {
     upsertTarget(archive.settings.target, archive.targetSnapshot);
     refreshTargetSelect(archive.settings.target);
@@ -2149,7 +2142,16 @@ async function restoreProjectArchive(archive) {
       persistCustomStandards(items);
       populateSelects();
     }
-    await loadStandard(archive.standard.id);
+    let standardId = archive.standard.id;
+    if (!archive.standard.custom && !hasStandard(standardId)) {
+      const replacement = archivedStandardAsCustom(archive.standard);
+      const items = addOrUpdateCustomStandard(replacement);
+      persistCustomStandards(items);
+      populateSelects();
+      standardId = replacement.id;
+      archiveStandardWarning = `项目使用的标准「${archive.standard.name || archive.standard.id}」已不再内置，已按存档设置恢复为自定义标准；请重新导入该标准的 Lab 参考数据。`;
+    }
+    await loadStandard(standardId);
   }
   state.iccProfile = archive.iccProfile || null;
   if (state.iccProfile && !state.iccProfile.error) {
@@ -2218,6 +2220,9 @@ async function restoreProjectArchive(archive) {
     warnings: [],
   };
   if (!state.importInfo.measurements?.length) state.importInfo.measurements = state.measurements;
+  if (archiveStandardWarning) {
+    state.importInfo = { ...state.importInfo, warnings: [...(state.importInfo.warnings || []), archiveStandardWarning] };
+  }
   els.rawInput.value = archive.rawInput || "";
   state.manualDirty = false;
   state.ratioAuto = false;
