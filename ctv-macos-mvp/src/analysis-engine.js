@@ -315,7 +315,7 @@ export function diagnosePress(results, options = {}) {
       ratio: 45,
       messages: [
         "C/Y 中间调同步偏大，且至少一个色组接近标准，优先检查印压、橡皮布、包衬和水墨平衡。",
-        "不建议建立统一 CMYK 曲线；如需生产，先用临时分色欠补偿曲线。",
+        "不建议建立统一 CMYK 曲线；如需生产，先用按通道分别做的低强度补偿曲线。",
       ],
       channelStats,
     };
@@ -386,7 +386,7 @@ export function analyzeCurveSafety(results) {
     for (const row of sorted) {
       const correction = row.outputTone - row.tone;
       if (Math.abs(correction) > 12) {
-        issues.push(curveIssue("warning", channel, row.tone, "补偿量过大", `${channel} ${row.tone}% 最终补偿 ${correction.toFixed(1)}%，建议复核欠补偿比例或测量点。`));
+        issues.push(curveIssue("warning", channel, row.tone, "补偿量过大", `${channel} ${row.tone}% 最终补偿 ${correction.toFixed(1)}%，建议复核补偿强度或测量点。`));
       }
       if (row.tone <= 10 && Math.abs(row.outputTone - row.tone) > 3) {
         issues.push(curveIssue("warning", channel, row.tone, "高光保护", `${channel} ${row.tone}% 高光补偿超过 3%，可能影响细小网点。`));

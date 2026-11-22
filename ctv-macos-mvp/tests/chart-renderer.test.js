@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { renderCompensationSimulationChart, renderCurveChart, renderG7Charts, renderLabChromaticityChart, renderMeasurementChart } from "../src/chart-renderer.js";
+import { niceTicks, renderCompensationSimulationChart, renderCurveChart, renderG7Charts, renderLabChromaticityChart, renderMeasurementChart } from "../src/chart-renderer.js";
 
 test("renderCurveChart includes legend, point tooltip, and locked point marker", () => {
   const svg = { innerHTML: "" };
@@ -184,4 +184,38 @@ test("renderG7Charts uses report-style G7 scales", () => {
   assert.match(grayChart.innerHTML, />3</);
   assert.match(weightedChart.innerHTML, />-6</);
   assert.match(weightedChart.innerHTML, />6</);
+});
+
+test("niceTicks returns round steps instead of awkward divisions", () => {
+  assert.deepEqual(niceTicks(0, 35), [0, 5, 10, 15, 20, 25, 30, 35]);
+  assert.deepEqual(niceTicks(0, 40), [0, 5, 10, 15, 20, 25, 30, 35, 40]);
+  assert.deepEqual(niceTicks(-2, 2), [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2]);
+});
+
+test("renderCurveChart defaults to the adjustment view and can show the output curve", () => {
+  const rows = [
+    { channel: "C", tone: 0, outputTone: 0 },
+    { channel: "C", tone: 50, outputTone: 45 },
+    { channel: "C", tone: 100, outputTone: 100 },
+  ];
+  const adjustment = { innerHTML: "", dataset: {} };
+  renderCurveChart(adjustment, rows);
+  assert.equal(adjustment.dataset.chartYMin, "-6");
+  assert.equal(adjustment.dataset.chartYMax, "6");
+  assert.match(adjustment.innerHTML, /data-drag-kind="curve-adjustment"/);
+  assert.match(adjustment.innerHTML, /data-y="-5"/);
+  assert.match(adjustment.innerHTML, />\+2</);
+
+  const output = { innerHTML: "", dataset: { curveView: "output" } };
+  renderCurveChart(output, rows);
+  assert.equal(output.dataset.chartYMax, "100");
+  assert.match(output.innerHTML, /data-y="45"/);
+  assert.doesNotMatch(output.innerHTML, /curve-adjustment/);
+});
+
+test("measurement chart Y axis uses 5-point ticks", () => {
+  const svg = { innerHTML: "" };
+  renderMeasurementChart(svg, [{ channel: "K", tone: 50, measuredTvi: 18, targetTvi: 16 }], [{ tone: 50, value: 16 }], "tvi");
+  assert.match(svg.innerHTML, />15<\/text>/);
+  assert.doesNotMatch(svg.innerHTML, />7<\/text>/);
 });

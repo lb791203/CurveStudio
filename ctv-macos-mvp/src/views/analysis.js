@@ -16,22 +16,20 @@ export function renderAnalyze(state, els) {
   const keySummary = summarizeKeyPatches(state.labRows);
   const hasPaperLab = state.labRows.some((row) => isPaperCmyk(row.cmyk) && row.lab);
   const sccaBlocked = els.sccaInput.checked && !hasPaperLab;
-  els.diagnosisCards.innerHTML = [
-    kpiCard(t("diagnosis_label", "诊断"), translateDynamicText(diagnosis.title), diagnosis.level),
-    kpiCard(t("ratio_label", "建议欠补偿"), `${diagnosis.ratio}%`, "neutral"),
+  els.diagnosisCards.innerHTML = renderVerdictBanner(diagnosis, state) + [
+    kpiCard(t("ratio_label", "建议补偿强度"), `${diagnosis.ratio}%`, "neutral"),
     kpiCard(`${deltaFormulaLabel(els.deltaFormulaSelect.value)} ${t("status_label", "Status")}`, labSummary.status, labSummary.status === "Pass" ? "pass" : labSummary.status === "Fail" ? "danger" : labSummary.status === "Warning" ? "warning" : "neutral"),
     kpiCard(t("comparable_lab_label", "可比 Lab"), `${labSummary.comparable}/${labSummary.total}`, labSummary.comparable ? "pass" : "warning"),
     kpiCard(t("max_delta_e_label", "最大 ΔE"), num(labSummary.maxDeltaE), labSummary.fail ? "danger" : labSummary.warning ? "warning" : "neutral"),
     kpiCard(t("curve_safety_issues_label", "曲线安全问题"), state.safetyIssues.length, state.safetyIssues.length ? "warning" : "pass"),
   ].join("");
 
-  const messages = diagnosis.messages?.map((item) => `<p>${escapeHtml(translateDynamicText(item))}</p>`).join("") || "";
   const sccaMessage = els.sccaInput.checked
     ? hasPaperLab
       ? `<p>${escapeHtml(t("scca_enabled_message", "SCCA 已启用：参考 Lab 已按纸白差异做 MVP 级平移校正。"))}</p>`
       : `<p>${escapeHtml(t("scca_missing_paper_message", "SCCA 已勾选，但缺少纸白 Lab，不能执行纸白校正。"))}</p>`
     : "";
-  els.diagnosisCards.insertAdjacentHTML("beforeend", `<div class="kpi-card span-card">${messages}${sccaMessage}</div>`);
+  if (sccaMessage) els.diagnosisCards.insertAdjacentHTML("beforeend", `<div class="kpi-card span-card">${sccaMessage}</div>`);
 
   els.verificationChecklistSummary.textContent = verificationRows.length || keySummary.available
     ? t("key_patch_summary", "关键 9 项：Pass {pass} / Warning {warning} / Fail {fail}")
@@ -51,6 +49,58 @@ export function renderAnalyze(state, els) {
   els.labBody.innerHTML = state.labRows.length
     ? renderKeyPatchRows(state.labRows, state.standard?.deltaE)
     : `<tr><td colspan="4">${sccaBlocked ? t("scca_needs_paper_lab", "SCCA requires paper-white Lab; current measurement is missing paper white.") : t("no_lab_compare_data", "No Lab/ΔE comparison data is available.")}</td></tr>`;
+}
+
+// One clear answer at the top of the diagnosis page: can this press go to production,
+// and what to do next. The detailed KPI cards follow below it.
+function renderVerdictBanner(diagnosis, state) {
+  const level = diagnosis.level || "empty";
+  const ratio = diagnosis.ratio;
+  const verdicts = {
+    pass: {
+      answer: t("verdict_pass", "可以上机"),
+      next: t("verdict_pass_next", "偏差已在标准附近：用 {ratio}% 补偿强度轻补偿，或保持当前曲线。"),
+      action: "curve",
+    },
+    warning: {
+      answer: t("verdict_warning", "可以上机，需补偿后复测"),
+      next: t("verdict_warning_next", "用 {ratio}% 补偿强度按通道生成曲线，印刷后重新测量，逐轮收敛。"),
+      action: "curve",
+    },
+    danger: {
+      answer: t("verdict_danger", "先检查机器，再做正式曲线"),
+      next: t("verdict_danger_next", "按下面提示排查印刷机；必须马上生产时，只用 {ratio}% 低强度补偿救急，并尽快复测。"),
+      action: "curve",
+    },
+    mode: {
+      answer: t("verdict_mode", "当前曲线模式算不出阶调"),
+      next: t("verdict_mode_next", "切换左侧“曲线模式”，或导入带密度/网点值的测量文件。"),
+      action: "",
+    },
+    empty: {
+      answer: t("verdict_empty", "还没有可诊断的数据"),
+      next: t("verdict_empty_next", "导入或录入 CMYK 阶调测量后，这里会给出能否上机的结论。"),
+      action: "measurement",
+    },
+  };
+  const verdict = verdicts[level] || verdicts.warning;
+  const actionLabel = verdict.action === "measurement"
+    ? t("verdict_action_import", "去导入测量")
+    : t("verdict_action_curve", "去生成曲线");
+  const reasons = (diagnosis.messages || [])
+    .map((item) => `<li>${escapeHtml(translateDynamicText(item))}</li>`)
+    .join("");
+  return `
+    <section class="verdict-banner ${escapeAttr(level)}" aria-live="polite">
+      <div class="verdict-main">
+        <span class="verdict-eyebrow">${escapeHtml(t("diagnosis_label", "诊断"))} · ${escapeHtml(translateDynamicText(diagnosis.title))}</span>
+        <strong class="verdict-answer">${escapeHtml(verdict.answer)}</strong>
+        <p class="verdict-next">${escapeHtml(verdict.next.replace("{ratio}", ratio))}</p>
+        ${reasons ? `<ul class="verdict-reasons">${reasons}</ul>` : ""}
+      </div>
+      ${verdict.action ? `<button class="verdict-action" type="button" data-goto-view="${escapeAttr(verdict.action)}">${escapeHtml(actionLabel)}</button>` : ""}
+    </section>
+  `;
 }
 
 function isPaperCmyk(cmyk) {
@@ -115,7 +165,7 @@ function renderKeyPatchRows(labRows = [], thresholds = {}) {
         <td>
           <strong>${escapeHtml(slot.name)}</strong>
         </td>
-        <td>${renderKeyPatchLabCell(sampleColor, row.lab, { note: `D ${Number.isFinite(row.density) ? num(row.density) : "-"}` })}</td>
+        <td>${renderKeyPatchLabCell(sampleColor, row.lab, { note: Number.isFinite(row.density) ? `D ${num(row.density)}` : "" })}</td>
           <td>${renderKeyPatchLabCell(targetColor, row.referenceLab, { missing: t("missing_target", "Missing target") })}</td>
         <td>
           <strong class="${deClass}">${Number.isFinite(row.deltaE) ? num(row.deltaE) : "-"}</strong>
@@ -126,15 +176,21 @@ function renderKeyPatchRows(labRows = [], thresholds = {}) {
   }).join("");
 }
 
+// One decimal is enough to read a Lab value at a glance; the full value is in the tooltip.
+function labDisplay(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(1) : "-";
+}
+
 function renderKeyPatchLabCell(color, lab, options = {}) {
   const swatchClass = options.muted ? "color-swatch muted" : "color-swatch";
   const note = options.note ? `<div class="cell-note key-patch-note">${escapeHtml(options.note)}</div>` : "";
   const value = lab
     ? `
-      <span class="lab-triplet" aria-label="L ${num(lab.l)} a ${num(lab.a)} b ${num(lab.b)}">
-        <span>${num(lab.l)}</span>
-        <span>${num(lab.a)}</span>
-        <span>${num(lab.b)}</span>
+      <span class="lab-triplet" aria-label="L ${num(lab.l)} a ${num(lab.a)} b ${num(lab.b)}" title="L* ${num(lab.l)} / a* ${num(lab.a)} / b* ${num(lab.b)}">
+        <span>${labDisplay(lab.l)}</span>
+        <span>${labDisplay(lab.a)}</span>
+        <span>${labDisplay(lab.b)}</span>
       </span>
     `
     : `<span class="lab-missing">${escapeHtml(options.missing || "-")}</span>`;
@@ -229,12 +285,20 @@ export function statusText(state, els) {
 }
 
 export function renderCurve(state, els) {
-  els.statusText.textContent = statusText(state, els);
   const filtered = state.activeCurveChannel && state.activeCurveChannel !== "all"
     ? state.results.filter((row) => row.channel === state.activeCurveChannel)
     : state.results;
+  const exportRows = toExportRows(filtered);
+  // The calculation method is normally the same for every row, so show it once in the
+  // table caption and only flag the rows that differ (e.g. CTV rows that fell back to TVI).
+  const algorithmOf = (row) => `${translateDynamicText(row.metric)} / ${methodLabel(row.measurementMethod)}`;
+  const algorithmCounts = new Map();
+  exportRows.forEach((row) => algorithmCounts.set(algorithmOf(row), (algorithmCounts.get(algorithmOf(row)) || 0) + 1));
+  const mainAlgorithm = [...algorithmCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+  const status = statusText(state, els);
+  els.statusText.textContent = mainAlgorithm ? `${status} · ${t("algorithm_label", "算法")}：${mainAlgorithm}` : status;
   const qualityMap = curveQualityByPoint(state.safetyIssues);
-  els.resultBody.innerHTML = toExportRows(filtered)
+  els.resultBody.innerHTML = exportRows
     .map((row, index) => {
       const sourceRow = filtered[index];
       const key = curveRowKey(sourceRow);
@@ -252,8 +316,7 @@ export function renderCurve(state, els) {
         <td><input class="curve-output-input" type="number" min="0" max="100" step="0.1" value="${escapeAttr(row.outputTone)}" data-curve-field="outputTone" data-curve-key="${escapeAttr(key)}" aria-label="${escapeAttr(t("suggested_output_aria", "Suggested output tone"))} ${escapeAttr(row.channel)} ${escapeAttr(row.inputTone)}%" /></td>
         <td><span class="status ${quality.level === "danger" ? "fail" : quality.level}">${escapeHtml(translateDynamicText(quality.label))}</span>${quality.messages.length ? `<div class="cell-note">${escapeHtml(quality.messages.map(translateDynamicText).join(" / "))}</div>` : ""}</td>
         <td><input class="curve-lock-input" type="checkbox" data-curve-field="locked" data-curve-key="${escapeAttr(key)}" ${locked ? "checked" : ""} aria-label="${escapeAttr(t("lock_output_aria", "Lock output"))} ${escapeAttr(row.channel)} ${escapeAttr(row.inputTone)}%" /></td>
-        <td class="cell-text">${row.pointSource === "interpolated" ? t("interpolated", "插值") : t("measured_label", "实测")}</td>
-        <td class="cell-text">${escapeHtml(translateDynamicText(row.metric))} / ${escapeHtml(methodLabel(row.measurementMethod))}${locked ? ` / ${escapeHtml(t("manual_locked_label", "人工锁定"))}` : ""}</td>
+        <td class="cell-text">${row.pointSource === "interpolated" ? t("interpolated", "插值") : t("measured_label", "实测")}${locked ? ` · ${escapeHtml(t("manual_locked_label", "人工锁定"))}` : ""}${algorithmOf(row) !== mainAlgorithm ? `<div class="cell-note">${escapeHtml(algorithmOf(row))}</div>` : ""}</td>
       </tr>
     `;
     })
@@ -376,7 +439,22 @@ export function renderG7(state, els) {
       </div>
     `;
   } else {
-    els.g7Cards.innerHTML = [
+    const g7Level = g7.conclusion?.level || (g7.status === "Pass" ? "pass" : g7.status === "Fail" ? "danger" : "warning");
+    const g7RowLevel = (item) => {
+      const row = (g7.verificationRows || []).find((candidate) => candidate.item === item);
+      return row?.status === "Fail" ? "danger" : row?.status === "Pass" ? "pass" : "neutral";
+    };
+    const g7Banner = `
+      <section class="verdict-banner ${escapeAttr(g7Level === "neutral" ? "empty" : g7Level)}">
+        <div class="verdict-main">
+          <span class="verdict-eyebrow">${escapeHtml(t("g7_conclusion_label", "G7 结论"))} · ${escapeHtml(t("g7_reference_only", "按 G7 方法做的参考检查，非 Idealliance 认证结果"))}</span>
+          <strong class="verdict-answer">${escapeHtml(translateDynamicText(g7.conclusion?.title || g7.status))}</strong>
+          ${g7.conclusion?.summary ? `<p class="verdict-next">${g7Level === "danger" ? `${escapeHtml(t("g7_failed_items_label", "未达标项目"))}：` : ""}${escapeHtml(translateDynamicText(g7.conclusion.summary))}</p>` : ""}
+          ${(g7.conclusion?.recommendations || []).length ? `<ul class="verdict-reasons">${g7.conclusion.recommendations.map((item) => `<li>${escapeHtml(translateDynamicText(item))}</li>`).join("")}</ul>` : ""}
+        </div>
+      </section>
+    `;
+    els.g7Cards.innerHTML = g7Banner + [
       kpiCard(t("g7_status_label", "G7 Status"), g7.status, g7.status === "Pass" ? "pass" : g7.status === "Fail" ? "danger" : g7.status === "Disabled" ? "neutral" : "warning"),
       kpiCard(t("k_only_points_label", "K-only Points"), g7.kOnlyCount, g7.kOnlyCount >= 5 ? "pass" : "warning"),
       kpiCard(t("lab_comparable_patches_label", "Comparable Lab Patches"), g7.labPatchCount, g7.labPatchCount ? "pass" : "warning"),
@@ -385,13 +463,12 @@ export function renderG7(state, els) {
       kpiCard(t("paper_solids_label", "Paper / Solids"), `${g7.patchClasses?.paper || 0}/${g7.patchClasses?.cmykSolids || 0}`, (g7.patchClasses?.paper && g7.patchClasses?.cmykSolids >= 4) ? "pass" : "warning"),
       kpiCard(`${t("avg_label", "Average")} ${deltaFormulaLabel(els.deltaFormulaSelect.value)}`, num(g7.avgDeltaE), "neutral"),
       kpiCard(`${t("max_label", "Max")} ${deltaFormulaLabel(els.deltaFormulaSelect.value)}`, num(g7.maxDeltaE), "neutral"),
-      kpiCard(translateDynamicText("NPDC 平均 wΔL*"), num(g7.weightedAverage), "neutral"),
-      kpiCard(translateDynamicText("NPDC 最大 wΔL*"), num(g7.maxNpdcDelta), Number(g7.maxNpdcDelta) > Number(g7.tolerances?.npdcMax || 3) ? "warning" : "neutral"),
-      kpiCard(translateDynamicText("灰平衡平均 wΔCh"), num(g7.weightedGrayAverage), "neutral"),
-      kpiCard(translateDynamicText("灰平衡最大 wΔCh"), num(g7.weightedGrayMax), Number(g7.weightedGrayMax) > Number(g7.tolerances?.grayMax || 3) ? "warning" : "neutral"),
-      `<div class="kpi-card span-card"><p><strong>${escapeHtml(t("g7_conclusion_label", "G7 Conclusion"))}</strong> <span class="status ${statusClass(g7.conclusion?.level || g7.status)}">${escapeHtml(translateDynamicText(g7.conclusion?.title || g7.status))}</span></p><p>${escapeHtml(translateDynamicText(g7.conclusion?.summary || ""))}</p>${(g7.conclusion?.recommendations || []).map((item) => `<p>${escapeHtml(translateDynamicText(item))}</p>`).join("")}</div>`,
-      `<div class="kpi-card span-card"><p><strong>${escapeHtml(t("g7_completeness_label", "G7 Data Completeness"))}</strong></p>${(g7.completenessRows || []).map((row) => `<p>${row.status === "Pass" ? "Pass" : "Missing"} ${escapeHtml(translateDynamicText(row.item))}: ${row.count} / ${escapeHtml(translateDynamicText(row.required))}</p>`).join("")}</div>`,
+      kpiCard(translateDynamicText("NPDC 平均 wΔL*"), num(g7.weightedAverage), g7RowLevel("NPDC wΔL* 平均")),
+      kpiCard(translateDynamicText("NPDC 最大 wΔL*"), num(g7.maxNpdcDelta), g7RowLevel("NPDC wΔL* 最大")),
+      kpiCard(translateDynamicText("灰平衡平均 wΔCh"), num(g7.weightedGrayAverage), g7RowLevel("灰平衡 wΔCh 平均")),
+      kpiCard(translateDynamicText("灰平衡最大 wΔCh"), num(g7.weightedGrayMax), g7RowLevel("灰平衡 wΔCh 最大")),
       `<div class="kpi-card span-card"><p><strong>${escapeHtml(t("g7_verification_items_label", "G7 Verification Items"))}</strong></p>${(g7.verificationRows || []).map((row) => `<p><span class="status ${statusClass(row.status)}">${escapeHtml(row.status)}</span> ${escapeHtml(translateDynamicText(row.item))}: ${num(row.value)} / ${escapeHtml(translateDynamicText(row.tolerance))}${row.message ? ` / ${escapeHtml(translateDynamicText(row.message))}` : ""}</p>`).join("")}</div>`,
+      `<div class="kpi-card span-card"><p><strong>${escapeHtml(t("g7_completeness_label", "G7 Data Completeness"))}</strong></p>${(g7.completenessRows || []).map((row) => `<p>${row.status === "Pass" ? "Pass" : "Missing"} ${escapeHtml(translateDynamicText(row.item))}: ${row.count} / ${escapeHtml(translateDynamicText(row.required))}</p>`).join("")}</div>`,
       `<div class="kpi-card span-card">${g7.missing.length ? `<p><strong>${escapeHtml(t("main_issues_label", "Main Issues"))}</strong></p>${g7.missing.map((item) => `<p>${escapeHtml(translateDynamicText(item))}</p>`).join("")}` : `<p>${escapeHtml(t("g7_completeness_pass_help", "Data completeness satisfies the first-stage G7 precheck."))}</p>`}</div>`,
     ].join("");
   }
@@ -552,7 +629,7 @@ function renderG7Compensation(compensation, els) {
   els.g7CompensationSummary.innerHTML = `
       <p><strong>${escapeHtml(t("status_label", "Status"))}</strong> <span class="status ${statusClass(level)}">${escapeHtml(preview.status)}</span> ${escapeHtml(translateDynamicText(preview.message || ""))}</p>
     ${preview.status === "Preview" ? `
-      <p><strong>${escapeHtml(t("production_principle_label", "Production Principle"))}</strong> ${escapeHtml(t("g7_production_principle_help", "Production C/M/Y/K output is based on the TVI/CTV base curve; G7 no longer generates shared CMY output."))} ${escapeHtml(t("current_max_single_point_label", "Current max single-point correction"))} ${limitText}, ${escapeHtml(t("undercomp_ratio_lower_label", "under-comp ratio"))} ${ratioText}, ${escapeHtml(t("g7_addon_limited_help", "G7 add-on correction is further limited to small adjustments."))}</p>
+      <p><strong>${escapeHtml(t("production_principle_label", "Production Principle"))}</strong> ${escapeHtml(t("g7_production_principle_help", "Production C/M/Y/K output is based on the TVI/CTV base curve; G7 no longer generates shared CMY output."))} ${escapeHtml(t("current_max_single_point_label", "Current max single-point correction"))} ${limitText}, ${escapeHtml(t("undercomp_ratio_lower_label", "compensation strength"))} ${ratioText}, ${escapeHtml(t("g7_addon_limited_help", "G7 add-on correction is further limited to small adjustments."))}</p>
       <p><strong>${escapeHtml(t("gray_balance_label", "Gray Balance"))}</strong> ${escapeHtml(t("g7_gray_split_help", "CMY gray is split into small C/M/Y single-channel corrections; when direction conflicts, TVI/CTV output is kept and only a review warning is shown."))}</p>
     ` : ""}
     ${(preview.warnings || []).map((item) => `<p>${escapeHtml(translateDynamicText(item))}</p>`).join("")}
