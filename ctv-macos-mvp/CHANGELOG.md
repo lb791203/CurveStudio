@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Spectral data is now converted to XYZ/Lab with ASTM E308 D50/2° 10 nm weighting factors. Against the i1iO2 M0/M2 fixtures the mean error versus the instrument's own Lab drops from about 1.1 ΔE00 to 0.005 ΔE00.
+- Fixed dark patches (Y < 1.5, roughly L* < 13) computed from spectral data being reported as L* > 100.
+- Fixed the visual (K) spectral density response, which peaked at 460 nm instead of following the photopic ȳ curve.
+- Compensation curves now invert the measured press response (as described in docs/curve-calculation.md) instead of subtracting the TVI difference at the same input tone, which over-corrected highlights.
+- G7 gray-balance split corrections now aim at the gray target (paper/standard tint) instead of a*=b*=0, and the gray diagnostics read the weighted ΔCh field that verification actually produces.
+
 ## 1.0.5 - 2026-07-05
 
 - Hardened desktop release packaging by pinning the Tauri CLI, adding a package lock, and disabling the global Tauri bridge.

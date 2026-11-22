@@ -91,11 +91,13 @@ export function calculateCompensation(measurements, options) {
   const compensationRatio = clamp(Number(options.compensationRatio ?? 100), 0, 100) / 100;
   const mode = options.mode || "tvi";
   const outputGrid = options.outputGrid === false ? null : options.outputGrid || DEFAULT_OUTPUT_GRID;
-  const rows = measurements
-    .map((item) => {
-      const metric = resolveMeasurementMetric(item, mode);
+  const resolved = measurements
+    .map((item) => ({ item, metric: resolveMeasurementMetric(item, mode) }))
+    .filter(({ metric }) => Number.isFinite(metric.delta));
+  const responseByChannel = buildResponseCurves(resolved);
+  const rows = resolved
+    .map(({ item, metric }) => {
       const measuredTvi = metric.delta;
-      if (!Number.isFinite(measuredTvi)) return null;
       let channelTargetPoints = targetPoints;
       if (options.standardId === "sml_printspec_xl75_6c") {
         if (item.channel === "K") {
@@ -108,7 +110,14 @@ export function calculateCompensation(measurements, options) {
       const measuredTone = metric.tone;
       const targetTone = clamp(item.tone + targetTvi, 0, 100);
       const tviDelta = measuredTvi - targetTvi;
-      const rawCorrection = targetTvi - measuredTvi;
+      // Find the plate/RIP value whose *measured* print tone equals the target print
+      // tone (inverse of the measured response curve, see docs/curve-calculation.md).
+      // Subtracting the TVI difference at the same input only holds when the response
+      // slope is 1; in highlights the slope is ~1.5 and the shortcut over-corrects.
+      const invertedInput = invertResponse(responseByChannel.get(item.channel), targetTone, item.tone);
+      const rawCorrection = Number.isFinite(invertedInput)
+        ? invertedInput - item.tone
+        : targetTvi - measuredTvi;
       const correction = clamp(rawCorrection * compensationRatio, -limit, limit);
       return {
         ...item,
@@ -119,6 +128,7 @@ export function calculateCompensation(measurements, options) {
         tviDelta,
         metricName: metric.name,
         metricMethod: metric.method,
+        correctionMethod: Number.isFinite(invertedInput) ? "inverse_response" : "tvi_difference",
         theoreticalCorrection: rawCorrection,
         compensationRatio: compensationRatio * 100,
         theoreticalOutputTone: clamp(item.tone + rawCorrection, 0, 100),
@@ -127,8 +137,7 @@ export function calculateCompensation(measurements, options) {
         outputTone: clamp(item.tone + correction, 0, 100),
         interpolated: false,
       };
-    })
-    .filter(Boolean);
+    });
 
   const grouped = groupByChannel(rows);
   return Object.values(grouped)
@@ -696,6 +705,54 @@ function smoothChannel(items, strength) {
     }
   }
   return sorted;
+}
+
+// Measured press response per channel: nominal tone -> measured printed tone.
+// Repeated tones are averaged and 0 -> 0 / 100 -> 100 anchors are added when missing
+// (tone value is paper/solid-relative by definition).
+function buildResponseCurves(resolved) {
+  const byChannel = new Map();
+  for (const { item, metric } of resolved) {
+    if (!Number.isFinite(item.tone) || !Number.isFinite(metric.tone)) continue;
+    if (!byChannel.has(item.channel)) byChannel.set(item.channel, new Map());
+    const tones = byChannel.get(item.channel);
+    const key = Number(item.tone.toFixed(3));
+    const bucket = tones.get(key) || { sum: 0, count: 0 };
+    bucket.sum += metric.tone;
+    bucket.count += 1;
+    tones.set(key, bucket);
+  }
+  const curves = new Map();
+  for (const [channel, tones] of byChannel) {
+    const points = [...tones].map(([tone, bucket]) => [tone, bucket.sum / bucket.count]);
+    if (!points.some(([tone]) => tone === 0)) points.push([0, 0]);
+    if (!points.some(([tone]) => tone === 100)) points.push([100, 100]);
+    points.sort((a, b) => a[0] - b[0]);
+    // Need at least one real measurement between the anchors to say anything.
+    curves.set(channel, points.length >= 3 ? points : null);
+  }
+  return curves;
+}
+
+// Returns the input tone whose measured print tone equals printedTone. Measured data
+// is not always monotonic (noise, a bad patch), so every crossing is collected and the
+// one closest to the nominal tone wins; a single outlier then only bends its own
+// neighbourhood instead of the whole curve.
+function invertResponse(points, printedTone, nominalTone) {
+  if (!points || !Number.isFinite(printedTone)) return NaN;
+  const candidates = [];
+  for (let i = 1; i < points.length; i += 1) {
+    const [x1, y1] = points[i - 1];
+    const [x2, y2] = points[i];
+    const low = Math.min(y1, y2);
+    const high = Math.max(y1, y2);
+    if (printedTone < low || printedTone > high) continue;
+    candidates.push(Math.abs(y2 - y1) < 1e-6 ? x1 : x1 + (printedTone - y1) * (x2 - x1) / (y2 - y1));
+  }
+  if (!candidates.length) return NaN;
+  return candidates.reduce((best, value) => (
+    Math.abs(value - nominalTone) < Math.abs(best - nominalTone) ? value : best
+  ), candidates[0]);
 }
 
 function interpolate(points, tone) {
