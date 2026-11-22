@@ -6,6 +6,9 @@
 - Fixed dark patches (Y < 1.5, roughly L* < 13) computed from spectral data being reported as L* > 100.
 - Fixed the visual (K) spectral density response, which peaked at 460 nm instead of following the photopic ȳ curve.
 - Compensation curves now invert the measured press response (as described in docs/curve-calculation.md) instead of subtracting the TVI difference at the same input tone, which over-corrected highlights.
+- G7 Grayscale is now substrate-relative: NPDC ΔL* compares paper-relative L* (sample Y / paper Y) for both the press sheet and the reference, and the CMY gray a*b* aim follows the paper tint (paper a*b* × (1 − C/100)). The previous absolute check is available with `g7Evaluation: "absolute"`.
+- G7 weighting now follows the Idealliance formula (1.0 up to 50%, 0.25 at 100%, no extra highlight reduction) and G7 Grayscale/Targeted results are Pass/Fail only. Targeted uses ΔE00 with per-patch limits (substrate 3.0, CMY solids 3.5, K 5.0, overprints 4.2).
+- Only patches on the G7 gray ratio (M = Y = f(C)) are evaluated as CMY gray; equal-CMY ramps and P2P offset grays such as 30/30/30 or 20/12/12 no longer distort the gray-balance result.
 - G7 gray-balance split corrections now aim at the gray target (paper/standard tint) instead of a*=b*=0, and the gray diagnostics read the weighted ΔCh field that verification actually produces.
 
 ## 1.0.5 - 2026-07-05

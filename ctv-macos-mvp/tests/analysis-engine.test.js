@@ -22,7 +22,7 @@ test("g7Preview classifies P2P patch completeness", () => {
     { cmyk_c: 0, cmyk_m: 0, cmyk_y: 100, cmyk_k: 0 },
     { cmyk_c: 0, cmyk_m: 0, cmyk_y: 0, cmyk_k: 100 },
     { cmyk_c: 0, cmyk_m: 0, cmyk_y: 0, cmyk_k: 25 },
-    { cmyk_c: 20, cmyk_m: 22, cmyk_y: 22, cmyk_k: 0 },
+    { cmyk_c: 20, cmyk_m: 15.01, cmyk_y: 15.01, cmyk_k: 0 },
     { cmyk_c: 50, cmyk_m: 40, cmyk_y: 40, cmyk_k: 0 },
   ];
   const g7 = g7Preview({ rawRows });
@@ -51,7 +51,7 @@ test("g7Preview uses raw Lab gray patches without claiming G7 pass", () => {
     { cmyk_c: 0, cmyk_m: 100, cmyk_y: 0, cmyk_k: 0, lab_l: 50, lab_a: 72, lab_b: -3 },
     { cmyk_c: 0, cmyk_m: 0, cmyk_y: 100, cmyk_k: 0, lab_l: 88, lab_a: -5, lab_b: 90 },
     { cmyk_c: 0, cmyk_m: 0, cmyk_y: 0, cmyk_k: 100, lab_l: 15, lab_a: 0, lab_b: 0 },
-    ...[25, 50, 75].map((tone) => ({ cmyk_c: tone, cmyk_m: tone, cmyk_y: tone, cmyk_k: 0, lab_l: 70, lab_a: 1, lab_b: -1 })),
+    ...[[25, 19], [50, 40], [75, 66]].map(([c, my]) => ({ cmyk_c: c, cmyk_m: my, cmyk_y: my, cmyk_k: 0, lab_l: 70, lab_a: 1, lab_b: -1 })),
   ];
   const results = [10, 20, 30, 40, 50].map((tone) => ({ channel: "K", tone, measuredTone: tone + 9, targetTone: tone + 9 }));
   const g7 = g7Preview({ rawRows, results });
