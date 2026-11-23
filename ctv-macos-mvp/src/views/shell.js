@@ -90,6 +90,14 @@ export function renderControlValues(els) {
   if (els.smoothValue) els.smoothValue.textContent = els.smoothInput.value;
 }
 
+// A TVI/CTV-only job has no G7 patches; showing "Data Incomplete" there reads as an error.
+function runHasG7Data(run = {}) {
+  const metrics = run.metrics || {};
+  return [run.g7WeightedAverage, run.g7MaxNpdcDelta, run.g7MaxGrayCh, metrics.g7WeightedAverage, metrics.g7MaxNpdcDelta, metrics.g7MaxGrayCh]
+    .some((value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)))
+    || Boolean((run.g7Status || metrics.g7Status) && (run.g7Status || metrics.g7Status) !== "Data Incomplete");
+}
+
 function runCompareText(state, runs = state.runs) {
   if (runs.length < 2) return `<strong>${escapeHtml(t("run_compare_title", "Run 比较"))}</strong><p>${escapeHtml(t("run_compare_need_two", "保存至少两次 Run 后显示补偿前后变化。"))}</p>`;
   const compare = compareRuns(runs[0], runs[1]);
@@ -98,12 +106,13 @@ function runCompareText(state, runs = state.runs) {
     <strong>${escapeHtml(t("run_compare_title", "Run 比较"))}</strong>
     <p>${escapeHtml(t("latest_label", "最新"))}: ${escapeHtml(compare.latest.createdAt || "")} / ${escapeHtml(t("previous_label", "上一次"))}: ${escapeHtml(compare.previous.createdAt || "")}</p>
     <p>${escapeHtml(t("avg_tvi_delta_label", "平均 TVI 偏差"))}: <span class="${changeClass(compare.avgTviDelta)}">${formatMetricChange(compare.avgTviDelta, "%")}</span></p>
-    <p>${escapeHtml(t("max_delta_e_label", "最大 ΔE"))}: <span class="${changeClass(compare.maxDeltaE)}">${formatMetricChange(compare.maxDeltaE)}</span></p>
+    ${compare.hasLab ? `<p>${escapeHtml(t("max_delta_e_label", "最大 ΔE"))}: <span class="${changeClass(compare.maxDeltaE)}">${formatMetricChange(compare.maxDeltaE)}</span></p>` : ""}
+    ${compare.hasG7 ? `
     <p>G7: <span class="${changeClass(compare.g7StatusChange)}">${escapeHtml(compare.g7StatusText)}</span> / NPDC wΔL*: <span class="${changeClass(compare.g7WeightedAverage)}">${formatMetricChange(compare.g7WeightedAverage)}</span></p>
     <p>${escapeHtml(t("g7_conclusion_label", "G7 结论"))}: ${escapeHtml(compare.g7ConclusionText)}</p>
     <p>${escapeHtml(t("g7_priority_label", "G7 主要问题"))}: ${escapeHtml(compare.g7PriorityText)}</p>
-    <p>NPDC ${escapeHtml(t("max_label", "最大"))} wΔL*: <span class="${changeClass(compare.g7MaxNpdcDelta)}">${formatMetricChange(compare.g7MaxNpdcDelta)}</span> / Gray ${escapeHtml(t("max_label", "最大"))} wΔCh: <span class="${changeClass(compare.g7MaxGrayCh)}">${formatMetricChange(compare.g7MaxGrayCh)}</span></p>
-    <p>${escapeHtml(t("curve_quality_label", "曲线质量"))}: ${escapeHtml(compare.curveQualityText)} / ${escapeHtml(t("curve_quality_warnings", "警告"))} <span class="${changeClass(compare.curveWarnings)}">${formatMetricChange(compare.curveWarnings)}</span> / ${escapeHtml(t("curve_quality_dangers", "严重"))} <span class="${changeClass(compare.curveDangers)}">${formatMetricChange(compare.curveDangers)}</span></p>
+    <p>NPDC ${escapeHtml(t("max_label", "最大"))} wΔL*: <span class="${changeClass(compare.g7MaxNpdcDelta)}">${formatMetricChange(compare.g7MaxNpdcDelta)}</span> / Gray ${escapeHtml(t("max_label", "最大"))} wΔCh: <span class="${changeClass(compare.g7MaxGrayCh)}">${formatMetricChange(compare.g7MaxGrayCh)}</span></p>` : ""}
+    ${compare.hasCurveIssues ? `<p>${escapeHtml(t("curve_quality_label", "曲线质量"))}: ${escapeHtml(compare.curveQualityText)} / ${escapeHtml(t("curve_quality_warnings", "警告"))} <span class="${changeClass(compare.curveWarnings)}">${formatMetricChange(compare.curveWarnings)}</span> / ${escapeHtml(t("curve_quality_dangers", "严重"))} <span class="${changeClass(compare.curveDangers)}">${formatMetricChange(compare.curveDangers)}</span></p>` : ""}
     <div class="run-compare-grid">
       ${compare.channelRows.map((row) => `
         <span><strong>${row.channel}</strong> <span class="${changeClass(row.change)}">${formatMetricChange(row.change, "%")}</span></span>
@@ -148,7 +157,7 @@ export function renderRuns(state, els) {
           </button>
           <div class="run-card-footer">
             <span class="job-run-statuses">
-              <span class="status ${statusClass(job.latest.g7Status || job.latest.metrics?.g7Status)}">${escapeHtml(job.latest.g7Status || job.latest.metrics?.g7Status || t("g7_not_run_label", "未运行"))}</span>
+              ${runHasG7Data(job.latest) ? `<span class="status ${statusClass(job.latest.g7Status || job.latest.metrics?.g7Status)}">${escapeHtml(job.latest.g7Status || job.latest.metrics?.g7Status || t("g7_not_run_label", "未运行"))}</span>` : ""}
               <span class="status ${job.latest.curveQualityStatus === "Ready" ? "pass" : job.latest.curveQualityStatus === "Blocked" ? "fail" : "warning"}">${escapeHtml(job.latest.curveQualityStatus || job.latest.metrics?.curveQualityStatus || "Curve")}</span>
             </span>
             <div class="run-card-actions">
@@ -1366,10 +1375,11 @@ function reportRunCompareText(compare) {
   return `
     <p>${escapeHtml(t("latest_label", "Latest"))}: ${escapeHtml(compare.latest.createdAt || "")} / ${escapeHtml(t("previous_label", "Previous"))}: ${escapeHtml(compare.previous.createdAt || "")}</p>
     <p>${escapeHtml(t("avg_tvi_delta_label", "Average TVI Delta"))}: <span class="${changeClass(compare.avgTviDelta)}">${formatMetricChange(compare.avgTviDelta, "%")}</span></p>
-    <p>${escapeHtml(t("max_delta_e_label", "Max ΔE"))}: <span class="${changeClass(compare.maxDeltaE)}">${formatMetricChange(compare.maxDeltaE)}</span></p>
+    ${compare.hasLab ? `<p>${escapeHtml(t("max_delta_e_label", "Max ΔE"))}: <span class="${changeClass(compare.maxDeltaE)}">${formatMetricChange(compare.maxDeltaE)}</span></p>` : ""}
+    ${compare.hasG7 ? `
     <p>G7: <span class="${changeClass(compare.g7StatusChange)}">${escapeHtml(translateDynamicText(compare.g7StatusText))}</span> / ${escapeHtml(translateDynamicText(compare.g7ConclusionText))}</p>
-    <p>${escapeHtml(t("main_issues_label", "Main Issues"))}: ${escapeHtml(translateDynamicText(compare.g7PriorityText))}</p>
-    <p>${escapeHtml(t("curve_quality_label", "Curve Quality"))}: ${escapeHtml(translateDynamicText(compare.curveQualityText))} / ${escapeHtml(t("curve_quality_warnings", "Warnings"))} <span class="${changeClass(compare.curveWarnings)}">${formatMetricChange(compare.curveWarnings)}</span> / ${escapeHtml(t("curve_quality_dangers", "Severe"))} <span class="${changeClass(compare.curveDangers)}">${formatMetricChange(compare.curveDangers)}</span></p>
+    <p>${escapeHtml(t("main_issues_label", "Main Issues"))}: ${escapeHtml(translateDynamicText(compare.g7PriorityText))}</p>` : ""}
+    ${compare.hasCurveIssues ? `<p>${escapeHtml(t("curve_quality_label", "Curve Quality"))}: ${escapeHtml(translateDynamicText(compare.curveQualityText))} / ${escapeHtml(t("curve_quality_warnings", "Warnings"))} <span class="${changeClass(compare.curveWarnings)}">${formatMetricChange(compare.curveWarnings)}</span> / ${escapeHtml(t("curve_quality_dangers", "Severe"))} <span class="${changeClass(compare.curveDangers)}">${formatMetricChange(compare.curveDangers)}</span></p>` : ""}
   `;
 }
 

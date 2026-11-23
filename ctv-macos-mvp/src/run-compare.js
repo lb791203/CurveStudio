@@ -37,6 +37,14 @@ export function compareRuns(latest, previous) {
     latest,
     latestMetrics,
     previousMetrics,
+    hasLab: [latestMetrics.maxDeltaE, previousMetrics.maxDeltaE].some(Number.isFinite),
+    hasG7: [
+      latestMetrics.g7WeightedAverage, previousMetrics.g7WeightedAverage,
+      latestMetrics.g7MaxNpdcDelta, previousMetrics.g7MaxNpdcDelta,
+      latestMetrics.g7MaxGrayCh, previousMetrics.g7MaxGrayCh,
+    ].some(Number.isFinite) || [latestMetrics.g7Status, previousMetrics.g7Status].some(isEvaluatedG7Status),
+    hasCurveIssues: [latestMetrics.curveWarnings, previousMetrics.curveWarnings, latestMetrics.curveDangers, previousMetrics.curveDangers].some((value) => Number(value) > 0)
+      || [latestMetrics.curveQualityStatus, previousMetrics.curveQualityStatus].some((status) => status && status !== "Ready"),
     avgTviDelta: metricChange(latestMetrics.avgTviDelta, previousMetrics.avgTviDelta, true),
     maxDeltaE: metricChange(latestMetrics.maxDeltaE, previousMetrics.maxDeltaE, true),
     g7WeightedAverage: metricChange(latestMetrics.g7WeightedAverage, previousMetrics.g7WeightedAverage, true),
@@ -56,6 +64,11 @@ export function compareRuns(latest, previous) {
       change: metricChange(latestMetrics.channelTvi[channel], previousMetrics.channelTvi[channel], true),
     })),
   };
+}
+
+// "Data Incomplete" means the measurement had no G7 patches (e.g. a TVI-only job), so there is nothing to compare.
+function isEvaluatedG7Status(status) {
+  return Boolean(status) && status !== "Data Incomplete";
 }
 
 export function formatMetricChange(change, suffix = "") {

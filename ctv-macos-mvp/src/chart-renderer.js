@@ -1,5 +1,6 @@
 import { escapeHtml } from "./shared.js";
 import { translateDynamicText } from "./translations.js";
+import { monotoneCubic } from "./curve-engine.js?v=20260521-icc-p4";
 
 export function renderMeasurementChart(svg, results, targetRows, mode) {
   const label = mode === "ctv" ? "CTV" : "TVI";
@@ -56,6 +57,7 @@ export function renderCurveChart(svg, results, safetyIssues = [], options = {}) 
       yTicks: [0, 20, 40, 60, 80, 100],
       yLabel: translateDynamicText("输出网点 %"),
       interactivePoints: true,
+      smoothSlope: 0,
       reference: [{ name: translateDynamicText("不调整"), points: [{ x: 0, y: 0 }, { x: 100, y: 100 }], color: "#9ca3af" }],
     });
     return;
@@ -71,6 +73,7 @@ export function renderCurveChart(svg, results, safetyIssues = [], options = {}) 
     yTickFormatter: (value) => (value > 0 ? `+${value}` : String(value)),
     yLabel: translateDynamicText("调整量（输出 − 输入）%"),
     interactivePoints: true,
+    smoothSlope: 1,
     reference: [{ name: translateDynamicText("不调整"), points: [{ x: 0, y: 0 }, { x: 100, y: 0 }], color: "#9ca3af" }],
     referenceDots: false,
   });
@@ -438,7 +441,7 @@ function drawChart(svg, series, config) {
   const ref = (config.reference || []).map((item) => path(item.points, xScale, yScale, item.color, "reference", item.name, item.dasharray)).join("");
   const lines = config.connectLines === false
     ? ""
-    : Object.entries(series).map(([channel, points]) => path(points, xScale, yScale, colors[channel] || "#2563eb", "series", channel)).join("");
+    : Object.entries(series).map(([channel, points]) => path(config.smoothSlope === undefined ? points : smoothPoints(points, config.smoothSlope), xScale, yScale, colors[channel] || "#2563eb", "series", channel)).join("");
   const dots = Object.entries(series).flatMap(([channel, points]) => points.map((point) => {
     const isDraggable = config.interactivePoints;
     return `
@@ -507,6 +510,24 @@ function bandPath(points, xScale, yScale, color, name = "") {
   const upper = points.map((point, index) => `${index ? "L" : "M"} ${xScale(point.x).toFixed(1)} ${yScale(point.high).toFixed(1)}`).join(" ");
   const lower = [...points].reverse().map((point) => `L ${xScale(point.x).toFixed(1)} ${yScale(point.low).toFixed(1)}`).join(" ");
   return `<path d="${upper} ${lower} Z" fill="${color}" class="chart-band"><title>${escapeHtml(name)}</title></path>`;
+}
+
+// Draw the same monotone cubic the curve engine uses, so the line between grid points
+// shows the real curve shape. The cubic runs on the output curve (y + slope·x): the
+// adjustment view passes slope 1 because adjustment = output − input.
+function smoothPoints(points, slope = 0) {
+  const sorted = [...points].filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y)).sort((a, b) => a.x - b.x);
+  if (sorted.length < 3) return sorted;
+  const curve = monotoneCubic(sorted.map((point) => [point.x, point.y + slope * point.x]));
+  const samples = [];
+  const first = sorted[0].x;
+  const last = sorted.at(-1).x;
+  const steps = Math.max(40, Math.ceil(last - first));
+  for (let i = 0; i <= steps; i += 1) {
+    const x = first + ((last - first) * i) / steps;
+    samples.push({ x, y: curve(x) - slope * x });
+  }
+  return samples;
 }
 
 function path(points, xScale, yScale, color, className, name = "", dasharray = "") {

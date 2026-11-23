@@ -8,6 +8,10 @@ export const TRANSLATIONS = {
     "no_measurement_file_title": "没有测量文件？",
     "next_remeasure": "再测一次：导入复测数据",
     "next_step_prefix": "下一步：",
+    "next_remeasure_manual": "再测一次：输入复测数据",
+    "auto_ctv_notice": "这份文件只有 Lab 数据，已自动切换到 CTV 模式计算曲线；G7 灰平衡照常检查。",
+    "base_curve_on": "已叠加上一轮曲线（{time}）：结果是完整曲线，可直接替换 RIP 里的旧曲线。",
+    "base_curve_off": "未叠加上一轮曲线：按印版为线性计算。只有复测前已把 RIP 曲线恢复为线性时才这样用。",
     "more_hints_suffix": "等 {n} 条提示，见下方数据检查",
     "step_settings": "系统设置",
     "nav_acquisition": "测量数据",
@@ -670,6 +674,10 @@ export const TRANSLATIONS = {
     "no_measurement_file_title": "No measurement file?",
     "next_remeasure": "Measure again: import re-measurement",
     "next_step_prefix": "Next: ",
+    "next_remeasure_manual": "Measure again: enter re-measurement",
+    "auto_ctv_notice": "This file has Lab data only, so the curve mode was switched to CTV. G7 gray balance is still checked.",
+    "base_curve_on": "Stacked on the previous round's curve ({time}): this is the full curve and can replace the old curve in the RIP.",
+    "base_curve_off": "Not stacked: calculated as if the plates were linear. Use this only if the RIP curve was reset to linear before re-measuring.",
     "more_hints_suffix": "and {n} hints in total; see Data Check below",
     "step_settings": "System Settings",
     "nav_acquisition": "Measurements",
@@ -1328,6 +1336,8 @@ export const TRANSLATIONS = {
 let currentLang = "zh";
 
 const STATIC_TEXT_ZH_EN = {
+  "超出容差 / 建议补偿": "Out of tolerance / compensation recommended",
+  "中间调整体接近标准，但控制点超出容差；建议补偿后复测。": "Midtones are close to the standard, but control points are out of tolerance; compensate and re-measure.",
   "保存本次测量": "Save This Measurement",
   "清空记录": "Clear Records",
   "DIN / ISO-I / Status-E 暂未开放。": "DIN / ISO-I / Status-E are not available yet.",
@@ -1618,6 +1628,10 @@ const STATIC_TEXT_ZH_EN = {
   "C/Y 中间调同步偏大，且至少一个色组接近标准，优先检查印压、橡皮布、包衬和水墨平衡。": "C and Y midtones are both high while at least one unit is near target. Check impression, blanket, packing and ink/water balance first.",
   "不建议建立统一 CMYK 曲线；如需生产，先用按通道分别做的低强度补偿曲线。": "Do not build one shared CMYK curve; if you need to print, use low-strength curves made per channel.",
   "生产可补偿型 TVI": "TVI that production curves can correct",
+  "生产可补偿型 CTV": "CTV that production curves can correct",
+  "存在中等 CTV 偏差，可建立分色独立生产补偿曲线。": "Moderate CTV deviation: build separate production curves per channel.",
+  "CTV 偏差整体较小，建议轻补偿或保持当前曲线。": "CTV deviation is small overall; apply light compensation or keep the current curve.",
+  "全通道 CTV 严重偏离 / 建议先做机械全面检查": "Severe CTV on all channels / check the press first",
   "K 组中间调偏大，是第一优先补偿对象。": "K midtones are high and should be compensated first.",
   "存在中等 TVI 偏差，可建立分色独立生产补偿曲线。": "Moderate TVI deviation: build separate production curves per channel.",
   "建议补偿后重新印刷并复测，逐轮收敛。": "Print again after compensating and remeasure, converging run by run.",
@@ -2176,6 +2190,9 @@ function translateDynamicZhText(text) {
     if (output.includes(source)) output = output.split(source).join(target);
   }
   output = output
+    .replace(/([CMYK]) 中间调 (TVI|CTV) 偏差 ([+-]?[\d.]+)%，其余通道接近正常，优先排查该色组压力、橡皮布、墨量\/水量和测量点。/g, "$1 midtone $2 deviation $3%; other channels are near normal. Check this unit's pressure, blanket, ink/water and the measured patches first.")
+    .replace(/([CMYK]) (\d+)% (TVI|CTV) 偏差 ([+-]?[\d.]+)%，超出容差 ±([\d.]+)%。/g, "$1 $2% $3 deviation $4%, outside the ±$5% tolerance.")
+    .replace(/另有 (\d+) 个控制点超出容差。/g, "Control points also out of tolerance: $1.")
     .replace(/25\/50\/75 不完整: (.+?)。/g, (_, list) => `25/50/75 incomplete: ${list.replace(/([CMYK])缺([\d/]+)/g, "$1 missing $2").replace(/，/g, ", ")}.`)
     .replace(/无主要 G7 问题/g, "No main G7 issues")
     .replace(/主要问题无变化/g, "No main issue changes")
