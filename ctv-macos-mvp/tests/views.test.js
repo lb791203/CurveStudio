@@ -102,7 +102,8 @@ test("renderMeasurement shows unloaded file prompt and patch empty state", () =>
   const localEls = els();
   renderMeasurement(state({ importInfo: null }), localEls);
 
-  assert.match(localEls.measurementSummary.innerHTML, /未加载测量文件/);
+  assert.match(localEls.measurementSummary.innerHTML, /没有测量文件/);
+  assert.match(localEls.measurementSummary.innerHTML, /data-goto-view="manual"/);
   assert.match(localEls.measurementPatchPreview.innerHTML, /测量文件色块预览/);
   assert.match(localEls.measurementPatchPreview.innerHTML, /未加载测量文件/);
 });
@@ -122,7 +123,7 @@ test("renderMeasurement renders patch preview from imported raw rows", () => {
     measurements: [{ channel: "C", tone: 50 }],
   }), localEls);
 
-  assert.match(localEls.measurementSummary.innerHTML, /来源: CGATS/);
+  assert.match(localEls.measurementSummary.innerHTML, /CGATS · 可计算测点 1 \/ 2/);
   assert.match(localEls.measurementPatchPreview.innerHTML, /2 个色块/);
   assert.match(localEls.measurementPatchPreview.innerHTML, /对应色彩导表/);
   assert.match(localEls.measurementPatchPreview.innerHTML, /分类\/用途/);
