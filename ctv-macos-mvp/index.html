@@ -1105,7 +1105,7 @@
               <div class="update-card-left">
                 <span data-translate="update_status_version_label">当前版本</span>
                 <strong>CurveStudio 1.0.6</strong>
-                <p id="updateStatusText" class="update-status-text" data-translate="update_status_initial_text">当前为本地预览版本；在线更新服务尚未启用，市场版将走各应用市场更新机制。</p>
+                <p id="updateStatusText" class="update-status-text" data-translate="update_status_initial_text">在线自动更新尚未启用。新版本请到 GitHub Releases 页面下载安装；市场版将通过应用市场更新。</p>
               </div>
               <button id="checkUpdateButton" type="button" data-translate="btn_check_update">检查更新</button>
             </div>
@@ -1113,10 +1113,15 @@
               <article>
                 <span>1.0.6</span>
                 <strong data-translate="release_1_0_6_title">颜色计算与 G7 判定修正，移除第三方数据</strong>
-                <p data-translate="release_1_0_6_text">光谱 Lab 改用 ASTM E308 权重；补偿曲线改为反解实测响应；G7 灰阶改为相对纸白判定且只分合格/不合格；移除第三方与客户参考数据，示例改为自制或合成数据。</p>
+                <p data-translate="release_1_0_6_text">光谱 Lab 改用 ASTM E308 权重；补偿曲线改为反解实测响应；G7 灰阶改为相对纸白判定且只分合格/不合格；移除第三方与客户参考数据，示例改为自制或合成数据；界面优化：补偿曲线默认显示调整量视图，诊断页和 G7 总览先给结论，“欠补偿比例”改名为“补偿强度”。</p>
               </article>
               <article>
                 <span>1.0.5</span>
+                <strong data-translate="release_1_0_5_title">打包加固与审核报告布局优化</strong>
+                <p data-translate="release_1_0_5_text">固定 Tauri CLI 版本并加入 npm 锁文件，关闭全局 Tauri 接口并加入 CSP；桌面文件命令增加严格校验；在接入厂商 SDK 前屏蔽未完成的真实设备操作；优化客户审核报告的布局、打印和网点扩大容差带绘制；新增发布、桥接、SDK 与审核报告回归测试。</p>
+              </article>
+              <article>
+                <span>1.0.4</span>
                 <strong data-translate="release_1_0_4_title">产品中心中英文翻译及布局优化</strong>
                 <p data-translate="release_1_0_4_text">支持产品中心（帮助文档/更新说明/关于）在中英文切换时全量翻译；优化更新卡片布局并固定 modal 高度为 560px，彻底消除切换标签页时的高度抖动突兀感。</p>
               </article>
@@ -1159,7 +1164,7 @@
             </div>
             <div class="about-facts">
               <div><span data-translate="about_version">版本</span><strong>1.0.6</strong></div>
-              <div><span data-translate="about_build_date">构建日期</span><strong>2026-06-09</strong></div>
+              <div><span data-translate="about_build_date">构建日期</span><strong>2026-11-22</strong></div>
               <div><span data-translate="about_data_handling">数据处理</span><strong data-translate="about_data_handling_val">默认本地处理，不上传测量文件</strong></div>
               <div><span data-translate="about_capabilities">计算能力</span><strong data-translate="about_capabilities_val">TVI、CTV、G7、Status-T、ΔE、P2P51</strong></div>
             </div>
