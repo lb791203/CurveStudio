@@ -357,3 +357,28 @@ test("g7Preview blocks reference-only imports", () => {
   assert.equal(g7.npdcRows.length, 0);
   assert.ok(g7.missing[0].includes("标准/目标参考文件"));
 });
+
+test("diagnosePress does not pass a press whose control points exceed the standard tolerance", () => {
+  const rows = ["C", "M", "Y", "K"].flatMap((channel) => [25, 40, 50, 60, 75].map((tone) => ({
+    channel,
+    tone,
+    tviDelta: channel === "K" && tone === 25 ? 7 : channel === "K" && tone === 50 ? 5 : 1,
+  })));
+  const toneTolerances = Object.fromEntries(["C", "M", "Y", "K"].map((channel) => [channel, { tvi: { 25: 3, 50: 4, 75: 3 } }]));
+  const withoutTolerance = diagnosePress(rows);
+  assert.equal(withoutTolerance.level, "pass");
+  const diagnosis = diagnosePress(rows, { toneTolerances, metric: "tvi" });
+  assert.equal(diagnosis.level, "warning");
+  assert.match(diagnosis.title, /超出容差/);
+  assert.equal(diagnosis.toleranceIssues.length, 2);
+  assert.match(diagnosis.messages[0], /K 25% TVI 偏差 \+7\.0%，超出容差 ±3%/);
+  assert.equal(diagnosePress(rows, { toneTolerances, metric: null }).level, "pass");
+});
+
+test("diagnosePress speaks CTV in CTV mode", () => {
+  const rows = ["C", "M", "Y", "K"].flatMap((channel) => [25, 50, 75].map((tone) => ({ channel, tone, tviDelta: 0.5 })));
+  const ctv = diagnosePress(rows, { metric: "ctv" });
+  assert.ok(ctv.messages.every((text) => !/\bTVI\b/.test(text)));
+  const tvi = diagnosePress(rows, { metric: "tvi" });
+  assert.ok(tvi.messages.some((text) => /\bTVI\b/.test(text)));
+});

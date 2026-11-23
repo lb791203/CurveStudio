@@ -104,7 +104,7 @@ function buildMissingMessages({ coverageRows, measurements, usable, rawClasses, 
     messages.push("CTV 模式需要纸白、实地和阶调 Lab/XYZ；当前没有可用 CTV 色度阶调。");
   }
   if (!labCount) messages.push("没有 Lab 数据，不能做 ΔE、SCCA 或完整 G7 灰平衡校验。");
-  if (!densityCount && !measurements.some((row) => Number.isFinite(row.measuredTone) || Number.isFinite(row.measuredTvi))) {
+  if (mode !== "ctv" && !densityCount && !measurements.some((row) => Number.isFinite(row.measuredTone) || Number.isFinite(row.measuredTvi))) {
     messages.push("没有密度或实测网点，不能做 TVI 曲线计算。");
   }
   return { messages, notes };

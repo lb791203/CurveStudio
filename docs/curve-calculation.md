@@ -66,6 +66,27 @@ x = x1 + (yt - y1) * (x2 - x1) / (y2 - y1)
 
 This avoids overly aggressive correction and reduces the risk of tone discontinuity.
 
+The correction itself is computed only at measured tones. The output grid between them
+(0, 5, 10, 20, ... 100) is filled with a monotone cubic (Fritsch-Carlson) through the
+corrected control points and the 0/100 anchors. The curve passes exactly through every
+measured correction, bends smoothly instead of kinking at 25/50/75, never overshoots, and
+stays monotone. Correction direction is enforced only at measured points; grid points
+between them take their direction from the smooth curve.
+
+The smoothing slider only acts on closely spaced measurements (no more than 30% apart).
+With sparse 25/50/75 data, neighbour averaging would wash out the midtone correction.
+
+## Re-measurement rounds
+
+A verification sheet is printed through the curve from the previous round, so its measured
+response already includes that curve. The curve calculated from it is an increment on top
+of the previous curve. CurveStudio composes the two: plate value = previous(increment(tone)),
+so the exported table is the complete curve and replaces the old one in the RIP.
+
+The previous curve is taken from the newest saved run with the same customer and press and
+a different measurement. Untick "stacked on the previous round's curve" if the RIP curve
+was reset to linear before the verification sheet was printed.
+
 ## Example correction
 
 If a 50% nominal tone prints as 73.2%, and the target printed tone for that control point is lower, the correction should not blindly reduce the input by the full TVI difference. Instead, CurveStudio should find the input value on the measured response curve that would produce the target printed value.
@@ -86,8 +107,6 @@ Recommended production controls:
 
 CurveStudio should eventually support:
 
-- Linear interpolation
-- Smooth curve fitting
 - Manual control-point locking
 - Maximum correction limits
 - Channel-specific smoothing
