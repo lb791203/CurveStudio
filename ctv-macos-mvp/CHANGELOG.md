@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.0.7 - 2026-11-23
 
+- Workflow: the app is organized in four numbered steps — 1 Measurements (file import, manual entry), 2 Reference Standard, 3 Analyze & Correct (diagnosis, compensation curve, G7, curve export), 4 Re-measure & Verify (run comparison, verification report) — with a next-step button in each step header. Section subtitles, import notes, export descriptions and developer notes were removed or folded away, cutting the visible helper text on the import and export pages by about 80–97%. Smoothing and per-point limit moved under Advanced, and the unfinished instrument tab is hidden.
 - CTV now follows ISO 20654:2017 formula (1): the distance is taken in Vx/Vy/Vz (from Lab: Vx = L* + 116a*/500, Vy = L*, Vz = L* − 116b*/200) instead of the plain L*a*b* distance. Magenta is affected most; on the demo P2P sheet M 50% reads 58.1 instead of 55.1.
 - Re-measurement rounds now stack on the previous round's curve (newest saved run for the same customer and press). The exported curve is the complete curve and can replace the old one in the RIP. A checkbox on the compensation curve page turns stacking off for plates that were reset to linear.
 - Curves between measured points use a monotone cubic instead of straight segments, so the exported table and the chart bend smoothly through 25/50/75 without overshoot. Correction direction is forced only at measured points, which removes flat spots and kinks (e.g. Y 5–20% stuck at 0).
@@ -10,6 +11,7 @@
 - CTV mode diagnoses speak CTV instead of TVI. Lab-only files (typical G7 P2P sheets) switch to CTV automatically so step 3 can build a curve; the G7 gray balance check is unchanged.
 - Workflow: applying a manual table goes to step 2 (reference standard); "Measure again" returns to manual entry when the data was typed in.
 - Run comparison and job cards hide G7 and ΔE rows when the job has no G7 or Lab data.
+- Product Center: Check for Updates no longer shows a stale "1.0.3" version, the update text no longer calls the app a preview build, the 1.0.5 release card shows the 1.0.5 notes again (1.0.4 is back too), and the About build date matches the release.
 
 ## 1.0.6 - 2026-11-22
 
