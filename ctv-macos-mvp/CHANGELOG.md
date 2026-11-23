@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- CTV now follows ISO 20654:2017 formula (1): the distance is taken in Vx/Vy/Vz (from Lab: Vx = L* + 116a*/500, Vy = L*, Vz = L* − 116b*/200) instead of the plain L*a*b* distance. Magenta is affected most; on the demo P2P sheet M 50% reads 58.1 instead of 55.1.
 - Re-measurement rounds now stack on the previous round's curve (newest saved run for the same customer and press). The exported curve is the complete curve and can replace the old one in the RIP. A checkbox on the compensation curve page turns stacking off for plates that were reset to linear.
 - Curves between measured points use a monotone cubic instead of straight segments, so the exported table and the chart bend smoothly through 25/50/75 without overshoot. Correction direction is forced only at measured points, which removes flat spots and kinks (e.g. Y 5–20% stuck at 0).
 - Smoothing no longer averages sparse control points (more than 30% apart); with 25/50/75 data it washed out the midtone correction.
