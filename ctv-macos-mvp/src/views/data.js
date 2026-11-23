@@ -565,8 +565,6 @@ function renderPatchPreview(state) {
 
 export function renderMeasurement(state, els) {
   const rawRows = state.importInfo?.rawRows?.length || 0;
-  const warnings = visibleWarnings(state, els);
-  const translatedWarnings = warnings.map(translateDynamicText);
   const health = manualHealth(state.manualRows || []);
   const audit = inspectImport({
     importInfo: state.importInfo,
@@ -581,21 +579,21 @@ export function renderMeasurement(state, els) {
       : state.importInfo
         ? t("measurement_status_insufficient", "数据不足")
         : t("measurement_status_empty", "未导入");
-  if (!state.importInfo && !state.measurements.length && !(state.manualRows || []).length) {
+  const auditMessages = (audit.messages || []).map(translateDynamicText);
+  const hasMeasurementData = Boolean(state.importInfo || state.measurements.length || (state.manualRows || []).length);
+  const details = globalThis.document?.getElementById?.("measurementDetails");
+  if (details) details.hidden = !hasMeasurementData;
+  if (!hasMeasurementData) {
     els.measurementSummary.innerHTML = `
-      <strong>${escapeHtml(t("file_import_status_title", "文件导入状态"))}</strong>
-      <div class="empty-state compact-empty">
-        <strong>${escapeHtml(t("no_measurement_file_loaded", "未加载测量文件"))}</strong>
-        <p>${escapeHtml(t("file_import_empty_help", "选择 CGATS / IT8 / P2P / CSV / JSON 测量文件后自动解析。"))}</p>
-      </div>
+      <strong>${escapeHtml(t("no_measurement_file_title", "没有测量文件？"))}</strong>
+      <p>${escapeHtml(t("manual_entry_offer", "也可以直接手动输入 CMYK 25/50/75 和实地数据。"))}</p>
+      <button type="button" class="secondary-action" data-goto-view="manual">${escapeHtml(t("btn_manual_entry", "手动输入"))}</button>
     `;
   } else {
     els.measurementSummary.innerHTML = `
-      <strong>${escapeHtml(t("file_import_status_title", "文件导入状态"))}</strong>
-      <p>${escapeHtml(t("status_label", "状态"))}: ${escapeHtml(status)}</p>
-      <p>${escapeHtml(t("source_label", "来源"))}: ${escapeHtml(state.importInfo?.sourceFormat || t("manual_entry_label", "手动录入"))}</p>
-      <p>${escapeHtml(t("raw_patches_rows_label", "原始色块/行"))} ${rawRows} / ${escapeHtml(t("usable_measurements_label", "可计算测点"))} ${state.measurements.length}</p>
-      <p>${escapeHtml(t("hint_label", "提示"))}: ${translatedWarnings.length ? escapeHtml(translatedWarnings.join(" / ")) : escapeHtml(t("none_label", "无"))}</p>
+      <strong>${escapeHtml(status)}</strong>
+      <p>${escapeHtml(state.importInfo?.sourceFormat || t("manual_entry_label", "手动录入"))} · ${escapeHtml(t("usable_measurements_label", "可计算测点"))} ${state.measurements.length}${rawRows && rawRows !== state.measurements.length ? ` / ${rawRows}` : ""}</p>
+      ${auditMessages.length ? `<p class="measurement-warning">${escapeHtml(auditMessages[0])}${auditMessages.length > 1 ? ` ${escapeHtml(t("more_hints_suffix", "等 {n} 条提示，见下方数据检查").replace("{n}", auditMessages.length))}` : ""}</p>` : ""}
     `;
   }
   if (els.measurementPatchPreview) els.measurementPatchPreview.innerHTML = renderPatchPreview(state);

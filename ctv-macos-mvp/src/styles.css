@@ -5212,3 +5212,155 @@ body.dark-theme .verdict-banner { background: #0f172a; }
 body.dark-theme .verdict-answer,
 body.dark-theme .verdict-next { color: #f8fafc; }
 body.dark-theme .verdict-reasons { color: #cbd5e1; }
+
+/* Workflow simplification: numbered steps, next-step action, folded details */
+[hidden] {
+  display: none !important;
+}
+
+.nav-step-num {
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  width: 22px;
+  height: 22px;
+}
+
+.nav-button.active .nav-step-num {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.nav-button.nav-secondary {
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  padding-top: 10px;
+  color: var(--text-muted);
+}
+
+.step-indicator-row .next-step-button {
+  order: 3;
+  margin-left: auto;
+  min-height: 34px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 8px;
+  background: #0f766e;
+  color: #ffffff;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.step-indicator-row .next-step-button::after {
+  content: " →";
+}
+
+.step-indicator-row .next-step-button:disabled {
+  background: #cbd5e1;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.step-indicator-row .sub-nav {
+  order: 2;
+}
+
+.sidebar .advanced-settings {
+  display: grid;
+  gap: 10px;
+  margin: 2px 0 6px;
+}
+
+.sidebar .advanced-settings summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.sidebar .advanced-settings[open] summary {
+  margin-bottom: 4px;
+}
+
+.file-drop {
+  min-height: 120px;
+  align-content: center;
+  gap: 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.file-drop-formats {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.measurement-status-card .measurement-warning {
+  color: #b45309;
+}
+
+.measurement-status-card button {
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.measurement-details,
+.export-details {
+  margin-top: 14px;
+}
+
+.measurement-details > summary,
+.export-details > summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 0;
+}
+
+.measurement-details[open] > .summary-box {
+  margin-top: 10px;
+}
+
+body.dark-theme .nav-step-num {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+
+body.dark-theme .nav-button.active .nav-step-num {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+.export-clean-grid {
+  align-items: start;
+}
+
+.export-clean-grid .export-group-card {
+  min-height: 0;
+}
+
+.run-compare-first {
+  margin: 4px 0 12px;
+}
+
+.job-info-details {
+  margin-bottom: 12px;
+}
+
+.job-info-details > summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 0;
+}
+
+.job-info-details[open] > .job-grid {
+  margin-top: 8px;
+}
