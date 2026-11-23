@@ -161,7 +161,7 @@ export function renderRuns(state, els) {
         </article>
       `),
       ].join("")
-      : `<p class="empty-run-list">${escapeHtml(t("empty_run_list_help", "保存 Run 后，这里会形成作业列表；每个作业下面可以保留多次 Run。"))}</p>`;
+      : "";
   }
   els.runBody.innerHTML = visibleItems.length
     ? visibleItems.map(({ run, index }) => `

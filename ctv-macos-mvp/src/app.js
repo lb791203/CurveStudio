@@ -364,6 +364,10 @@ function attachEvents() {
     }
   });
 
+  document.getElementById("nextStepButton")?.addEventListener("click", (event) => {
+    const target = event.currentTarget.dataset.target;
+    if (target) switchView(target);
+  });
   document.querySelectorAll("[data-step-button]").forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.stepButton));
   });
@@ -515,7 +519,7 @@ function attachEvents() {
   els.manualBody.addEventListener("click", deleteManualRow);
   els.manualBody.addEventListener("paste", pasteManualTable);
   els.resultBody.addEventListener("change", updateCurveOverride);
-  els.diagnosisCards?.addEventListener("click", (event) => {
+  document.querySelector(".workspace")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-goto-view]");
     if (button) switchView(button.dataset.gotoView);
   });
@@ -1496,6 +1500,7 @@ function render() {
   renderReport(state, els);
   renderSettings(state, els);
   updateDomTranslations(getLanguage());
+  updateNextStepButton();
 }
 
 function renderShell() {
@@ -1723,50 +1728,83 @@ function confirmDataOverwrite(message) {
 }
 
 const viewToStepMap = {
-  job: "acquisition",
-  standard: "setup",
-  settings: "setup",
   measurement: "acquisition",
   manual: "acquisition",
   instrument: "acquisition",
+  standard: "setup",
   analyze: "diagnose",
+  curve: "diagnose",
   g7: "diagnose",
-  curve: "curves",
+  export: "diagnose",
+  job: "delivery",
   report: "delivery",
-  export: "delivery"
+  settings: "settings"
 };
 
 const stepDefaultViewMap = {
-  setup: "standard",
   acquisition: "measurement",
+  setup: "standard",
   diagnose: "analyze",
-  curves: "curve",
-  delivery: "report"
+  delivery: "job",
+  settings: "settings"
 };
+
+const STEP_ORDER = ["acquisition", "setup", "diagnose", "delivery"];
+
+function stepTitle(step) {
+  const names = {
+    acquisition: t("step_acquisition", "第 1 步：测量数据"),
+    setup: t("step_setup", "第 2 步：参考标准"),
+    diagnose: t("step_diagnose", "第 3 步：分析修正"),
+    delivery: t("step_delivery", "第 4 步：复测验证"),
+    settings: t("step_settings", "系统设置")
+  };
+  return names[step] || "";
+}
+
+function updateNextStepButton() {
+  const button = document.getElementById("nextStepButton");
+  if (!button) return;
+  const step = viewToStepMap[state.activeView] || "acquisition";
+  const position = STEP_ORDER.indexOf(step);
+  if (position < 0) {
+    button.hidden = true;
+    return;
+  }
+  button.hidden = false;
+  if (step === "delivery") {
+    button.textContent = t("next_remeasure", "再测一次：导入复测数据");
+    button.dataset.target = "measurement";
+    button.disabled = false;
+    return;
+  }
+  const next = STEP_ORDER[position + 1];
+  const navLabel = {
+    setup: t("nav_setup", "参考标准"),
+    diagnose: t("nav_diagnose", "分析修正"),
+    delivery: t("nav_delivery", "复测验证")
+  }[next];
+  button.textContent = `${t("next_step_prefix", "下一步：")}${navLabel}`;
+  button.dataset.target = next;
+  button.disabled = step === "acquisition" && !state.measurements.length;
+}
 
 function switchView(view) {
   if (stepDefaultViewMap[view]) {
     view = stepDefaultViewMap[view];
   }
   
-  const step = viewToStepMap[view] || "setup";
+  const step = viewToStepMap[view] || "acquisition";
   state.activeView = view;
-  
+
   const appShell = document.querySelector(".app-shell");
   if (appShell) {
     appShell.setAttribute("data-active-step", step);
   }
 
-  const stepNames = {
-    setup: t("step_setup", "标准设置"),
-    acquisition: t("step_acquisition", "第 1 步：导入测量"),
-    diagnose: t("step_diagnose", "第 2 步：分析诊断"),
-    curves: t("step_curves", "第 3 步：生成曲线"),
-    delivery: t("step_delivery", "第 4 步：验证报告")
-  };
   const stepIndicator = document.getElementById("currentStepName");
   if (stepIndicator) {
-    stepIndicator.textContent = stepNames[step] || "";
+    stepIndicator.textContent = stepTitle(step);
   }
 
   document.querySelectorAll("[data-view]").forEach((item) => {
@@ -1784,6 +1822,7 @@ function switchView(view) {
   if (view === "report") _renderReport(state, els);
   if (view === "export") _renderExport(state, els);
   if (els.workflowContextToolbar) els.workflowContextToolbar.hidden = true;
+  updateNextStepButton();
 }
 
 function saveRun() {

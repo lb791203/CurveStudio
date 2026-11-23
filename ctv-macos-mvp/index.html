@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CurveStudio</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f766e'/%3E%3Cpath d='M12 44c12 0 10-24 22-24s10 24 18 24' fill='none' stroke='white' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./src/styles.css?v=20260705-audit-report" />
+    <link rel="stylesheet" href="./src/styles.css?v=20261123-flow" />
   </head>
   <body>
     <main class="app-shell" data-active-step="acquisition">
@@ -29,11 +29,11 @@
         </div>
 
         <nav class="nav-list" aria-label="主要页面">
-          <button class="nav-button active" type="button" data-step-button="acquisition" data-translate="nav_acquisition"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line><circle cx="12" cy="12" r="3"></circle></svg></span>导入测量</button>
-          <button class="nav-button" type="button" data-step-button="setup" data-translate="nav_setup"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>标准设置</button>
-          <button class="nav-button" type="button" data-step-button="diagnose" data-translate="nav_diagnose"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line><path d="M3 20h18"></path></svg></span>分析诊断</button>
-          <button class="nav-button" type="button" data-step-button="curves" data-translate="nav_curves"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"></path><circle cx="18.7" cy="8" r="1.5" fill="currentColor"></circle><circle cx="13.6" cy="13.2" r="1.5" fill="currentColor"></circle><circle cx="10.8" cy="10.5" r="1.5" fill="currentColor"></circle></svg></span>生成曲线</button>
-          <button class="nav-button" type="button" data-step-button="delivery" data-translate="nav_delivery"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></span>验证报告</button>
+          <button class="nav-button active" type="button" data-step-button="acquisition" data-translate="nav_acquisition"><span class="nav-icon nav-step-num">1</span>测量数据</button>
+          <button class="nav-button" type="button" data-step-button="setup" data-translate="nav_setup"><span class="nav-icon nav-step-num">2</span>参考标准</button>
+          <button class="nav-button" type="button" data-step-button="diagnose" data-translate="nav_diagnose"><span class="nav-icon nav-step-num">3</span>分析修正</button>
+          <button class="nav-button" type="button" data-step-button="delivery" data-translate="nav_delivery"><span class="nav-icon nav-step-num">4</span>复测验证</button>
+          <button class="nav-button nav-secondary" type="button" data-step-button="settings" data-translate="subnav_settings"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>系统设置</button>
         </nav>
 
         <section class="panel control-panel-widget">
@@ -52,6 +52,13 @@
             <select id="targetSelect"></select>
           </label>
           <label>
+            补偿强度 %
+            <input id="ratioInput" type="number" min="0" max="100" step="5" value="50" aria-describedby="ratioHint" />
+            <small id="ratioHint" class="field-hint">首次上机建议 40–60%</small>
+          </label>
+          <details class="advanced-settings">
+            <summary>高级</summary>
+          <label>
             平滑强度
             <span class="range-row">
               <input id="smoothInput" type="range" min="0" max="4" step="1" value="2" />
@@ -62,12 +69,8 @@
             单点最大修正
             <input id="limitInput" type="number" min="1" max="40" step="1" value="18" />
           </label>
-          <label>
-            补偿强度 %
-            <input id="ratioInput" type="number" min="0" max="100" step="5" value="50" aria-describedby="ratioHint" />
-            <small id="ratioHint" class="field-hint">100% 一次补满全部偏差。首次上机建议 40–60%，先看复测结果再加，避免补过头；系统会按诊断结果自动给出建议值。</small>
-          </label>
-          <button id="calculateButton" type="button">计算补偿曲线</button>
+          </details>
+          <button id="calculateButton" type="button" hidden>计算补偿曲线</button>
           <p id="ctvModeWarning" class="ctv-warning" hidden></p>
         </section>
       </aside>
@@ -75,29 +78,19 @@
       <section class="workspace">
         <header class="workspace-header">
           <div class="step-indicator-row">
-            <span class="step-badge" id="currentStepName">第 1 步：导入测量</span>
+            <span class="step-badge" id="currentStepName">第 1 步：测量数据</span>
             <div class="sub-nav" id="subNavBar">
-              <!-- Acquisition Sub-tabs -->
               <button class="sub-nav-button active" type="button" data-sub-view-button="measurement" data-parent-step="acquisition" data-translate="subnav_file_import">文件导入</button>
-              <button class="sub-nav-button" type="button" data-sub-view-button="job" data-parent-step="acquisition" data-translate="subnav_job">项目记录</button>
-              <button class="sub-nav-button" type="button" data-sub-view-button="manual" data-parent-step="acquisition" data-translate="subnav_manual">手动测量</button>
-              <button class="sub-nav-button" type="button" data-sub-view-button="instrument" data-parent-step="acquisition" data-translate="subnav_instrument">仪器测量</button>
-
-              <!-- Setup Sub-tabs -->
-              <button class="sub-nav-button" type="button" data-sub-view-button="standard" data-parent-step="setup" data-translate="subnav_standard">印刷标准</button>
-              <button class="sub-nav-button" type="button" data-sub-view-button="settings" data-parent-step="setup" data-translate="subnav_settings">系统设置</button>
-
-              <!-- Diagnose Sub-tabs -->
+              <button class="sub-nav-button" type="button" data-sub-view-button="manual" data-parent-step="acquisition" data-translate="subnav_manual">手动输入</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="instrument" data-parent-step="acquisition" data-translate="subnav_instrument" hidden>仪器测量</button>
               <button class="sub-nav-button" type="button" data-sub-view-button="analyze" data-parent-step="diagnose" data-translate="subnav_diagnose">印刷诊断</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="curve" data-parent-step="diagnose" data-translate="subnav_curve">补偿曲线</button>
               <button class="sub-nav-button" type="button" data-sub-view-button="g7" data-parent-step="diagnose" data-translate="subnav_g7">G7 灰平衡</button>
-
-              <!-- Curves Sub-tabs -->
-              <button class="sub-nav-button" type="button" data-sub-view-button="curve" data-parent-step="curves" data-translate="subnav_curve">补偿生成</button>
-
-              <!-- Delivery Sub-tabs -->
-              <button class="sub-nav-button" type="button" data-sub-view-button="report" data-parent-step="delivery" data-translate="subnav_report">客户/验厂报告</button>
-              <button class="sub-nav-button" type="button" data-sub-view-button="export" data-parent-step="delivery" data-translate="subnav_export">数据导出</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="export" data-parent-step="diagnose" data-translate="subnav_export">导出曲线</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="job" data-parent-step="delivery" data-translate="subnav_job">复测对比</button>
+              <button class="sub-nav-button" type="button" data-sub-view-button="report" data-parent-step="delivery" data-translate="subnav_report">验证报告</button>
             </div>
+            <button id="nextStepButton" class="next-step-button" type="button" hidden></button>
           </div>
           <div class="toolbar workflow-context-toolbar" id="workflowContextToolbar" hidden>
             <div>
@@ -112,14 +105,16 @@
           <section class="panel wide-panel">
             <div class="table-title">
               <div>
-                <h2>Job / Run 项目记录</h2>
-                <span>导入会自动保存 Run；这里用于找回历史测量、复测对比和作业归档。</span>
+                <h2>项目记录</h2>
               </div>
               <div class="inline-actions">
-                <button id="saveRunButton" type="button">保存当前作业 / Run</button>
-                <button id="clearRunsButton" type="button">清空当前 Run</button>
+                <button id="saveRunButton" type="button">保存本次测量</button>
+                <button id="clearRunsButton" type="button">清空记录</button>
               </div>
             </div>
+            <div class="summary-box run-compare-first" id="runCompareSummary"></div>
+            <details class="job-info-details">
+              <summary>作业信息</summary>
             <div class="job-grid">
               <label>客户<input id="jobCustomerInput" type="text" value="现场客户" /></label>
               <label>机器<input id="jobPressInput" type="text" value="KBA" /></label>
@@ -128,6 +123,7 @@
               <label>操作员<input id="jobOperatorInput" type="text" value="" /></label>
               <label>备注<input id="jobNoteInput" type="text" value="" /></label>
             </div>
+            </details>
             <div class="job-run-list" id="jobRunList"></div>
             <div class="table-wrap compact">
               <table>
@@ -150,7 +146,6 @@
                 <tbody id="runBody"></tbody>
               </table>
             </div>
-            <div class="summary-box" id="runCompareSummary"></div>
           </section>
         </section>
 
@@ -158,8 +153,7 @@
           <section class="panel wide-panel">
             <div class="table-title standard-library-title">
               <div>
-                <h2>Standard Library</h2>
-                <span>选择印刷标准，查看 TVI 目标和 Lab 参考色块；可导入 ICC 作为颜色参考。</span>
+                <h2>印刷标准</h2>
               </div>
               <div class="standard-action-toolbar" aria-label="标准库操作">
                 <button id="saveCustomStandardButton" type="button">新建</button>
@@ -270,8 +264,7 @@
           <section class="panel wide-panel">
             <div class="table-title">
               <div>
-                <h2>Measurement 数据采集</h2>
-                <span>选择测量文件后自动解析，并检查导表、Lab、密度与可计算曲线点。</span>
+                <h2>测量文件</h2>
               </div>
               <div class="inline-actions dev-sample-actions" hidden>
                 <select id="sampleSelect">
@@ -292,16 +285,19 @@
                   <label class="file-drop">
                     <input id="fileInput" type="file" accept=".csv,.txt,.cgats,.it8,.rwxf,.cxf,.json,.icc,.icm" />
                     <span data-translate="measurement_file_select">选择测量文件</span>
+                    <small class="file-drop-formats">CGATS · IT8 · P2P · CSV · JSON</small>
                   </label>
                   <button id="desktopOpenFileButton" type="button" hidden>桌面打开文件</button>
                   <textarea id="rawInput" spellcheck="false" hidden placeholder="高级调试：粘贴 CSV/CGATS 原始文本。"></textarea>
                   <button id="parseButton" type="button" hidden>解析文本数据</button>
-                  <p class="measurement-import-note" data-translate="measurement_import_note">导入成功后会自动保存为一份 Run；当前工作区显示最新测量，上一份可在「项目记录」中找回对比。</p>
                 </div>
                 <div class="summary-box measurement-status-card" id="measurementSummary"></div>
               </div>
-              <div class="summary-box measurement-audit-panel" id="importAuditSummary"></div>
-              <div class="summary-box patch-preview-panel" id="measurementPatchPreview"></div>
+              <details class="measurement-details" id="measurementDetails" hidden>
+                <summary>数据检查与色块预览</summary>
+                <div class="summary-box measurement-audit-panel" id="importAuditSummary"></div>
+                <div class="summary-box patch-preview-panel" id="measurementPatchPreview"></div>
+              </details>
             </div>
           </section>
         </section>
@@ -548,7 +544,6 @@
             <div class="table-title">
               <div>
                 <h2>补偿模拟验证</h2>
-                <span>网点扩张视角检查当前、目标与补偿后模拟；用于复测前判断方向，不替代第二次实测。</span>
               </div>
             </div>
             <div class="summary-box" id="compensationSimulationSummary"></div>
@@ -576,7 +571,7 @@
           <section class="panel wide-panel">
             <div class="table-title">
               <h2>曲线安全检查</h2>
-              <span>单调性、相邻跳变、高光/暗调保护</span>
+              
             </div>
             <div id="safetySummary" class="summary-box"></div>
           </section>
@@ -587,7 +582,6 @@
             <div class="table-title">
               <div>
                 <h2>G7 验证</h2>
-                <span>按 G7 wΔL* / wΔCh 容差检查 NPDC、灰平衡与 Lab 色差。</span>
               </div>
               <div class="inline-actions">
                 <button id="runG7Button" type="button">运行 G7 校验</button>
@@ -666,7 +660,7 @@
               <div class="table-title">
                 <div>
                   <h2>G7 补偿建议预览</h2>
-                  <span>以 TVI/CTV 曲线为生产基础；K NPDC 和 CMY 灰平衡只做 G7 修正参考。</span>
+                  <span>以 TVI/CTV 曲线为主，G7 修正仅供参考。</span>
                 </div>
               </div>
               <div id="g7CompensationSummary" class="summary-box"></div>
@@ -730,7 +724,7 @@
               </section>
             </section>
             <section class="panel" id="g7ColorspaceSection" data-g7-panel="details">
-              <div class="table-title"><h2>G7 色彩空间合规 (认证级)</h2></div>
+              <div class="table-title"><h2>G7 色彩空间检查</h2></div>
               <div class="table-wrap">
                 <table>
                   <thead>
@@ -750,17 +744,10 @@
 
         <section class="view" data-view="export">
           <section class="panel wide-panel">
-            <div class="table-title">
-              <div>
-                <h2>Export 导出</h2>
-                <span>导出字段必须记录标准、算法、补偿强度和生成时间。</span>
-              </div>
-            </div>
             <div class="export-group-grid export-clean-grid">
               <section class="export-group-card export-primary-card">
                 <div>
                   <h3 data-translate="export_group_rip_title">RIP 曲线</h3>
-                  <p data-translate="export_group_rip_help">给 RIP 导入的主曲线文件，包含输入/输出网点和生成上下文。</p>
                 </div>
                 <button id="exportPrinergyButton" class="export-primary-action" type="button" data-translate="btn_export_prinergy">导出 RIP 导入 CSV</button>
                 <details class="export-more-formats">
@@ -775,7 +762,6 @@
               <section class="export-group-card export-primary-card">
                 <div>
                   <h3 data-translate="export_group_report_title">G7 / 验证报告</h3>
-                  <p data-translate="export_group_report_help">给复盘、留档和第三方软件交换的验证结果。</p>
                 </div>
                 <button id="exportG7JsonButton" class="export-primary-action" type="button" data-translate="btn_export_g7_json">导出 G7 报告 JSON</button>
                 <details class="export-more-formats">
@@ -789,7 +775,6 @@
               <section class="export-group-card export-primary-card">
                 <div>
                   <h3 data-translate="export_group_archive_title">项目档案</h3>
-                  <p data-translate="export_group_archive_help">保存当前项目状态，方便以后恢复、复测和对比。</p>
                 </div>
                 <button id="exportJsonButton" class="export-primary-action" type="button" data-translate="btn_export_json_project">导出当前项目档案</button>
                 <details class="export-more-formats">
@@ -803,7 +788,6 @@
               <section class="export-group-card export-primary-card export-group-card-icc">
                 <div>
                   <h3 data-translate="export_group_icc_title">测量数据 / ICC</h3>
-                  <p data-translate="export_group_icc_help">导出最新 Run 的测量数据；复测通过后可生成实验 ICC 草稿。</p>
                 </div>
                 <button id="exportIccReferenceButton" class="export-primary-action" type="button" data-translate="btn_export_cgats_ref">导出 CGATS 测量数据</button>
                 <details class="export-more-formats">
@@ -814,7 +798,10 @@
                 </details>
               </section>
             </div>
-            <div class="summary-box" id="exportSummary"></div>
+            <details class="export-details">
+              <summary>导出信息</summary>
+              <div class="summary-box" id="exportSummary"></div>
+            </details>
           </section>
         </section>
 
@@ -878,12 +865,6 @@
 
         <section class="view" data-view="settings">
           <section class="panel wide-panel">
-            <div class="table-title">
-              <div>
-                <h2>Settings / Device / Packaging</h2>
-                <span>设备和桌面打包先建立接口与状态，不假装 SDK 已接入。</span>
-              </div>
-            </div>
             <div class="settings-grid">
               <div class="summary-box span-card">
                 <div class="settings-card-header">
@@ -923,7 +904,6 @@
               </div>
               <div class="summary-box">
                 <strong>色度分析容差 / ΔE / SCCA</strong>
-                <p>a*b* 色度图、Lab 表、G7 预检和 ICC 门禁共用这些容差。</p>
                 <div class="settings-form-grid two-col">
                   <label class="field-label">
                     内圈容差 ΔE（Warning）
@@ -949,7 +929,6 @@
                     <span>默认启用 SCCA 纸白校正</span>
                   </label>
                 </div>
-                <p>ΔE 公式、内外圈容差和 SCCA 会立即参与 Lab 状态、G7 色彩空间检查、报告和 ICC 生成闸门。</p>
               </div>
               <div class="summary-box">
                 <strong>测量条件默认值</strong>
@@ -979,7 +958,6 @@
                     </select>
                   </label>
                 </div>
-                <p>导出和 Run 档案会记录这些条件；文件内已有 M0/M1/M2 时优先使用文件记录。</p>
               </div>
               <div class="summary-box">
                 <strong>光谱密度</strong>
@@ -994,7 +972,7 @@
                     <option value="status_e" disabled>ISO_E — ISO 13655 E 条件（待厂商样本验证）</option>
                   </select>
                 </label>
-                <p>Status-T 已接入 Murray-Davies TVI；None 会禁用光谱密度换算。DIN / ISO-I / Status-E 暂不开放，避免误出未验证报告。</p>
+                <p>DIN / ISO-I / Status-E 暂未开放。</p>
               </div>
               <div class="summary-box">
                 <strong>仪器 / 测量队列</strong>
@@ -1011,7 +989,6 @@
                     </select>
                   </label>
                 </div>
-                <p>真实 SDK 未接入前，推荐默认使用文件导入；模拟设备只用于流程演示。</p>
               </div>
               <div class="summary-box">
                 <strong>ICC / 复测门禁</strong>
@@ -1019,15 +996,13 @@
                   <input id="settingsRequireG7Input" type="checkbox" checked />
                   <span>生成 ICC 前要求 G7 校验通过</span>
                 </label>
-                <p>关闭后仍会检查复测 Run、Lab、特性化色块和曲线质量，但不把 G7 作为硬性阻断项。</p>
               </div>
-              <div class="summary-box">
+              <div class="summary-box" hidden>
                 <strong>桌面 App</strong>
                 <div id="desktopSummary"></div>
               </div>
               <div class="summary-box product-settings-card">
                 <strong>软件维护</strong>
-                <p>版本、帮助文档和更新说明集中管理；计算算法变化会在更新说明中单独列出。</p>
                 <div class="product-version-row">
                   <span>当前版本</span>
                   <strong>1.0.6</strong>
@@ -1039,10 +1014,6 @@
                   <button id="settingsHelpButton" class="secondary-action" type="button" data-translate="btn_help_docs">帮助文档</button>
                   <button id="settingsAboutButton" class="secondary-action" type="button" data-translate="btn_about">关于</button>
                 </div>
-              </div>
-              <div class="summary-box">
-                <strong>当前限制</strong>
-                <p>完整 G7 认证级补偿、RWXF/CxF 和真实设备 SDK 仍是下一阶段实现项。</p>
               </div>
             </div>
           </section>
