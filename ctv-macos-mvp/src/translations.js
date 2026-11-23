@@ -2,11 +2,18 @@ export const TRANSLATIONS = {
   zh: {
     // Navigation & Sidebar
     "brand_logo": "CurveStudio",
-    "nav_setup": "标准设置",
-    "nav_acquisition": "导入测量",
-    "nav_diagnose": "分析诊断",
+    "nav_setup": "参考标准",
+    "btn_manual_entry": "手动输入",
+    "manual_entry_offer": "也可以直接手动输入 CMYK 25/50/75 和实地数据。",
+    "no_measurement_file_title": "没有测量文件？",
+    "next_remeasure": "再测一次：导入复测数据",
+    "next_step_prefix": "下一步：",
+    "more_hints_suffix": "等 {n} 条提示，见下方数据检查",
+    "step_settings": "系统设置",
+    "nav_acquisition": "测量数据",
+    "nav_diagnose": "分析修正",
     "nav_curves": "生成曲线",
-    "nav_delivery": "验证报告",
+    "nav_delivery": "复测验证",
     // Product Info Modal & Settings Card
     "product_info_title": "CurveStudio 产品中心",
     "product_info_desc": "帮助文档、软件升级和版本信息。",
@@ -69,17 +76,17 @@ export const TRANSLATIONS = {
     "nav_settings": "高级设置",
 
     // Sub Navigation Tabs
-    "subnav_job": "项目记录",
+    "subnav_job": "复测对比",
     "subnav_standard": "印刷标准",
     "subnav_settings": "系统设置",
     "subnav_file_import": "文件导入",
-    "subnav_manual": "手动测量",
+    "subnav_manual": "手动输入",
     "subnav_instrument": "仪器测量",
     "subnav_diagnose": "印刷诊断",
     "subnav_g7": "G7 灰平衡",
-    "subnav_curve": "补偿生成",
-    "subnav_report": "客户/验厂报告",
-    "subnav_export": "数据导出",
+    "subnav_curve": "补偿曲线",
+    "subnav_report": "验证报告",
+    "subnav_export": "导出曲线",
 
     // Setup Panel
     "setup_title": "Setup 基础配置",
@@ -352,11 +359,11 @@ export const TRANSLATIONS = {
     // Step indicators
     "step_prefix": "第",
     "step_infix": " 步：",
-    "step_setup": "标准设置",
-    "step_acquisition": "第 1 步：导入测量",
-    "step_diagnose": "第 2 步：分析诊断",
+    "step_setup": "第 2 步：参考标准",
+    "step_acquisition": "第 1 步：测量数据",
+    "step_diagnose": "第 3 步：分析修正",
     "step_curves": "第 3 步：生成曲线",
-    "step_delivery": "第 4 步：验证报告",
+    "step_delivery": "第 4 步：复测验证",
     "current_job_filter_label": "当前只显示作业",
     "show_all_jobs_button": "显示全部作业",
     "generated_curve_status": "已生成 {count} 个{mode}曲线点",
@@ -494,8 +501,8 @@ export const TRANSLATIONS = {
     "mode_status_prefix": "模式:",
     "target_status_prefix": "目标:",
     "undercomp_status_prefix": "补偿强度",
-    "run_compare_title": "Run 比较",
-    "run_compare_need_two": "保存至少两次 Run 后显示补偿前后变化。",
+    "run_compare_title": "复测对比",
+    "run_compare_need_two": "修正前、修正后各测一次，这里就会显示变化。",
     "run_compare_missing_metrics": "缺少可比较的 Run 指标。",
     "latest_label": "最新",
     "run_latest_label": "Run / 最新",
@@ -563,7 +570,7 @@ export const TRANSLATIONS = {
     "improved_label": "改善",
     "worsened_label": "变差",
     "simulation_note_label": "说明",
-    "simulation_same_measurement_note": "这是按同一次测量得到的机器响应曲线做估算，用来判断补偿方向；正式验收仍需要输出补偿后样张并复测。",
+    "simulation_same_measurement_note": "估算值，正式结论以复测为准。",
     "simulation_not_ready_help": "尚未生成可模拟的补偿曲线。先导入测量数据并计算曲线。",
     "curve_quality_check_label": "曲线质量检查",
     "more_label": "还有",
@@ -657,11 +664,18 @@ export const TRANSLATIONS = {
   en: {
     // Navigation & Sidebar
     "brand_logo": "CurveStudio",
-    "nav_setup": "Standard Settings",
-    "nav_acquisition": "Import Measurement",
-    "nav_diagnose": "Diagnostics",
+    "nav_setup": "Reference Standard",
+    "btn_manual_entry": "Manual Entry",
+    "manual_entry_offer": "You can also type in CMYK 25/50/75 and solid values by hand.",
+    "no_measurement_file_title": "No measurement file?",
+    "next_remeasure": "Measure again: import re-measurement",
+    "next_step_prefix": "Next: ",
+    "more_hints_suffix": "and {n} hints in total; see Data Check below",
+    "step_settings": "System Settings",
+    "nav_acquisition": "Measurements",
+    "nav_diagnose": "Analyze & Correct",
     "nav_curves": "Generate Curve",
-    "nav_delivery": "Verification Report",
+    "nav_delivery": "Re-measure & Verify",
     // Product Info Modal & Settings Card
     "product_info_title": "CurveStudio Product Center",
     "product_info_desc": "Help documentation, software updates, and version information.",
@@ -724,17 +738,17 @@ export const TRANSLATIONS = {
     "nav_settings": "Settings",
 
     // Sub Navigation Tabs
-    "subnav_job": "Job Records",
+    "subnav_job": "Re-measure Comparison",
     "subnav_standard": "Print Standard",
-    "subnav_settings": "Settings",
+    "subnav_settings": "System Settings",
     "subnav_file_import": "File Import",
     "subnav_manual": "Manual Entry",
     "subnav_instrument": "Instrument Entry",
     "subnav_diagnose": "Diagnostics",
     "subnav_g7": "G7 Balance",
-    "subnav_curve": "Compensation",
-    "subnav_report": "Customer / Audit Report",
-    "subnav_export": "Data Export",
+    "subnav_curve": "Compensation Curve",
+    "subnav_report": "Verification Report",
+    "subnav_export": "Export Curve",
 
     // Setup Panel
     "setup_title": "Setup Configuration",
@@ -1007,11 +1021,11 @@ export const TRANSLATIONS = {
     // Step indicators
     "step_prefix": "Step ",
     "step_infix": ": ",
-    "step_setup": "Standard Settings",
-    "step_acquisition": "Step 1: Import Measurement",
-    "step_diagnose": "Step 2: Diagnostics",
+    "step_setup": "Step 2: Reference Standard",
+    "step_acquisition": "Step 1: Measurements",
+    "step_diagnose": "Step 3: Analyze & Correct",
     "step_curves": "Step 3: Generate Curve",
-    "step_delivery": "Step 4: Verification Report",
+    "step_delivery": "Step 4: Re-measure & Verify",
     "current_job_filter_label": "Currently showing job",
     "show_all_jobs_button": "Show all jobs",
     "generated_curve_status": "Generated {count} {mode} curve points",
@@ -1149,8 +1163,8 @@ export const TRANSLATIONS = {
     "mode_status_prefix": "Mode:",
     "target_status_prefix": "Target:",
     "undercomp_status_prefix": "Strength",
-    "run_compare_title": "Run Compare",
-    "run_compare_need_two": "Save at least two Runs to compare pre/post-compensation changes.",
+    "run_compare_title": "Re-measure Comparison",
+    "run_compare_need_two": "Measure once before and once after correction to see the change here.",
     "run_compare_missing_metrics": "Comparable Run metrics are missing.",
     "latest_label": "Latest",
     "run_latest_label": "Runs / Latest",
@@ -1218,7 +1232,7 @@ export const TRANSLATIONS = {
     "improved_label": "Improved",
     "worsened_label": "Worsened",
     "simulation_note_label": "Note",
-    "simulation_same_measurement_note": "This estimate uses the same measurement response curve to judge compensation direction. Formal acceptance still requires outputting the compensated target and remeasuring it.",
+    "simulation_same_measurement_note": "Estimate only; confirm by re-measuring.",
     "simulation_not_ready_help": "No simulatable compensation curve has been generated yet. Import measurement data and calculate the curve first.",
     "curve_quality_check_label": "Curve Quality Check",
     "more_label": "More",
@@ -1314,6 +1328,19 @@ export const TRANSLATIONS = {
 let currentLang = "zh";
 
 const STATIC_TEXT_ZH_EN = {
+  "保存本次测量": "Save This Measurement",
+  "清空记录": "Clear Records",
+  "DIN / ISO-I / Status-E 暂未开放。": "DIN / ISO-I / Status-E are not available yet.",
+  "作业信息": "Job Details",
+  "测量文件": "Measurement File",
+  "高级": "Advanced",
+  "项目记录": "Job Records",
+  "数据检查与色块预览": "Data Check & Patch Preview",
+  "导出信息": "Export Details",
+  "首次上机建议 40–60%": "First run: 40–60% recommended",
+  "以 TVI/CTV 曲线为主，G7 修正仅供参考。": "TVI/CTV curve leads; G7 corrections are for reference.",
+  "G7 色彩空间检查": "G7 Color Space Check",
+  "系统设置": "System Settings",
   "切换深色模式": "Toggle Dark Mode",
   "切换语言": "Toggle Language",
   "关于 CurveStudio": "About CurveStudio",
@@ -2149,6 +2176,7 @@ function translateDynamicZhText(text) {
     if (output.includes(source)) output = output.split(source).join(target);
   }
   output = output
+    .replace(/25\/50\/75 不完整: (.+?)。/g, (_, list) => `25/50/75 incomplete: ${list.replace(/([CMYK])缺([\d/]+)/g, "$1 missing $2").replace(/，/g, ", ")}.`)
     .replace(/无主要 G7 问题/g, "No main G7 issues")
     .replace(/主要问题无变化/g, "No main issue changes")
     .replace(/已解决/g, "Resolved")
