@@ -48,7 +48,7 @@
             </select>
           </label>
           <label>
-            TVI 目标曲线
+            目标曲线
             <select id="targetSelect"></select>
           </label>
           <label>
@@ -481,6 +481,10 @@
         </section>
 
         <section class="view" data-view="curve">
+          <label class="base-curve-notice" id="baseCurveNotice" hidden>
+            <input id="baseCurveInput" type="checkbox" checked />
+            <span id="baseCurveText"></span>
+          </label>
           <section class="chart-grid">
             <article class="chart-panel">
               <div class="chart-title">

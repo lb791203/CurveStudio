@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildDiagnosticRows,
   calculateCompensation,
+  monotoneCubic,
   parseImportText,
   spotColorToneValueFromLab,
   spotColorToneValueFromXyz,
@@ -209,32 +210,36 @@ test("output grid keeps 0 and 100 boundary anchors", () => {
 
 test("smoothing changes the middle point before monotonic enforcement", () => {
   const measurements = [
-    { channel: "C", tone: 25, measuredTone: 25 },
-    { channel: "C", tone: 50, measuredTone: 80 },
-    { channel: "C", tone: 75, measuredTone: 75 },
+    { channel: "C", tone: 40, measuredTone: 40 },
+    { channel: "C", tone: 50, measuredTone: 70 },
+    { channel: "C", tone: 60, measuredTone: 60 },
   ];
-  const unsmoothed = calculateCompensation(measurements, {
-    mode: "tvi",
-    target: "linear",
-    compensationRatio: 100,
-    limit: 100,
-    smooth: 0,
-    outputGrid: false,
-  });
-  const smoothed = calculateCompensation(measurements, {
-    mode: "tvi",
-    target: "linear",
-    compensationRatio: 100,
-    limit: 100,
-    smooth: 1,
-    outputGrid: false,
-  });
+  const options = { mode: "tvi", target: "linear", compensationRatio: 100, limit: 100, outputGrid: false };
+  const unsmoothed = calculateCompensation(measurements, { ...options, smooth: 0 });
+  const smoothed = calculateCompensation(measurements, { ...options, smooth: 1 });
 
-  // Inverse response: 50% prints at 80%, so aim 50% sits on the 25->50 segment.
-  assert.ok(Math.abs(unsmoothed.find((row) => row.tone === 50).outputTone - (25 + 25 * 25 / 55)) < 1e-9);
-  // The 75% patch is on target; the 50% outlier must not drag it.
-  assert.equal(unsmoothed.find((row) => row.tone === 75).outputTone, 75);
+  // Inverse response: 50% prints at 70%, so aim 50% sits on the 40->50 segment.
+  assert.ok(Math.abs(unsmoothed.find((row) => row.tone === 50).outputTone - (40 + 10 * 10 / 30)) < 1e-9);
+  // The 60% patch is on target; the 50% outlier must not drag it.
+  assert.equal(unsmoothed.find((row) => row.tone === 60).outputTone, 60);
   assert.ok(smoothed.find((row) => row.tone === 50).outputTone > unsmoothed.find((row) => row.tone === 50).outputTone);
+});
+
+test("smoothing skips sparse 25/50/75 control points so the midtone correction survives", () => {
+  const measurements = [
+    { channel: "K", tone: 25, measuredTone: 44 },
+    { channel: "K", tone: 50, measuredTone: 71 },
+    { channel: "K", tone: 75, measuredTone: 89 },
+  ];
+  const options = { mode: "tvi", target: "linear", compensationRatio: 100, limit: 100, outputGrid: false };
+  const unsmoothed = calculateCompensation(measurements, { ...options, smooth: 0 });
+  const smoothed = calculateCompensation(measurements, { ...options, smooth: 3 });
+  for (const tone of [25, 50, 75]) {
+    assert.equal(
+      smoothed.find((row) => row.tone === tone).outputTone,
+      unsmoothed.find((row) => row.tone === tone).outputTone,
+    );
+  }
 });
 
 test("protects highlight and shadow endpoints", () => {
@@ -368,4 +373,59 @@ test("highlight compensation inverts the measured response instead of subtractin
   assert.ok(Math.abs(row10.theoreticalOutputTone - (5 + 9 * 5 / 14)) < 1e-9);
   // The old shortcut (10 + 10 - 15 = 5) over-corrected by ~3.2 points.
   assert.ok(row10.theoreticalOutputTone > 8);
+});
+
+test("monotoneCubic passes through knots, stays monotone and does not overshoot", () => {
+  const f = monotoneCubic([[0, 0], [25, 23], [50, 47.7], [75, 74], [100, 100]]);
+  assert.equal(f(25), 23);
+  assert.equal(f(50), 47.7);
+  let previous = -Infinity;
+  for (let x = 0; x <= 100; x += 0.5) {
+    const y = f(x);
+    assert.ok(y >= previous - 1e-9, `not monotone at ${x}`);
+    previous = y;
+  }
+  const flat = monotoneCubic([[0, 0], [50, 10], [100, 10]]);
+  for (let x = 50; x <= 100; x += 5) assert.ok(flat(x) <= 10 + 1e-9);
+});
+
+const sparseK = [
+  { channel: "K", tone: 25, measuredTone: 44 },
+  { channel: "K", tone: 50, measuredTone: 71 },
+  { channel: "K", tone: 75, measuredTone: 89 },
+];
+
+test("grid output bends smoothly between sparse control points", () => {
+  const rows = calculateCompensation(sparseK, { mode: "tvi", target: "isoA", compensationRatio: 50, limit: 18, smooth: 2 });
+  const adjust = (tone) => { const row = rows.find((r) => r.tone === tone); return row.outputTone - row.tone; };
+  // Control points keep their exact correction.
+  assert.ok(Math.abs(adjust(50) - (45.37 - 50) * 0.5) < 0.05);
+  // Between 25 and 50 the adjustment no longer runs on a straight chord: 30/40 differ from linear.
+  const linear40 = adjust(25) + (adjust(50) - adjust(25)) * 0.6;
+  assert.ok(Math.abs(adjust(40) - linear40) > 0.01);
+  const outputs = rows.map((row) => row.outputTone);
+  outputs.forEach((value, index) => { if (index) assert.ok(value >= outputs[index - 1]); });
+});
+
+test("re-measure stacks the new correction on the previous round's curve", () => {
+  const options = { mode: "tvi", target: "isoA", compensationRatio: 100, limit: 18, smooth: 0 };
+  const round1 = calculateCompensation(sparseK, options);
+  const baseCurve = { K: round1.map((row) => [row.tone, row.outputTone]) };
+  // The press, printed through round 1, now lands 2 points heavy at 50%.
+  const round2Measured = [
+    { channel: "K", tone: 25, measuredTone: 38 },
+    { channel: "K", tone: 50, measuredTone: 68 },
+    { channel: "K", tone: 75, measuredTone: 88 },
+  ];
+  const flat = calculateCompensation(round2Measured, options);
+  const stacked = calculateCompensation(round2Measured, { ...options, baseCurve });
+  const at = (rows, tone) => rows.find((row) => row.tone === tone);
+  const base50 = at(round1, 50).outputTone;
+  // Unstacked result forgets round 1 (it is close to linear); stacked goes further than round 1.
+  assert.ok(at(flat, 50).outputTone > base50);
+  assert.ok(at(stacked, 50).outputTone < base50);
+  assert.equal(at(stacked, 50).incrementalOutputTone, at(flat, 50).outputTone);
+  assert.equal(at(stacked, 50).stackedOnBaseCurve, true);
+  assert.equal(at(stacked, 0).outputTone, 0);
+  assert.equal(at(stacked, 100).outputTone, 100);
 });

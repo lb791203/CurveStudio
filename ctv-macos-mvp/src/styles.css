@@ -5364,3 +5364,25 @@ body.dark-theme .nav-button.active .nav-step-num {
 .job-info-details[open] > .job-grid {
   margin-top: 8px;
 }
+
+.base-curve-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px solid #a7d7c5;
+  border-radius: 8px;
+  background: #ecf8f3;
+  color: #14532d;
+  font-size: 13px;
+  cursor: pointer;
+}
+.base-curve-notice:has(input:not(:checked)) {
+  border-color: #f2c48d;
+  background: #fff7ed;
+  color: #7c2d12;
+}
+.base-curve-notice input { margin: 0; }
+body.dark-theme .base-curve-notice { background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.4); color: #a7f3d0; }
+body.dark-theme .base-curve-notice:has(input:not(:checked)) { background: rgba(251, 146, 60, 0.12); border-color: rgba(251, 146, 60, 0.4); color: #fed7aa; }

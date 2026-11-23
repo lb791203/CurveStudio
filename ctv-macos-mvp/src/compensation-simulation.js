@@ -8,7 +8,7 @@ export function buildCompensationSimulation(rows, options = {}) {
     return channelRows
       .filter((row) => isFiniteNumber(row.tone) && isFiniteNumber(row.measuredTone) && isFiniteNumber(row.targetTone) && isFiniteNumber(row.outputTone))
       .map((row) => {
-        const simulatedTone = interpolateMeasuredTone(measuredCurve, Number(row.outputTone));
+        const simulatedTone = interpolateMeasuredTone(measuredCurve, simulationInputTone(row));
         const beforeDelta = Number(row.measuredTone) - Number(row.targetTone);
         const afterDelta = Number.isFinite(simulatedTone) ? simulatedTone - Number(row.targetTone) : NaN;
         const improvement = Number.isFinite(afterDelta) ? Math.abs(beforeDelta) - Math.abs(afterDelta) : NaN;
@@ -32,6 +32,16 @@ export function buildCompensationSimulation(rows, options = {}) {
         };
       });
   });
+}
+
+// When the curve is stacked on the previous round's curve, the measured response already
+// includes that curve, so the press only "sees" the incremental part. A manual lock moves
+// the total; base curves are close to slope 1, so the same shift is applied to the increment.
+function simulationInputTone(row) {
+  const output = Number(row.outputTone);
+  if (row.incrementalOutputTone == null || !isFiniteNumber(row.incrementalOutputTone)) return output;
+  const auto = isFiniteNumber(row.autoOutputTone) ? Number(row.autoOutputTone) : output;
+  return Number(row.incrementalOutputTone) + (output - auto);
 }
 
 export function summarizeCompensationSimulation(rows) {

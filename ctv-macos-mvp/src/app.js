@@ -102,6 +102,9 @@ const els = {
   smoothValue: document.querySelector("#smoothValue"),
   limitInput: document.querySelector("#limitInput"),
   ratioInput: document.querySelector("#ratioInput"),
+  baseCurveNotice: document.querySelector("#baseCurveNotice"),
+  baseCurveInput: document.querySelector("#baseCurveInput"),
+  baseCurveText: document.querySelector("#baseCurveText"),
   customTvi25Input: document.querySelector("#customTvi25Input"),
   customTvi50Input: document.querySelector("#customTvi50Input"),
   customTvi75Input: document.querySelector("#customTvi75Input"),
@@ -256,6 +259,8 @@ const state = {
   curveOverrides: {},
   runs: [],
   ratioAuto: true,
+  stackOnBaseCurve: true,
+  baseCurveRun: null,
   manualDirty: false,
   storageWarning: "",
   activeCurveChannel: "all",
@@ -560,6 +565,10 @@ function attachEvents() {
     el.addEventListener("change", () => calculate({ preserveRatio: true }));
   }
   els.smoothInput.addEventListener("input", renderControlValues);
+  els.baseCurveInput?.addEventListener("change", () => {
+    state.stackOnBaseCurve = els.baseCurveInput.checked;
+    calculate({ preserveRatio: true });
+  });
   els.ratioInput.addEventListener("change", () => {
     state.ratioAuto = false;
     calculate({ preserveRatio: true });
@@ -893,8 +902,11 @@ function updateStandardToleranceFromUi(event) {
         },
       },
     };
-    renderExport();
-    renderReport();
+    if (event.type === "change" && state.measurements.length) calculate({ preserveRatio: true });
+    else {
+      renderExport();
+      renderReport();
+    }
     return;
   }
   if (target?.matches?.("[data-channel-target]")) {
@@ -1048,7 +1060,25 @@ function loadImportedMeasurement(importInfo, text) {
   state.selectedPatchIndex = null;
   state.ratioAuto = true;
   els.rawInput.value = text;
+  autoSelectModeForData();
   calculate();
+}
+
+// A Lab-only file (typical G7 P2P) has no density or dot values, so TVI/G7 modes cannot
+// build a curve and step 3 dead-ends. Switch to CTV, which uses the Lab data directly.
+function autoSelectModeForData() {
+  els.ctvModeWarning.hidden = true;
+  if (els.modeSelect.value === "ctv" || !state.measurements.length) return false;
+  const hasToneData = state.measurements.some((row) => (
+    Number.isFinite(row.measuredTvi) || Number.isFinite(row.measuredTone) || Number.isFinite(row.density)
+  ));
+  const hasColorimetric = state.measurements.some((row) => Number.isFinite(row.colorimetricTone));
+  if (hasToneData || !hasColorimetric) return false;
+  els.modeSelect.value = "ctv";
+  els.targetSelect.value = "linear";
+  els.ctvModeWarning.textContent = t("auto_ctv_notice", "这份文件只有 Lab 数据，已自动切换到 CTV 模式计算曲线；G7 灰平衡照常检查。");
+  els.ctvModeWarning.hidden = false;
+  return true;
 }
 
 
@@ -1321,7 +1351,7 @@ function applyManualRows() {
   state.selectedPatchIndex = null;
   els.rawInput.value = manualRowsToCsv(state.manualRows.map(normalizeManualRow));
   calculate();
-  switchView("analyze");
+  switchView("standard");
 }
 
 function selectMeasurementPatch(event) {
@@ -1334,15 +1364,22 @@ function selectMeasurementPatch(event) {
 function calculate(options = {}) {
   const baseOptions = calculationOptions();
   const diagnosticRows = buildDiagnosticRows(state.measurements, baseOptions);
-  const diagnosisOptions = { solidDensityRanges: state.standard.solidDensityRanges };
+  const diagnosisOptions = {
+    solidDensityRanges: state.standard.solidDensityRanges,
+    toneTolerances: state.standard.toneTolerances,
+    metric: { tvi: "tvi", ctv: "ctv" }[els.modeSelect.value] || null,
+  };
   const preDiagnosis = diagnosePress(diagnosticRows, diagnosisOptions);
   const effectiveRatio = state.ratioAuto && !options.preserveRatio && diagnosticRows.length
     ? preDiagnosis.ratio
     : Number(els.ratioInput.value);
   if (Number(els.ratioInput.value) !== effectiveRatio) els.ratioInput.value = effectiveRatio;
+  state.baseCurveRun = findBaseCurveRun();
+  const baseCurve = state.stackOnBaseCurve && state.baseCurveRun ? runCurvePoints(state.baseCurveRun) : null;
   const calculatedRows = calculateCompensation(state.measurements, {
     ...baseOptions,
     compensationRatio: effectiveRatio,
+    baseCurve,
   });
   state.curveOverrides = pruneCurveOverrides(calculatedRows, state.curveOverrides);
   state.results = applyCurveOverrides(calculatedRows, state.curveOverrides);
@@ -1375,6 +1412,67 @@ function calculate(options = {}) {
   state.g7 = currentG7Preview();
   if (state.g7Compensation) state.g7Compensation = currentG7Compensation();
   render();
+}
+
+// Re-measurement loop: the previous saved run of the same customer + press (with a different
+// measurement) holds the curve that was on the plates when this sheet was printed.
+function findBaseCurveRun() {
+  if (!state.measurements.length) return null;
+  const customer = els.jobCustomerInput.value.trim();
+  const press = els.jobPressInput.value.trim();
+  const fingerprint = measurementFingerprint(state.measurements);
+  return (state.runs || []).find((run) => {
+    const job = run.archive?.job || {};
+    if (String(job.customer || "").trim() !== customer || String(job.press || "").trim() !== press) return false;
+    if (runMeasurementFingerprint(run) === fingerprint) return false;
+    return Object.keys(runCurvePoints(run) || {}).length > 0;
+  }) || null;
+}
+
+function measurementFingerprint(measurements = []) {
+  return JSON.stringify(measurements.map((row) => [
+    row.channel,
+    Number(row.tone).toFixed(2),
+    finiteSignature(row.measuredTone),
+    finiteSignature(row.measuredTvi),
+    finiteSignature(row.colorimetricTone),
+    finiteSignature(row.density),
+  ]));
+}
+
+function runMeasurementFingerprint(run) {
+  if (run.measurementFingerprint) return run.measurementFingerprint;
+  const measurements = run.archive?.measurements;
+  return Array.isArray(measurements) ? measurementFingerprint(measurements) : "";
+}
+
+function runCurvePoints(run) {
+  if (run.curvePoints && typeof run.curvePoints === "object") return run.curvePoints;
+  const rows = Array.isArray(run.archive?.results) ? run.archive.results : [];
+  return curvePointsFromResults(rows);
+}
+
+function curvePointsFromResults(rows = []) {
+  const byChannel = {};
+  for (const row of rows) {
+    const tone = Number(row.tone);
+    const output = Number(row.outputTone);
+    if (!row.channel || !Number.isFinite(tone) || !Number.isFinite(output)) continue;
+    (byChannel[row.channel] ||= []).push([tone, Number(output.toFixed(3))]);
+  }
+  for (const points of Object.values(byChannel)) points.sort((a, b) => a[0] - b[0]);
+  return byChannel;
+}
+
+function renderBaseCurveNotice() {
+  if (!els.baseCurveNotice) return;
+  const run = state.baseCurveRun;
+  els.baseCurveNotice.hidden = !run;
+  if (!run) return;
+  els.baseCurveInput.checked = state.stackOnBaseCurve;
+  els.baseCurveText.textContent = state.stackOnBaseCurve
+    ? t("base_curve_on", "已叠加上一轮曲线（{time}）：结果是完整曲线，可直接替换 RIP 里的旧曲线。").replace("{time}", run.createdAt || "")
+    : t("base_curve_off", "未叠加上一轮曲线：按印版为线性计算。只有复测前已把 RIP 曲线恢复为线性时才这样用。");
 }
 
 function calculationOptions() {
@@ -1494,6 +1592,7 @@ function render() {
   renderManualTable();
   renderAnalyze(state, els);
   renderCurve(state, els);
+  renderBaseCurveNotice();
   renderG7(state, els);
   renderRuns(state, els);
   renderExport(state, els);
@@ -1773,8 +1872,11 @@ function updateNextStepButton() {
   }
   button.hidden = false;
   if (step === "delivery") {
-    button.textContent = t("next_remeasure", "再测一次：导入复测数据");
-    button.dataset.target = "measurement";
+    const manualSource = state.importInfo?.sourceFormat === "Manual Table";
+    button.textContent = manualSource
+      ? t("next_remeasure_manual", "再测一次：输入复测数据")
+      : t("next_remeasure", "再测一次：导入复测数据");
+    button.dataset.target = manualSource ? "manual" : "measurement";
     button.disabled = false;
     return;
   }
@@ -1876,6 +1978,9 @@ function saveCurrentRun(options = {}) {
     curveWarnings: metrics.curveWarnings,
     curveDangers: metrics.curveDangers,
     metrics,
+    measurementFingerprint: measurementFingerprint(state.measurements),
+    curvePoints: curvePointsFromResults(state.results),
+    stackedOnRun: state.stackOnBaseCurve && state.baseCurveRun ? state.baseCurveRun.runId || state.baseCurveRun.createdAt || "" : "",
     archive: historyArchive,
   };
   const nextRuns = [run, ...state.runs].slice(0, 24);

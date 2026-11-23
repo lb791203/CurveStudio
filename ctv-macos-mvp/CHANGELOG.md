@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Re-measurement rounds now stack on the previous round's curve (newest saved run for the same customer and press). The exported curve is the complete curve and can replace the old one in the RIP. A checkbox on the compensation curve page turns stacking off for plates that were reset to linear.
+- Curves between measured points use a monotone cubic instead of straight segments, so the exported table and the chart bend smoothly through 25/50/75 without overshoot. Correction direction is forced only at measured points, which removes flat spots and kinks (e.g. Y 5–20% stuck at 0).
+- Smoothing no longer averages sparse control points (more than 30% apart); with 25/50/75 data it washed out the midtone correction.
+- The press diagnosis now checks the standard's 25/50/75 tolerances: a press with good midtone averages but control points out of tolerance gets "Out of tolerance / compensation recommended" instead of "Close to the standard".
+- CTV mode diagnoses speak CTV instead of TVI. Lab-only files (typical G7 P2P sheets) switch to CTV automatically so step 3 can build a curve; the G7 gray balance check is unchanged.
+- Workflow: applying a manual table goes to step 2 (reference standard); "Measure again" returns to manual entry when the data was typed in.
+- Run comparison and job cards hide G7 and ΔE rows when the job has no G7 or Lab data.
+
 ## 1.0.6 - 2026-11-22
 
 - Spectral data is now converted to XYZ/Lab with ASTM E308 D50/2° 10 nm weighting factors. Against the i1iO2 M0/M2 fixtures the mean error versus the instrument's own Lab drops from about 1.1 ΔE00 to 0.005 ΔE00.

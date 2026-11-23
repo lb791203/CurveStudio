@@ -137,7 +137,8 @@ export function calculateCompensation(measurements, options) {
     .flatMap((items) => {
       const channel = items[0]?.channel;
       const channelTargetPoints = channelTargetPointsFor(channel, targetPoints, options.channelTargets, mode);
-      return finalizeChannel(items, { smooth, outputGrid, targetPoints: channelTargetPoints });
+      const finalized = finalizeChannel(items, { smooth, outputGrid, targetPoints: channelTargetPoints });
+      return composeWithBaseCurve(finalized, options.baseCurve?.[channel]);
     })
     .sort((a, b) => a.channel.localeCompare(b.channel) || a.tone - b.tone);
 }
@@ -681,6 +682,8 @@ function densityToApproxTvi(density, tone, channel) {
   return clamp(apparent - tone, -20, 40);
 }
 
+const MAX_SMOOTH_SPAN = 30;
+
 function smoothChannel(items, strength) {
   if (strength <= 0 || items.length < 3) return items;
   const sorted = [...items].sort((a, b) => a.tone - b.tone);
@@ -691,7 +694,9 @@ function smoothChannel(items, strength) {
       const current = previousPass[i];
       const next = previousPass[i + 1];
       const span = next.tone - previous.tone;
-      if (span <= 0) continue;
+      // Only smooth between close neighbours. With sparse control points (e.g. 25/50/75)
+      // the neighbour line is 25% away and would wash out the 50% correction.
+      if (span <= 0 || span > MAX_SMOOTH_SPAN) continue;
       const position = clamp((current.tone - previous.tone) / span, 0, 1);
       const neighborLine = previous.outputTone + (next.outputTone - previous.outputTone) * position;
       const outputTone = (current.outputTone + neighborLine) / 2;
@@ -1093,13 +1098,21 @@ function finalizeChannel(items, { smooth, outputGrid, targetPoints }) {
   rows = protectToneEnds(rows);
   rows = enforceMonotonic(rows);
   rows = preserveCorrectionDirection(rows);
-  if (outputGrid) rows = interpolateRowsToGrid(rows, outputGrid, targetPoints);
+  if (outputGrid) {
+    rows = interpolateRowsToGrid(rows, outputGrid, targetPoints);
+    rows = protectToneEnds(rows);
+    rows = enforceMonotonic(rows);
+  }
   rows = preserveCorrectionDirection(rows);
   return rows.map((row) => ({ ...row, finalOutputTone: row.outputTone }));
 }
 
 function preserveCorrectionDirection(items) {
   return items.map((row) => {
+    // Grid points between measurements only have a linearly estimated TVI delta; forcing
+    // their direction from that estimate flattens and kinks the curve (e.g. Y 5-20% stuck
+    // at 0 then jumping). Their direction comes from the smooth curve through measured points.
+    if (row.interpolated) return row;
     let outputTone = row.outputTone;
     const intended = row.productionOutputTone;
     if (row.tviDelta > 0.01 && outputTone >= row.tone) {
@@ -1157,7 +1170,9 @@ function interpolateRowsToGrid(items, grid, targetPoints) {
       const measuredTone = clamp(tone + measuredTvi, 0, 100);
       const theoreticalCorrection = interpolateProperty(rows, tone, "theoreticalCorrection", targetTvi - measuredTvi);
       const correction = interpolateProperty(rows, tone, "correction", theoreticalCorrection);
-      const outputTone = interpolateProperty(rows, tone, "outputTone", clamp(tone + correction, 0, 100));
+      // Monotone cubic (Fritsch-Carlson) through the measured knots: the curve bends smoothly
+      // at 25/50/75 instead of kinking, never overshoots, and keeps the measured points exact.
+      const outputTone = smoothOutputAt(rows, tone, clamp(tone + correction, 0, 100));
       const nearest = nearestMeasuredRow(rows, tone);
       return {
         ...(nearest || rows[0]),
@@ -1216,6 +1231,87 @@ function identityAnchor(channel, tone) {
     interpolated: true,
     anchor: true,
   };
+}
+
+function smoothOutputAt(rows, tone, fallback) {
+  const knots = rows
+    .filter((row) => Number.isFinite(row.outputTone))
+    .map((row) => [row.tone, row.outputTone]);
+  if (knots.length < 2) return fallback;
+  return monotoneCubic(knots)(tone);
+}
+
+// Fritsch-Carlson monotone cubic Hermite interpolation over [[x, y], ...] (x ascending).
+// Monotone data stays monotone and there is no overshoot between knots.
+export function monotoneCubic(points) {
+  const knots = [...points]
+    .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y))
+    .sort((a, b) => a[0] - b[0])
+    .filter((point, index, all) => index === 0 || point[0] - all[index - 1][0] > 1e-9);
+  const n = knots.length;
+  if (n === 0) return () => NaN;
+  if (n === 1) return () => knots[0][1];
+  const xs = knots.map((point) => point[0]);
+  const ys = knots.map((point) => point[1]);
+  const h = [];
+  const delta = [];
+  for (let i = 0; i < n - 1; i += 1) {
+    h.push(xs[i + 1] - xs[i]);
+    delta.push((ys[i + 1] - ys[i]) / h[i]);
+  }
+  const m = new Array(n).fill(0);
+  m[0] = delta[0];
+  m[n - 1] = delta[n - 2];
+  for (let i = 1; i < n - 1; i += 1) {
+    if (delta[i - 1] * delta[i] <= 0) {
+      m[i] = 0;
+    } else {
+      const w1 = 2 * h[i] + h[i - 1];
+      const w2 = h[i] + 2 * h[i - 1];
+      m[i] = (w1 + w2) / (w1 / delta[i - 1] + w2 / delta[i]);
+    }
+  }
+  return (x) => {
+    if (x <= xs[0]) return ys[0];
+    if (x >= xs[n - 1]) return ys[n - 1];
+    let i = 0;
+    while (i < n - 2 && x > xs[i + 1]) i += 1;
+    const t = (x - xs[i]) / h[i];
+    const t2 = t * t;
+    const t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * ys[i]
+      + (t3 - 2 * t2 + t) * h[i] * m[i]
+      + (-2 * t3 + 3 * t2) * ys[i + 1]
+      + (t3 - t2) * h[i] * m[i + 1];
+  };
+}
+
+// Re-measurement loop: the new sheet was printed through the previous plate curve, so the
+// measured response already includes it. The curve just calculated is the extra step on
+// top of that curve; the plate curve to load in the RIP is previous(incremental(tone)).
+function composeWithBaseCurve(rows, basePoints) {
+  if (!Array.isArray(basePoints) || basePoints.length < 2) return rows;
+  const anchored = [[0, 0], ...basePoints.filter(([tone]) => tone > 0 && tone < 100), [100, 100]];
+  const base = monotoneCubic(anchored);
+  let previous = -Infinity;
+  return rows.map((row) => {
+    const incrementalOutputTone = row.outputTone;
+    const outputTone = Math.max(previous, clamp(base(incrementalOutputTone), 0, 100));
+    previous = outputTone;
+    const theoreticalOutputTone = clamp(base(row.theoreticalOutputTone), 0, 100);
+    return {
+      ...row,
+      incrementalOutputTone,
+      baseOutputTone: clamp(base(row.tone), 0, 100),
+      theoreticalOutputTone,
+      theoreticalCorrection: theoreticalOutputTone - row.tone,
+      productionOutputTone: outputTone,
+      outputTone,
+      finalOutputTone: outputTone,
+      correction: outputTone - row.tone,
+      stackedOnBaseCurve: true,
+    };
+  });
 }
 
 function interpolateProperty(rows, tone, key, fallback = NaN) {
