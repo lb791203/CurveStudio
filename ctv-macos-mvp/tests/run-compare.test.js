@@ -79,3 +79,14 @@ test("compareRuns marks lower error metrics as improved", () => {
   assert.equal(compare.channelRows.find((row) => row.channel === "K").change.direction, "improved");
   assert.match(formatMetricChange(compare.avgTviDelta, "%"), /8.00% -> 4.00%/);
 });
+
+test("compareRuns flags TVI-only runs so G7 and ΔE rows can be hidden", () => {
+  const run = (avg) => ({ metrics: { avgTviDelta: avg, maxDeltaE: NaN, g7Status: "Data Incomplete", g7WeightedAverage: NaN, g7MaxNpdcDelta: NaN, g7MaxGrayCh: NaN, curveQualityStatus: "Ready", curveWarnings: 0, curveDangers: 0, channelTvi: {} } });
+  const compare = compareRuns(run(0.8), run(1.8));
+  assert.equal(compare.hasG7, false);
+  assert.equal(compare.hasLab, false);
+  assert.equal(compare.hasCurveIssues, false);
+
+  const g7Run = { metrics: { ...run(1).metrics, g7Status: "Pass", g7WeightedAverage: 1.2 } };
+  assert.equal(compareRuns(g7Run, run(2)).hasG7, true);
+});

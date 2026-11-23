@@ -242,7 +242,15 @@ function sccaReferenceLab(reference, paperReference, paperMeasured) {
   };
 }
 
+// Diagnosis texts are written for TVI; in CTV mode the same deviations are CTV values.
 export function diagnosePress(results, options = {}) {
+  const diagnosis = diagnosePressCore(results, options);
+  if (options.metric !== "ctv") return diagnosis;
+  const toCtv = (text) => (typeof text === "string" && !text.includes("密度-TVI") ? text.replace(/\bTVI\b/g, "CTV") : text);
+  return { ...diagnosis, title: toCtv(diagnosis.title), messages: (diagnosis.messages || []).map(toCtv) };
+}
+
+function diagnosePressCore(results, options = {}) {
   if (!results.length) {
     return {
       level: "empty",
@@ -334,6 +342,23 @@ export function diagnosePress(results, options = {}) {
     };
   }
 
+  const toleranceIssues = controlPointToleranceIssues(results, options.toneTolerances, options.metric);
+  if (toleranceIssues.length) {
+    const metricLabel = (options.metric || "tvi").toUpperCase();
+    return {
+      level: "warning",
+      title: "超出容差 / 建议补偿",
+      ratio: 50,
+      messages: [
+        ...toleranceIssues.slice(0, 4).map((item) => `${item.channel} ${item.tone}% ${metricLabel} 偏差 ${item.delta >= 0 ? "+" : ""}${item.delta.toFixed(1)}%，超出容差 ±${item.tolerance}%。`),
+        ...(toleranceIssues.length > 4 ? [`另有 ${toleranceIssues.length - 4} 个控制点超出容差。`] : []),
+        "中间调整体接近标准，但控制点超出容差；建议补偿后复测。",
+      ],
+      channelStats,
+      toleranceIssues,
+    };
+  }
+
   return {
     level: "pass",
     title: "接近标准",
@@ -341,6 +366,22 @@ export function diagnosePress(results, options = {}) {
     messages: ["TVI 偏差整体较小，建议轻补偿或保持当前曲线。"],
     channelStats,
   };
+}
+
+const TOLERANCE_CONTROL_TONES = [25, 50, 75];
+
+function controlPointToleranceIssues(results, toneTolerances, metric) {
+  if (!toneTolerances || !metric) return [];
+  const issues = [];
+  for (const row of results) {
+    const tone = Math.round(Number(row.tone));
+    if (!TOLERANCE_CONTROL_TONES.includes(tone) || Math.abs(Number(row.tone) - tone) > 0.01) continue;
+    const tolerance = Number(toneTolerances?.[row.channel]?.[metric]?.[tone]);
+    const delta = Number(row.tviDelta);
+    if (!Number.isFinite(tolerance) || tolerance <= 0 || !Number.isFinite(delta)) continue;
+    if (Math.abs(delta) > tolerance + 1e-9) issues.push({ channel: row.channel, tone, delta, tolerance });
+  }
+  return issues.sort((a, b) => (Math.abs(b.delta) - b.tolerance) - (Math.abs(a.delta) - a.tolerance));
 }
 
 export function analyzeCurveSafety(results) {
