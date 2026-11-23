@@ -927,9 +927,12 @@ function spotColorToneValue(toneVector, paperVector, solidVector) {
   return clamp((vectorDistance(toneVector, paperVector) / full) * 100, 0, 100);
 }
 
+// ISO 20654:2017 formulas (1)-(9): SCTV is a distance in (Vx, Vy, Vz), where
+// V = 116·f(X/Xn) − 16 per tristimulus (D50). From CIELAB (clause 4.3) this is
+// Vx = L* + 116·a*/500, Vy = L*, Vz = L* − 116·b*/200 — not the L*a*b* distance.
 function vectorFromLab(lab) {
   if (!lab) return null;
-  return { x: lab.l, y: lab.a, z: lab.b };
+  return { x: lab.l + (116 / 500) * lab.a, y: lab.l, z: lab.l - (116 / 200) * lab.b };
 }
 
 function vectorFromXyz(xyz) {

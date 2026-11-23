@@ -122,14 +122,26 @@ test("CTV mode marks fallback rows when colorimetric data is missing", () => {
   assert.equal(row.metricMethod, "reported_tone");
 });
 
-test("ISO 20654 Lab CTV uses direct Lab Delta E distance", () => {
+test("ISO 20654 Lab CTV uses the Vx/Vy/Vz distance, not the Lab Delta E distance", () => {
   const value = spotColorToneValueFromLab(
     { l: 50, a: 10, b: 0 },
     { l: 100, a: 0, b: 0 },
     { l: 0, a: 0, b: 0 }
   );
+  // Vx = L + 116a/500 = 52.32, Vy = Vz = 50; paper V = (100,100,100), solid V = (0,0,0).
+  const expected = 100 * Math.hypot(100 - 52.32, 50, 50) / Math.hypot(100, 100, 100);
+  assert.ok(Math.abs(value - expected) < 1e-9);
+  assert.equal(Number(value.toFixed(2)), 49.24);
+});
 
-  assert.equal(Number(value.toFixed(2)), 50.99);
+test("ISO 20654 CTV on a magenta 50% patch differs from the Lab Delta E ratio", () => {
+  // Paper, M50 and M solid from samples/g7-p2p51-simulated.txt; expected value computed by hand
+  // from ISO 20654 formula (1) with Vx = L + 116a/500, Vy = L, Vz = L - 116b/200.
+  const paper = { l: 93.5, a: 1, b: -5.5 };
+  const m50 = { l: 66.5, a: 40.47, b: -8.21 };
+  const solid = { l: 48, a: 75, b: -4 };
+  const value = spotColorToneValueFromLab(m50, paper, solid);
+  assert.equal(Number(value.toFixed(2)), 58.07);
 });
 
 test("ISO 20654 XYZ CTV converts through D50 Lab before distance", () => {
