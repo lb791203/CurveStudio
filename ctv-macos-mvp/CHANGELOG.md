@@ -17,6 +17,13 @@
 - Projects saved with a preset that is no longer built in now reopen with their archived settings as a custom standard (with a warning to re-import the Lab reference) instead of silently switching to GRACoL CRPC1. Projects saved with the old audit preset id open with the renamed audit demo preset.
 - Per-channel TVI targets now also drive the press diagnosis and automatic compensation ratio, and are ignored in CTV and G7 modes.
 - The overall G7 result now uses the same Pass/Fail limits as the grayscale summaries (no Warning band for NPDC or gray balance).
+- UI: the compensation chart opens in an adjustment view (output − input, 0 = no change) with a toggle back to the input → output curve; points stay draggable in both views. Chart Y ticks use round steps and the plot moves down when the legend wraps.
+- UI: the curve table shows the calculation method once in its caption instead of on every row, and notes only rows that use a different method (for example a CTV fallback).
+- UI: "欠补偿比例 / Under-Comp Ratio" is renamed "补偿强度 / Compensation Strength", with a hint explaining 100% and the 40–60% first-run range.
+- UI: the diagnosis page opens with a verdict banner (can the press go to production, the next step, and a link to it); the G7 overview opens with its conclusion, marked as a G7-method reference check rather than an Idealliance certification, and NPDC/gray KPI cards take their colour from Pass/Fail.
+- UI: the key patch table no longer shows a "D -" placeholder when density is missing, and Lab values show one decimal (full value in the tooltip) without overlapping.
+- A Lab-only P2P file in TVI/G7 mode now explains that the mode cannot compute tone values and suggests CTV, instead of reporting "未加载测量数据".
+- Press-diagnosis titles and messages are now translated in English mode.
 - Old release installers that bundled the removed reference data have been withdrawn; use 1.0.6 or later.
 
 ## 1.0.5 - 2026-07-05
