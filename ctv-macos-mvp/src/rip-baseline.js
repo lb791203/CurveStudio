@@ -45,7 +45,9 @@ export function appliedCurveSnapshot({ rows = [], job = {}, createdAt = new Date
 export function addAppliedCurve(list = [], snapshot) {
   if (!snapshot) return list;
   const signature = JSON.stringify(snapshot.curvePoints);
-  const rest = list.filter((item) => item.id !== snapshot.id && JSON.stringify(item.curvePoints) !== signature);
+  // The same curve exported for another job is a separate record; only repeats within one job collapse.
+  const rest = list.filter((item) => item.id !== snapshot.id
+    && !(sameJob(item.job || {}, snapshot.job || {}) && JSON.stringify(item.curvePoints) === signature));
   return [snapshot, ...rest].slice(0, APPLIED_LIMIT);
 }
 

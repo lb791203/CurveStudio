@@ -615,6 +615,11 @@ export function g7Preview(options = {}) {
       : "K-only NPDC 阶调不足");
   }
   if (!patchClasses.paper) missing.push("缺少纸白色块");
+  // TR 015 aims are scaled to the measured substrate and solids: without their Lab the
+  // result would silently fall back to reference aims, so it cannot pass.
+  else if (!paperLab) missing.push("纸白缺少有效 Lab");
+  if (!kSolidLab) missing.push("K 实地缺少有效 Lab");
+  if (!cmySolidLab) missing.push("CMY 三色实地缺少有效 Lab");
   if (patchClasses.cmykSolids < 4) missing.push("CMYK 实地色块不足");
   if (grayCount < 3) {
     missing.push(grayCandidateCount ? `CMY 灰平衡色块缺少有效 Lab（有效 ${grayCount} 个，至少 3 个）` : "缺少 CMY neutral gray / 灰平衡 Lab");

@@ -262,3 +262,24 @@ test("buildColorspaceVerification marks missing when no data", () => {
   const result = buildColorspaceVerification({}, new Map(), deltaE76);
   assert.ok(result.every((r) => r.status === "Missing"));
 });
+
+// Independent reference vectors (hand-computed from TR 015-2022, not from this module).
+test("re-review S4: TR 015 shadow adaptation uses the power of the ratio (eq. 7/14)", () => {
+  // Solid relative Y 0.30 (RA = 0.70): Y_R(50) = 0.32091, Y_C = 0.73097, ratio = 0.57828,
+  // Y = Y_R + 0.278223 · ratio^1.35 = 0.45373 → relative L* 73.14 (a linear ratio would give 74.95).
+  const solidL = 116 * Math.cbrt(0.30) - 16;
+  assert.ok(Math.abs(tr015RelativeL(50, "K", 100, solidL) - 73.14) < 0.02);
+  // End points are unchanged by the exponent: 100 % lands on the measured solid, 0 % on paper.
+  assert.ok(Math.abs(tr015RelativeL(100, "K", 100, solidL) - solidL) < 1e-6);
+  assert.ok(Math.abs(tr015RelativeL(0, "K", 100, solidL) - 100) < 1e-6);
+});
+
+test("re-review M2: TR 015 gray balance adds the CMY solid term to the substrate term (eq. 4/5)", () => {
+  // C 90 %, paper a* = 10, CMY solid a* = 10: 10 · 0.1 + 10 · 0.8^4 = 1 + 4.096 = 5.096.
+  const aim = tr015GrayAim(90, { l: 95, a: 10, b: -4 }, { l: 25, a: 10, b: 6 });
+  assert.ok(Math.abs(aim.a - 5.096) < 1e-9);
+  assert.ok(Math.abs(aim.b - (-0.4 + 6 * 0.4096)) < 1e-9);
+  // 100 % C lands on the solid, 50 % C is still the pure substrate term.
+  assert.ok(Math.abs(tr015GrayAim(100, { l: 95, a: 3, b: -7 }, { l: 25, a: 1, b: 2 }).a - 1) < 1e-9);
+  assert.ok(Math.abs(tr015GrayAim(50, { l: 95, a: 3, b: -7 }, { l: 25, a: 1, b: 2 }).b - (-3.5)) < 1e-9);
+});

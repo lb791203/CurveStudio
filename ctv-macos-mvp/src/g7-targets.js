@@ -29,14 +29,14 @@ export function classifyP2PPatch(c, m, y, k) {
 //   TVI(TV) = a·p1 + b·p2 + c·p3 with p1 = -4x(x-1), p2 = 21x(x-1)(x-0.5), p3 = -64x(x-1)(x-0.5)^2, x = TV/100
 //   Y_R(TV) = 1 - RR·(TV + TVI(TV))/100           reference reflectance relative to the substrate
 //   Y_C     = (0.7 + 0.3·(Y_D/Y_L)^(1/3))^3        control point; lighter tones follow Y_R unchanged
-//   darker: Y = Y_R - (RA - RR)·(Y_C - Y_R)/(Y_C - 1 + RR), RA = 1 - Y_D/Y_L
+//   darker: Y = Y_R - (RA - RR)·((Y_C - Y_R)/(Y_C - 1 + RR))^(1 + RA/2), RA = 1 - Y_D/Y_L
 // Y_D/Y_L is the measured solid (K, or CMY overprint) relative to the measured substrate, so
 // the shadow end lands exactly on the actual maximum neutral density.
 // Constants: CMY a=24.321 b=2.246 c=0.670 RR=0.956649; K a=19.421 b=0.967 c=0.555 RR=0.978223.
 // Check: with paper L* 95 / K L* 16 this reproduces the CRPC6 K ramp within 0.6 L*, and the
 // CMY curve the CRPC6 50/40/40 gray within 0.1 L*.
 
-export const G7_NPDC_METHOD = "TR015 (2013/2022) NPDC";
+export const G7_NPDC_METHOD = "CGATS TR 015-2022 NPDC";
 
 const TR015 = {
   K: { a: 19.421, b: 0.967, c: 0.555, rr: 0.978223 },
@@ -61,7 +61,9 @@ export function tr015RelativeY(toneValue, kind = "K", solidRelativeY = NaN) {
   const ra = 1 - ydyl;
   const yC = (0.7 + 0.3 * Math.cbrt(ydyl)) ** 3;
   if (yR > yC) return yR;
-  return yR - (ra - constants.rr) * (yC - yR) / (yC - 1 + constants.rr);
+  // TR 015 eq. (7)/(14): the shadow adaptation follows a power of the ratio, exponent 1 + RA/2.
+  const ratio = (yC - yR) / (yC - 1 + constants.rr);
+  return yR - (ra - constants.rr) * ratio ** (1 + ra / 2);
 }
 
 // Substrate-relative target L* (paper = 100).
@@ -223,8 +225,9 @@ export function tr015GrayAim(toneValue, paperLab, cmySolidLab = null) {
   let b = number(paperLab.b) * share;
   if (cmySolidLab && tone > 50) {
     const w = ((tone - 50) / 50) ** 4;
-    a = a * (1 - w) + number(cmySolidLab.a) * w;
-    b = b * (1 - w) + number(cmySolidLab.b) * w;
+    // TR 015 eq. (4)/(5): additive — the substrate term stays, the solid's a*b* is added with weight w.
+    a += number(cmySolidLab.a) * w;
+    b += number(cmySolidLab.b) * w;
   }
   return { a, b };
 }

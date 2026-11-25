@@ -1358,7 +1358,9 @@ async function exportRipCurve(filename, build, type) {
     return;
   }
   const context = exportContext();
-  await download(filename, build(rows, context), type);
+  const saved = await download(filename, build(rows, context), type);
+  // Cancelled or failed save: nothing reached the RIP, so nothing is registered as a baseline.
+  if (!saved) return;
   // An exported curve is what goes into the RIP: remember it so the next measurement of this
   // job can be stacked on exactly this curve.
   const snapshot = appliedCurveSnapshot({ rows, job: currentJobFields() });
@@ -1673,15 +1675,16 @@ function exportContext() {
   return context;
 }
 
+// Returns true only when the file was actually written (desktop) or handed to the browser download.
 async function download(filename, content, type, options = {}) {
-  if (!options.allowWithoutResults && !state.results.length && !filename.includes("project")) return;
+  if (!options.allowWithoutResults && !state.results.length && !filename.includes("project")) return false;
   if (!options.skipManualDirty && state.manualDirty && !filename.includes("project")) {
     window.alert(t("manual_dirty_warning", "手动测量表已修改，请先点击「应用测量表」重新生成曲线后再导出。"));
-    return;
+    return false;
   }
   try {
     const desktop = await saveTextFileDesktop({ filename, contents: content });
-    if (desktop.handled) return;
+    if (desktop.handled) return Boolean(desktop.path) && !desktop.canceled;
   } catch (error) {
     window.alert(t("desktop_save_failed", `桌面保存失败，已改用浏览器下载：${error.message || error}`));
   }
@@ -1692,6 +1695,7 @@ async function download(filename, content, type, options = {}) {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+  return true;
 }
 
 async function downloadBinary(filename, content, type, options = {}) {

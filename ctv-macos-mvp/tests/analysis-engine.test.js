@@ -166,6 +166,7 @@ test("g7Preview can validate complete manual-equivalent G7 data", () => {
       lab: { l: channel === "K" ? g7NpdcLTarget(100) : 50, a: 0, b: 0 },
       deltaE: 1,
     })),
+    { label: "CMY 100%", cmyk: { c: 100, m: 100, y: 100, k: 0 }, lab: { l: g7CmyNpdcLTarget(100), a: 0, b: 0 }, deltaE: 1 },
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
       cmyk: g7Gray(tone),
@@ -205,6 +206,7 @@ test("g7Preview treats G7 grayscale overruns as Fail, not Warning", () => {
       lab: { l: channel === "K" ? g7NpdcLTarget(100) : 50, a: 0, b: 0 },
       deltaE: 1,
     })),
+    { label: "CMY 100%", cmyk: { c: 100, m: 100, y: 100, k: 0 }, lab: { l: g7CmyNpdcLTarget(100), a: 0, b: 0 }, deltaE: 1 },
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
       cmyk: g7Gray(tone),
@@ -255,6 +257,7 @@ test("g7Preview conclusion identifies failed G7 verification priorities", () => 
       lab: { l: channel === "K" ? g7NpdcLTarget(100) : 50, a: 0, b: 0 },
       deltaE: 1,
     })),
+    { label: "CMY 100%", cmyk: { c: 100, m: 100, y: 100, k: 0 }, lab: { l: g7CmyNpdcLTarget(100), a: 0, b: 0 }, deltaE: 1 },
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
       cmyk: g7Gray(tone),
@@ -420,6 +423,7 @@ function g7BaseLabRows({ kLOffset = 0, includeK = true } = {}) {
       lab: { l: channel === "K" ? g7NpdcLTarget(100) : 50, a: 0, b: 0 },
       deltaE: 1,
     })),
+    { label: "CMY 100%", cmyk: { c: 100, m: 100, y: 100, k: 0 }, lab: { l: g7CmyNpdcLTarget(100), a: 0, b: 0 }, deltaE: 1 },
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
       cmyk: g7Gray(tone),
@@ -473,4 +477,16 @@ test("review #4: duplicate K patches count once", () => {
   const g7 = g7Preview({ labRows });
   assert.equal(g7.kOnlyCount, 2);
   assert.equal(g7.status, "Data Incomplete");
+});
+
+test("re-review S4: G7 cannot pass on reference aims when paper, K solid or CMY solid Lab is missing", () => {
+  const without = (label) => g7Preview({ labRows: g7BaseLabRows().filter((row) => row.label !== label) });
+  const noCmy = without("CMY 100%");
+  assert.equal(noCmy.status, "Data Incomplete");
+  assert.ok(noCmy.missing.some((item) => /CMY 三色实地/.test(item)));
+  const noK = without("K 100%");
+  assert.equal(noK.status, "Data Incomplete");
+  assert.ok(noK.missing.some((item) => /K 实地/.test(item)));
+  const paperWithoutLab = g7Preview({ labRows: g7BaseLabRows().map((row) => row.label === "Paper" ? { ...row, lab: null } : row) });
+  assert.equal(paperWithoutLab.status, "Data Incomplete");
 });

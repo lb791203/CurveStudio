@@ -49,3 +49,16 @@ test("review #2: the baseline snapshot survives save/reopen unchanged", () => {
   assert.deepEqual(again.map((row) => row.outputTone), round2.map((row) => row.outputTone));
   assert.equal(normalizeBaseline(undefined).kind, "linear");
 });
+
+test("re-review S2: the same curve exported for another job does not drop the first job's record", () => {
+  const rows = compute(measure(["C"], 20));
+  const jobA = { customer: "A", press: "P1", paper: "Coated" };
+  const jobB = { customer: "B", press: "P2", paper: "Coated" };
+  let list = addAppliedCurve([], appliedCurveSnapshot({ rows, job: jobA, id: "a" }));
+  list = addAppliedCurve(list, appliedCurveSnapshot({ rows, job: jobB, id: "b" }));
+  assert.equal(list.length, 2);
+  assert.equal(defaultBaseline(list, jobA).id, "a");
+  // Re-exporting the same curve within one job still collapses to one record.
+  list = addAppliedCurve(list, appliedCurveSnapshot({ rows, job: jobA, id: "a2" }));
+  assert.deepEqual(list.map((item) => item.id), ["a2", "b"]);
+});
