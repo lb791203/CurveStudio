@@ -26,19 +26,38 @@ test("review #1: release whitelist only holds self-made or synthetic data and ma
 });
 
 test("review #1: binary scan rejects third-party or old customer resources", () => {
-  const ok = verifyBinary("/index.html\0/src/app.js\0/samples/g7-demo-synthetic.txt\0");
+  const ok = verifyBinary(fullManifest());
   assert.equal(ok.status, 0, ok.stderr);
   for (const bad of ["/samples/kba-presets.json", "/samples/audit-report-demo.json", "/reference-data/standards/cgats21-iso15339/CGATS21-2-CRPC6.txt", "/reference-data/targets/p2p/P2P51.txt"]) {
-    const result = verifyBinary(`/src/app.js\0${bad}\0`);
+    const result = verifyBinary(`${fullManifest()}${bad}\0`);
     assert.notEqual(result.status, 0, bad);
   }
 });
+
+test("re-review M8: a file without any embedded resource paths fails the binary scan", () => {
+  const result = verifyBinary("just some bytes, no asset table");
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /no embedded resource paths/);
+});
+
+test("re-review M8: the embedded resource list must match the whitelist, not just avoid bad names", () => {
+  const result = verifyBinary("/index.html\0/src/app.js\0/samples/g7-demo-synthetic.txt\0");
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /do not match the whitelist/);
+});
+
+function fullManifest() {
+  return allowedFiles(root, loadWhitelist(root)).map((file) => `/${file}\0`).join("");
+}
 
 test("release build runs the bundle resource gate", () => {
   const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
   assert.match(pkg.scripts["verify:release"], /verify:bundle/);
   assert.match(fs.readFileSync("scripts/notarize-macos.mjs", "utf8"), /verify-bundle\.mjs", "--binary"/);
   assert.match(fs.readFileSync("../.github/workflows/windows-installer.yml", "utf8"), /verify-bundle\.mjs --binary/);
+  // re-review M8: the final artefacts are checked too (unpacked NSIS/MSI, mounted stapled DMG).
+  assert.match(fs.readFileSync("../.github/workflows/windows-installer.yml", "utf8"), /verify-bundle\.mjs --binary \$nsisDir[\s\S]*verify-bundle\.mjs --binary \$msiDir/);
+  assert.match(fs.readFileSync("scripts/notarize-macos.mjs", "utf8"), /verifyFinalDmg\(dmgPath\)/);
 });
 
 test("sample hashes ignore CRLF line endings from a Windows checkout", () => {

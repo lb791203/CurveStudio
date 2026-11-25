@@ -22,15 +22,26 @@ if (args[0] === "--update-hashes") {
 }
 
 const allowed = new Set(allowedFiles(root, whitelist));
+const RESOURCE_PATH_SOURCE = String.raw`(?:^|[\/\\])((?:samples|reference-data|src)\/[A-Za-z0-9._\/-]+\.(?:json|txt|csv|js|css|it8|cgats))`;
+const RESOURCE_PATH = new RegExp(RESOURCE_PATH_SOURCE);
+const RESOURCE_PATH_GLOBAL = new RegExp(RESOURCE_PATH_SOURCE, "g");
 
 if (args[0] === "--binary") {
   const binaries = args.slice(1);
   if (!binaries.length) failures.push("no binary given");
   for (const binary of binaries) {
-    // A directory (e.g. CurveStudio.app/Contents/MacOS) is scanned file by file.
+    // A directory (e.g. CurveStudio.app/Contents/MacOS or an unpacked installer) is scanned
+    // file by file, and the resource paths found are pooled per argument.
     const targets = fs.existsSync(binary) && fs.statSync(binary).isDirectory() ? walk(binary) : [binary];
     if (!targets.length) failures.push(`no files in ${binary}`);
-    for (const target of targets) checkBinary(target);
+    const found = new Set();
+    for (const target of targets) for (const file of checkBinary(target)) found.add(file);
+    // The embedded resource list must be exactly the whitelist: a file with no resource paths
+    // at all (wrong file, compressed or stripped assets) is a failure, not a pass.
+    const expected = [...allowed].filter((file) => RESOURCE_PATH.test(`/${file}`));
+    const missing = expected.filter((file) => !found.has(file));
+    if (!found.size) failures.push(`${binary}: no embedded resource paths found (not the app binary, or assets not inspectable)`);
+    else if (missing.length) failures.push(`${binary}: embedded resources do not match the whitelist, missing ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ` (+${missing.length - 5})` : ""}`);
   }
 } else {
   checkDist(path.resolve(root, args[0] || "dist"));
@@ -62,13 +73,11 @@ function checkDist(dist) {
 function checkBinary(binary) {
   if (!fs.existsSync(binary)) {
     failures.push(`binary not found: ${binary}`);
-    return;
+    return new Set();
   }
   const text = fs.readFileSync(binary).toString("latin1");
   const found = new Set();
-  for (const match of text.matchAll(/(?:^|[\/\\])((?:samples|reference-data|src)\/[A-Za-z0-9._\/-]+\.(?:json|txt|csv|js|css|it8|cgats))/g)) {
-    found.add(match[1]);
-  }
+  for (const match of text.matchAll(RESOURCE_PATH_GLOBAL)) found.add(match[1]);
   for (const file of found) {
     if (!allowed.has(file)) failures.push(`${path.basename(binary)} embeds non-whitelisted resource: ${file}`);
   }
@@ -77,6 +86,7 @@ function checkBinary(binary) {
   }
   const embeddedData = Object.keys(whitelist.data).filter((file) => found.has(file)).length;
   console.log(`${path.basename(binary)}: ${found.size} embedded resource paths, ${embeddedData} whitelisted data files`);
+  return found;
 }
 
 function forbiddenName(file) {
