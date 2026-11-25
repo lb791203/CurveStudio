@@ -8,7 +8,7 @@ import {
   toHarmonyCsv,
   upsertTarget,
 } from "./curve-engine.js?v=20260521-icc-p4";
-import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260522-g7-verify";
+import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview, releaseDiagnosis } from "./analysis-engine.js?v=20260522-g7-verify";
 import { applyCurveOverrides, curveRowKey, pruneCurveOverrides } from "./curve-overrides.js";
 import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260524-standards-runs";
 import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260603-standard-simple-1";
@@ -1266,7 +1266,9 @@ function calculate(options = {}) {
   });
   state.curveOverrides = pruneCurveOverrides(calculatedRows, state.curveOverrides);
   state.results = applyCurveOverrides(calculatedRows, state.curveOverrides);
-  state.diagnosis = diagnosePress(state.results.length ? state.results : diagnosticRows, diagnosisOptions);
+  // Release decisions come from the measured points; the fixed output grid would drop an
+  // off-grid patch (e.g. C 35 %) and could turn a warning into a pass.
+  state.diagnosis = releaseDiagnosis(diagnosticRows, state.results, diagnosisOptions);
   if (!state.results.length && !diagnosticRows.length && state.measurements.length) {
     // Data was imported but the current curve mode cannot use it (e.g. a Lab-only P2P file in TVI/G7 mode).
     const hasColorimetric = state.measurements.some((row) => Number.isFinite(row.colorimetricTone));

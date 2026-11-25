@@ -243,6 +243,12 @@ function sccaReferenceLab(reference, paperReference, paperMeasured) {
 }
 
 // Diagnosis texts are written for TVI; in CTV mode the same deviations are CTV values.
+// Release decision for UI and report: judged on the measured points. The output grid is only
+// used when there are no measured diagnostic rows (it would drop off-grid patches).
+export function releaseDiagnosis(measuredRows = [], gridRows = [], options = {}) {
+  return diagnosePress(measuredRows.length ? measuredRows : gridRows, options);
+}
+
 export function diagnosePress(results, options = {}) {
   const diagnosis = diagnosePressCore(results, options);
   if (options.metric !== "ctv") return diagnosis;

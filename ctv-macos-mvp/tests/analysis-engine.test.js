@@ -490,3 +490,16 @@ test("re-review S4: G7 cannot pass on reference aims when paper, K solid or CMY 
   const paperWithoutLab = g7Preview({ labRows: g7BaseLabRows().map((row) => row.label === "Paper" ? { ...row, lab: null } : row) });
   assert.equal(paperWithoutLab.status, "Data Incomplete");
 });
+
+test("re-review M3: an off-grid measured patch (C 35 % at −30) is not lost to the output grid", async () => {
+  const { buildDiagnosticRows, calculateCompensation } = await import("../src/curve-engine.js");
+  const { releaseDiagnosis } = await import("../src/analysis-engine.js");
+  const gain = { 25: 13, 50: 17, 75: 13 }; // ISO A-like targets, all in tolerance
+  const measurements = ["C", "M", "Y", "K"].flatMap((channel) => [25, 50, 75].map((tone) => ({ channel, tone, measuredTone: tone + gain[tone] })));
+  measurements.push({ channel: "C", tone: 35, measuredTone: 35 - 30 + 15 });
+  const options = { mode: "tvi", target: "isoA", smooth: "medium", limit: 18, compensationRatio: 100 };
+  const diagnosticRows = buildDiagnosticRows(measurements, options);
+  const grid = calculateCompensation(measurements, options);
+  const decision = releaseDiagnosis(diagnosticRows, grid, {});
+  assert.notEqual(decision.level, "pass");
+});
