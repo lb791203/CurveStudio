@@ -13,7 +13,7 @@ export const DEVICE_ADAPTERS = [
     id: "file",
     name: "文件导入",
     status: "Ready",
-    description: "通过 X-Rite / Techkon 软件导出的 CGATS、IT8、CSV、CxF/RWXF 文件进入测量流程。",
+    description: "通过 X-Rite / Techkon 软件导出的 CGATS、IT8、CSV 文件进入测量流程。",
     capabilities: ["importFile", "crossVerify"],
   },
   {

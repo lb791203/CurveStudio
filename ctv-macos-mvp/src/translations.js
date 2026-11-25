@@ -1953,7 +1953,7 @@ const STATIC_TEXT_ZH_EN = {
   "模拟设备": "Simulated Device",
   "仪器 SDK": "Instrument SDK",
   "SDK 待接入": "SDK Pending",
-  "通过 X-Rite / Techkon 软件导出的 CGATS、IT8、CSV、CxF/RWXF 文件进入测量流程。": "Import CGATS, IT8, CSV, CxF/RWXF files exported from X-Rite / Techkon software into the measurement workflow.",
+  "通过 X-Rite / Techkon 软件导出的 CGATS、IT8、CSV 文件进入测量流程。": "Import CGATS, IT8 and CSV files exported from X-Rite / Techkon software into the measurement workflow.",
   "用于开发和演示测量队列；不连接真实仪器。": "For development and measurement-queue demos; no real instrument is connected.",
   "连接 Techkon (0x197B) 或 X-Rite (0x0981) USB 分光光度仪进行实时测量。": "Connect Techkon (0x197B) or X-Rite (0x0981) USB spectrophotometers for live measurement.",
   "等待 X-Rite / Techkon SDK、授权文件或通讯协议后启用。": "Enabled after the X-Rite / Techkon SDK, license file, or communication protocol is available.",

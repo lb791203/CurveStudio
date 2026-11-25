@@ -48,7 +48,7 @@ test("desktop file IO uses Tauri dialog and command bridge", async () => {
   assert.equal(canUseDesktopFileDialog(), true);
   assert.deepEqual(await saveTextFileDesktop({ filename: "demo.json", contents: "{}" }), { handled: true, path: "/tmp/demo.json" });
   assert.deepEqual(await openTextFileDesktop(), { handled: true, path: "/tmp/demo.json", contents: "{\"ok\":true}" });
-  assert.deepEqual(calls.map((call) => call[0]), ["save", "write_text_file", "open", "read_text_file"]);
+  assert.deepEqual(calls.map((call) => call[0]), ["save", "write_text_file", "open", "read_file_bytes", "read_text_file"]);
 
   globalThis.window = originalWindow;
 });
@@ -73,7 +73,7 @@ test("desktop file IO works without global Tauri API", async () => {
   assert.deepEqual(await saveTextFileDesktop({ filename: "demo.json", contents: "{}" }), { handled: true, path: "/tmp/no-global.json" });
   assert.deepEqual(await openTextFileDesktop(), { handled: true, path: "/tmp/no-global.json", contents: "{\"ok\":\"internal\"}" });
   assert.deepEqual(await invokeTauriCommand("sdk_scan_devices"), undefined);
-  assert.deepEqual(calls.map((call) => call[0]), ["plugin:dialog|save", "write_text_file", "plugin:dialog|open", "read_text_file", "sdk_scan_devices"]);
+  assert.deepEqual(calls.map((call) => call[0]), ["plugin:dialog|save", "write_text_file", "plugin:dialog|open", "read_file_bytes", "read_text_file", "sdk_scan_devices"]);
 
   globalThis.window = originalWindow;
 });
@@ -171,4 +171,13 @@ test("desktop file IO exposes bridge failures to the UI error boundary", async (
   } finally {
     globalThis.window = originalWindow;
   }
+});
+
+test("review M5: text files are decoded as UTF-8, UTF-16 with BOM or GB18030", async () => {
+  const { decodeTextBytes } = await import("../src/desktop-io.js");
+  const utf16 = new Uint8Array([0xff, 0xfe, ...Array.from("C,50").flatMap((ch) => [ch.charCodeAt(0), 0])]);
+  assert.equal(decodeTextBytes(utf16), "C,50");
+  assert.equal(decodeTextBytes(new TextEncoder().encode("﻿纸白,95")), "纸白,95");
+  const gb = new Uint8Array([0xd6, 0xbd, 0xb0, 0xd7]); // "纸白" in GB18030
+  assert.equal(decodeTextBytes(gb), "纸白");
 });

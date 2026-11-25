@@ -24,6 +24,13 @@ fn write_binary_file(path: String, contents: Vec<u8>) -> Result<String, String> 
     Ok(path)
 }
 
+// Raw bytes so the frontend can decode UTF-16 / GB18030 files, not only UTF-8.
+#[tauri::command]
+fn read_file_bytes(path: String) -> Result<Vec<u8>, String> {
+    validate_file_command_path(Path::new(&path))?;
+    std::fs::read(path).map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 fn read_text_file(path: String) -> Result<String, String> {
     validate_file_command_path(Path::new(&path))?;
@@ -77,6 +84,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             write_text_file,
             read_text_file,
+            read_file_bytes,
             write_binary_file,
             sdk_scan_devices,
             sdk_calibrate,

@@ -22,7 +22,7 @@ import { DEVICE_ADAPTERS, buildMeasurementQueue, buildSdkMeasurementRow, calibra
 import { inspectImport } from "./import-inspector.js?v=20260525-statusbar-pass-1";
 import { buildIccStandardPair } from "./icc-pairing.js?v=20260521-icc-p4";
 import { parseIccProfile } from "./icc-profile.js?v=20260521-icc-p4";
-import { canUseTauriCommandBridge, invokeTauriCommand, openTextFileDesktop, saveTextFileDesktop, saveBinaryFileDesktop } from "./desktop-io.js";
+import { canUseTauriCommandBridge, decodeTextBytes, invokeTauriCommand, openTextFileDesktop, saveTextFileDesktop, saveBinaryFileDesktop } from "./desktop-io.js";
 import { buildIccExportPackage, exportMeasurementToCgats } from "./icc-generator.js";
 import { t, translateDynamicText, updateDomTranslations, getLanguage, setLanguage } from "./translations.js";
 import {
@@ -50,6 +50,7 @@ import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 import { fetchTextResource } from "./network.js";
 import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCurvePoints, baselineFromApplied, defaultBaseline, normalizeBaseline, withBaselineChannels } from "./rip-baseline.js";
 import { exportBlockedMessage, validateExportCurve } from "./curve-validation.js";
+import { validateMeasurements } from "./measurement-validation.js";
 import { escapeHtml } from "./shared.js";
 import { bindAsyncAction } from "./ui-actions.js";
 
@@ -393,7 +394,7 @@ function attachEvents() {
       event.target.value = "";
       return;
     }
-    const text = await file.text();
+    const text = decodeTextBytes(await file.arrayBuffer());
     if (file.name.toLowerCase().endsWith(".json") && await restoreProjectFromText(text)) {
       event.target.value = "";
       return;
@@ -1217,6 +1218,14 @@ function applyManualRows() {
     .map((row) => enrichManualDensityRow(row, solidDensities, paperDensity))
     .map((row) => enrichManualColorimetricRow(row, labReferences))
     .filter((row) => canCalculateCurve(row));
+  // Same plausibility rules as file import.
+  const checked = validateMeasurements(curveRows.map((row) => ({ ...row, lab: labFromManual(row) })));
+  if (checked.warnings.length) {
+    const rejected = checked.warnings.filter((item) => /已忽略/.test(item));
+    if (rejected.length) window.alert(`${t("manual_rows_rejected", "以下手输数据不合理，已忽略：")}\n${rejected.slice(0, 10).join("\n")}`);
+  }
+  const validRows = new Set(checked.valid.map((row) => `${row.channel}|${row.tone}|${row.patchType}`));
+  curveRows.splice(0, curveRows.length, ...curveRows.filter((row) => validRows.has(`${row.channel}|${row.tone}|${row.patchType}`)));
 
   state.importInfo = {
     sourceFormat: "Manual Table",
