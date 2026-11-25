@@ -2,9 +2,9 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { calculateCompensation, parseImportText } from "../src/curve-engine.js";
 
-const root = path.resolve("reference-data");
+const roots = [path.resolve("reference-data"), path.resolve("samples")];
 const supported = new Set([".txt", ".csv"]);
-const files = (await listFiles(root)).filter((file) => supported.has(path.extname(file).toLowerCase()));
+const files = (await Promise.all(roots.map(listFiles))).flat().filter((file) => supported.has(path.extname(file).toLowerCase()));
 const rows = [];
 let failures = 0;
 

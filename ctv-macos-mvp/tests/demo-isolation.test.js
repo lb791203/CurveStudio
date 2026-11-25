@@ -21,11 +21,6 @@ test("review #5: importing a measurement file never loads demo audit data", () =
   assert.ok(body.indexOf("parseImportText") < body.indexOf("state.auditReport"));
 });
 
-test("review #5: demo audit data is only fetched from the explicit sample entry", () => {
-  const fetches = [...app.matchAll(/audit-report-demo\.json/g)].map((match) => match.index);
-  const sampleBody = functionBody("loadSelectedSample");
-  const sampleStart = app.indexOf(sampleBody);
-  for (const index of fetches) {
-    assert.ok(index > sampleStart && index < sampleStart + sampleBody.length, "audit demo referenced outside loadSelectedSample");
-  }
+test("review #1/#5: no demo audit report or press presets are bundled or referenced", () => {
+  assert.doesNotMatch(app, /audit-report-demo\.json|kba-presets\.json/);
 });

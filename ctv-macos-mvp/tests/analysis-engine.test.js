@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { analyzeCurveSafety, buildLabVerificationRows, deltaE2000, deltaE76, deltaE94, deltaECMC, diagnosePress, g7Preview, summarizeLabVerification } from "../src/analysis-engine.js";
-import { g7NpdcLTarget } from "../src/g7-targets.js";
+import { g7CmyNpdcLTarget, g7NpdcLTarget } from "../src/g7-targets.js";
 import { g7GrayMagentaYellowFor } from "../src/shared.js";
 
 const g7Gray = (tone) => ({ c: tone, m: g7GrayMagentaYellowFor(tone), y: g7GrayMagentaYellowFor(tone), k: 0 });
@@ -163,13 +163,13 @@ test("g7Preview can validate complete manual-equivalent G7 data", () => {
         y: channel === "Y" ? 100 : 0,
         k: channel === "K" ? 100 : 0,
       },
-      lab: { l: 50, a: 0, b: 0 },
+      lab: { l: channel === "K" ? g7NpdcLTarget(100) : 50, a: 0, b: 0 },
       deltaE: 1,
     })),
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
       cmyk: g7Gray(tone),
-      lab: { l: g7NpdcLTarget(tone), a: 0.5, b: -0.5 },
+      lab: { l: g7CmyNpdcLTarget(tone), a: 0.5, b: -0.5 },
       deltaE: 1,
     })),
   ];
@@ -202,13 +202,13 @@ test("g7Preview treats G7 grayscale overruns as Fail, not Warning", () => {
         y: channel === "Y" ? 100 : 0,
         k: channel === "K" ? 100 : 0,
       },
-      lab: { l: 50, a: 0, b: 0 },
+      lab: { l: channel === "K" ? g7NpdcLTarget(100) : 50, a: 0, b: 0 },
       deltaE: 1,
     })),
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
       cmyk: g7Gray(tone),
-      lab: { l: g7NpdcLTarget(tone), a: 2, b: -0.5 },
+      lab: { l: g7CmyNpdcLTarget(tone), a: 2, b: -0.5 },
       deltaE: 1,
     })),
   ];
@@ -252,7 +252,7 @@ test("g7Preview conclusion identifies failed G7 verification priorities", () => 
         y: channel === "Y" ? 100 : 0,
         k: channel === "K" ? 100 : 0,
       },
-      lab: { l: 50, a: 0, b: 0 },
+      lab: { l: channel === "K" ? g7NpdcLTarget(100) : 50, a: 0, b: 0 },
       deltaE: 1,
     })),
     ...[25, 50, 75].map((tone) => ({
@@ -402,13 +402,13 @@ function g7BaseLabRows({ kLOffset = 0, includeK = true } = {}) {
     ...["C", "M", "Y", "K"].map((channel) => ({
       label: `${channel} 100%`,
       cmyk: { c: channel === "C" ? 100 : 0, m: channel === "M" ? 100 : 0, y: channel === "Y" ? 100 : 0, k: channel === "K" ? 100 : 0 },
-      lab: { l: 50, a: 0, b: 0 },
+      lab: { l: channel === "K" ? g7NpdcLTarget(100) : 50, a: 0, b: 0 },
       deltaE: 1,
     })),
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
       cmyk: g7Gray(tone),
-      lab: { l: g7NpdcLTarget(tone), a: 0.5 * (1 - tone / 100) * 0, b: -2 * (1 - tone / 100) },
+      lab: { l: g7CmyNpdcLTarget(tone), a: 0, b: -2 * (1 - tone / 100) },
       deltaE: 1,
     })),
   ];

@@ -135,7 +135,7 @@ test("ISO 20654 Lab CTV uses the Vx/Vy/Vz distance, not the Lab Delta E distance
 });
 
 test("ISO 20654 CTV on a magenta 50% patch differs from the Lab Delta E ratio", () => {
-  // Paper, M50 and M solid from samples/g7-p2p51-simulated.txt; expected value computed by hand
+  // Paper, M50 and M solid values (synthetic); expected value computed by hand
   // from ISO 20654 formula (1) with Vx = L + 116a/500, Vy = L, Vz = L - 116b/200.
   const paper = { l: 93.5, a: 1, b: -5.5 };
   const m50 = { l: 66.5, a: 40.47, b: -8.21 };

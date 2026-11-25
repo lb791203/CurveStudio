@@ -75,13 +75,6 @@ const BROAD_SOLID_DENSITY_RANGES = {
   K: [0.95, 1.95],
 };
 
-export const AUDIT_DEMO_ISO_12647_2_2007_DENSITY_TARGETS = {
-  C: { 0: 0.08, 25: 0.25, 50: 0.49, 75: 0.85, 100: 1.4 },
-  M: { 0: 0.08, 25: 0.25, 50: 0.5, 75: 0.86, 100: 1.45 },
-  Y: { 0: 0.06, 25: 0.22, 50: 0.43, 75: 0.72, 100: 1.05 },
-  K: { 0: 0.08, 25: 0.28, 50: 0.54, 75: 0.94, 100: 1.7 },
-};
-
 const ISO_12647_2_2013_TOLERANCE_SOURCE = "ISO 12647-2:2013 Table 11";
 const ISO_12647_2_2013_TARGET_SOURCE = "ISO 12647-2:2013 Table 9";
 const ISO_12647_2_2013_LAB_SOURCE = "ISO 12647-2:2013 Tables 2, 5 and 6";
@@ -139,11 +132,25 @@ const ISO_12647_2_2013_PC = [
   { pc: "PC8", ps: "PS8", cd: "CD8", target: "isoC" },
 ];
 
+// Paper / solid / overprint aims of the CGATS21-2 (ISO 15339-2) reference print conditions.
+// Only these aim values ship with the app; the full characterization data sets do not.
+const CRPC_AIM_LAB = {
+  CRPC1: { paper: [85, 1, 5], C: [59, -24, -26], M: [56, 48, 0], Y: [80, -2, 60], K: [37, 1, 4], CM: [42, 7, -22], CY: [55, -35, 17], MY: [54, 44, 25], CMY: [40, 0, 0] },
+  CRPC2: { paper: [87, 0, 3], C: [57, -28, -34], M: [52, 58, -2], Y: [82, -2, 72], K: [30, 1, 2], CM: [35, 9, -32], CY: [51, -44, 19], MY: [51, 55, 32], CMY: [32, 0, 0] },
+  CRPC3: { paper: [95, 1, -4], C: [60, -26, -44], M: [56, 61, -2], Y: [89, -3, 76], K: [32, 1, 1], CM: [38, 10, -31], CY: [54, -43, 15], MY: [54, 56, 28], CMY: [34, 0, 0] },
+  CRPC4: { paper: [89, 0, 3], C: [55, -36, -38], M: [47, 66, -3], Y: [83, -3, 83], K: [23, 1, 2], CM: [28, 14, -39], CY: [49, -54, 24], MY: [46, 62, 39], CMY: [27, 0, 0] },
+  CRPC5: { paper: [92, 0, 0], C: [57, -37, -44], M: [48, 71, -4], Y: [87, -4, 88], K: [19, 0, 1], CM: [27, 17, -44], CY: [51, -62, 26], MY: [48, 65, 45], CMY: [25, 0, 0] },
+  CRPC6: { paper: [95, 1, -4], C: [56, -37, -50], M: [48, 75, -4], Y: [89, -4, 93], K: [16, 0, 0], CM: [25, 20, -46], CY: [50, -66, 26], MY: [47, 68, 48], CMY: [23, 0, 0] },
+  CRPC7: { paper: [97, 1, -4], C: [54, -42, -54], M: [47, 78, -10], Y: [90, -4, 103], K: [14, 0, 0], CM: [20, 26, -53], CY: [50, -72, 29], MY: [47, 75, 54], CMY: [14, 0, 0] },
+};
+
 function labReferenceRowsForIso2013(pc) {
+  return labReferenceRows(ISO_12647_2_2013_PAPER_LAB[pc.ps], ISO_12647_2_2013_SOLID_LAB[pc.cd] || {});
+}
+
+function labReferenceRows(paper, lab) {
   const rows = [];
-  const paper = ISO_12647_2_2013_PAPER_LAB[pc.ps];
   if (paper) rows.push(labReferenceRow("Paper", { c: 0, m: 0, y: 0, k: 0 }, paper));
-  const lab = ISO_12647_2_2013_SOLID_LAB[pc.cd] || {};
   const cmykByPatch = {
     C: { c: 100, m: 0, y: 0, k: 0 },
     M: { c: 0, m: 100, y: 0, k: 0 },
@@ -181,8 +188,8 @@ const CRPC_STANDARDS = Array.from({ length: 7 }, (_, index) => {
     printCondition: `CGATS21-2 CRPC${crpc}`,
     target: "isoA",
     targetSource: "GRACoL2013 CRPC tone target",
-    labReferenceSource: "CGATS21-2 CRPC reference data",
-    referencePath: `./reference-data/standards/cgats21-iso15339/CGATS21-2-CRPC${crpc}.txt`,
+    labReferenceSource: "CGATS21-2 CRPC aim values (paper, solids, overprints)",
+    referenceRows: labReferenceRows(CRPC_AIM_LAB[`CRPC${crpc}`].paper, CRPC_AIM_LAB[`CRPC${crpc}`]),
     solidDensityRanges: COATED_SOLID_DENSITY_RANGES,
     ...acceptancePreset("gracolG7"),
   };
@@ -206,22 +213,6 @@ const ISO_12647_2_2013_PC_STANDARDS = ISO_12647_2_2013_PC.map((pc) => ({
 
 const BUILT_IN_STANDARD_LIBRARY = [
   ...CRPC_STANDARDS,
-  {
-    id: "iso12647_2_2007_offset_audit_demo",
-    name: "ISO 12647-2:2007 Offset",
-    printCondition: "ISO 12647-2:2007 Offset Status T / Paper 2 Matt / Curve A+B / Black / Status T",
-    target: "isoA",
-    // CMY follow TVI curve A, K follows curve B.
-    channelTargets: { K: "isoB" },
-    targetSource: "Audit report demo / Curve A (CMY) + B (K)",
-    labReferenceSource: "Audit report demo target Lab",
-    densityTargetSource: "Audit report demo target density",
-    referencePath: "./reference-data/standards/audit-demo/iso12647-2-2007-offset-audit-demo.txt",
-    solidDensityRanges: COATED_SOLID_DENSITY_RANGES,
-    densityTargets: AUDIT_DEMO_ISO_12647_2_2007_DENSITY_TARGETS,
-    ...acceptancePreset("isoTviOnly"),
-    deltaE: { warning: 5, fail: 5 },
-  },
   ...ISO_12647_2_2013_PC_STANDARDS,
   {
     id: "iso_tvi_a",
@@ -344,9 +335,9 @@ export function removeCustomStandard(id) {
 }
 
 // Preset ids renamed in earlier releases; saved project archives may still reference them.
-const LEGACY_STANDARD_IDS = {
-  sml_printspec_xl75_6c: "iso12647_2_2007_offset_audit_demo",
-};
+// The ISO 12647-2:2007 audit demo preset was removed (its data was not ours to ship);
+// projects that used it are restored as a custom standard.
+const LEGACY_STANDARD_IDS = {};
 
 export function standardById(id) {
   const resolvedId = LEGACY_STANDARD_IDS[id] || id;

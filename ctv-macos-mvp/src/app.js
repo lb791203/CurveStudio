@@ -47,8 +47,7 @@ import { buildCompensationSimulation } from "./compensation-simulation.js";
 import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
 import { STANDARD_LIBRARY, addOrUpdateCustomStandard, archivedStandardAsCustom, buildPatchMap, cmykKey, hasStandard, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260604-density-targets-1";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
-import { auditMeasurementCsv } from "./audit-report.js";
-import { fetchJsonResource, fetchTextResource } from "./network.js";
+import { fetchTextResource } from "./network.js";
 import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCurvePoints, baselineFromApplied, defaultBaseline, normalizeBaseline, withBaselineChannels } from "./rip-baseline.js";
 import { exportBlockedMessage, validateExportCurve } from "./curve-validation.js";
 import { escapeHtml } from "./shared.js";
@@ -291,9 +290,10 @@ const state = {
   },
 };
 
-let kbaPresetCache = null;
 
-initialize();
+// Start after the whole module has evaluated: built-in standards now load synchronously,
+// so the first render must not run before module-level constants are initialised.
+queueMicrotask(initialize);
 
 async function initialize() {
   // Initialize theme from localStorage
@@ -975,9 +975,8 @@ function cloneData(value) {
 
 function parseAndCalculate(options = {}) {
   if (!options.skipConfirm && !confirmDataOverwrite(t("confirm_parse_overwrite", "解析文本数据会替换当前工作区数据。"))) return;
-  if (!options.preserveAuditReport) state.auditReport = null;
+  state.auditReport = null;
   state.importInfo = parseImportText(els.rawInput.value, { densityFilter: state.settings.densityFilter });
-  if (state.auditReport) applyAuditReportImportMetadata(state.importInfo, state.auditReport);
   state.measurements = state.importInfo.measurements;
   state.manualRows = [];
   state.manualDirty = false;
@@ -1002,52 +1001,6 @@ async function importMeasurementText(text, options = {}) {
   saveCurrentRun({ switchToJob: false, namePrefix: t("run_name_imported_measurement", "导入测量") });
   render();
   return true;
-}
-
-async function loadAuditReportStandard(report) {
-  const marker = [
-    report?.standard?.name,
-    report?.source?.software,
-    report?.job?.customerName,
-    report?.job?.machineModel,
-  ].filter(Boolean).join(" ");
-  const match = STANDARD_LIBRARY.find((item) => (
-    item.id === "iso12647_2_2007_offset_audit_demo" &&
-    /audit demo|ISO 12647-2:2007/i.test(marker)
-  ));
-  if (!match || state.standard?.id === match.id) return;
-  await loadStandard(match.id);
-}
-
-function applyAuditReportImportMetadata(importInfo, report) {
-  if (!importInfo || !report?.standard) return;
-  importInfo.metadata = {
-    ...(importInfo.metadata || {}),
-    measurement_condition: importInfo.metadata?.measurement_condition || report.standard.measurementCondition || "",
-    illuminant: importInfo.metadata?.illuminant || report.standard.illuminant || "",
-    observer: importInfo.metadata?.observer || report.standard.observer || "",
-    density_filter: importInfo.metadata?.density_filter || report.standard.densityFilter || "",
-    backing: importInfo.metadata?.backing || report.standard.backing || "",
-  };
-}
-
-function applyAuditReportJobFields(report, options = {}) {
-  if (!report) return;
-  const overwrite = Boolean(options.overwrite);
-  const setValue = (input, value) => {
-    if (!input || !value) return;
-    const current = String(input.value || "").trim();
-    if (overwrite || !current || /^(现场客户|Field Customer|KBA)$/i.test(current)) {
-      input.value = value;
-    }
-  };
-  setValue(els.jobCustomerInput, report.job?.customerName || report.job?.supplier);
-  setValue(els.jobPressInput, report.job?.machineModel || report.job?.pressPrinter);
-  setValue(els.jobPaperInput, report.job?.substrateName);
-  setValue(els.jobDeviceInput, report.source?.software);
-  if (els.jobNoteInput && (overwrite || !String(els.jobNoteInput.value || "").trim())) {
-    els.jobNoteInput.value = `${report.source?.software || "Audit report"} summary sample; not a full CGATS/P2P measurement file.`;
-  }
 }
 
 function loadImportedMeasurement(importInfo, text) {
@@ -1085,26 +1038,11 @@ function autoSelectModeForData() {
 async function loadSelectedSample() {
   if (!confirmDataOverwrite(t("confirm_sample_overwrite", "载入示例会替换当前工作区数据。"))) return;
   const selected = els.sampleSelect.value;
-  if (selected === "kba105" || selected === "kba162") {
-    await loadManualPreset(selected);
-    return;
-  }
   const samplePaths = {
     sample: "./samples/sample-measurements.csv",
     ctvLab: "./samples/ctv-lab-demo.csv",
-    p2p51: "./samples/g7-p2p51-simulated.txt",
-    auditDemo: "./samples/audit-report-demo.json",
+    p2p51: "./samples/g7-demo-synthetic.txt",
   };
-  if (selected === "auditDemo") {
-    const report = await responseJson(samplePaths.auditDemo);
-    state.auditReport = report;
-    await loadAuditReportStandard(report);
-    els.rawInput.value = auditMeasurementCsv(report);
-    applyAuditReportJobFields(report, { overwrite: true });
-    parseAndCalculate({ skipConfirm: true, preserveAuditReport: true });
-    switchView("report");
-    return;
-  }
   els.rawInput.value = await fetchTextResource(samplePaths[selected] || samplePaths.sample, { label: "sample measurement" });
   state.auditReport = null;
   parseAndCalculate({ skipConfirm: true });
@@ -1120,46 +1058,6 @@ async function loadSelectedSample() {
     calculate({ preserveRatio: true });
     switchView("g7");
   }
-}
-
-async function responseJson(path) {
-  return fetchJsonResource(path);
-}
-
-async function loadManualPreset(key) {
-  const preset = (await loadKbaPresets())[key];
-  if (!preset) return;
-  state.auditReport = null;
-  state.manualRows = kbaPresetRows(preset);
-  state.manualDirty = false;
-  state.curveOverrides = {};
-  state.selectedPatchIndex = null;
-  els.jobPressInput.value = preset.press;
-  els.modeSelect.value = "tvi";
-  els.targetSelect.value = state.standard.target || "isoB";
-  state.ratioAuto = true;
-  applyManualRows();
-  switchView("curve");
-}
-
-async function loadKbaPresets() {
-  if (kbaPresetCache) return kbaPresetCache;
-  kbaPresetCache = await fetchJsonResource("./samples/kba-presets.json", { label: "KBA preset" });
-  return kbaPresetCache;
-}
-
-function kbaPresetRows(preset) {
-  return Object.entries(preset.channels || {}).flatMap(([channel, data]) => (
-    (data.points || []).map(([tone, measuredTone]) => defaultManualRow({
-      patchType: "tone",
-      channel,
-      tone,
-      measuredTone,
-      density: data.density ?? "",
-      source: preset.source,
-      note: "",
-    }))
-  ));
 }
 
 function addManualRow() {

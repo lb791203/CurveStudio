@@ -24,36 +24,73 @@ export function classifyP2PPatch(c, m, y, k) {
   return categories.length ? categories : ["other"];
 }
 
-// ─── G7 NPDC Target Curve ───
-// Fallback L* targets from the bundled GRACoL2013 CRPC6 characterization data.
-// When a selected standard provides exact or interpolated K-only / CMY gray Lab,
-// buildNpdcVerification and buildGrayVerification use that standard data instead.
+// ─── G7 NPDC Target Curve (CGATS/Idealliance TR 015) ───
+// The aim neutral print density curves are computed, not looked up in a data set:
+//   TVI(TV) = a·p1 + b·p2 + c·p3 with p1 = -4x(x-1), p2 = 21x(x-1)(x-0.5), p3 = -64x(x-1)(x-0.5)^2, x = TV/100
+//   Y_R(TV) = 1 - RR·(TV + TVI(TV))/100           reference reflectance relative to the substrate
+//   Y_C     = (0.7 + 0.3·(Y_D/Y_L)^(1/3))^3        control point; lighter tones follow Y_R unchanged
+//   darker: Y = Y_R - (RA - RR)·(Y_C - Y_R)/(Y_C - 1 + RR), RA = 1 - Y_D/Y_L
+// Y_D/Y_L is the measured solid (K, or CMY overprint) relative to the measured substrate, so
+// the shadow end lands exactly on the actual maximum neutral density.
+// Constants: CMY a=24.321 b=2.246 c=0.670 RR=0.956649; K a=19.421 b=0.967 c=0.555 RR=0.978223.
+// Check: with paper L* 95 / K L* 16 this reproduces the CRPC6 K ramp within 0.6 L*, and the
+// CMY curve the CRPC6 50/40/40 gray within 0.1 L*.
 
-const G7_NPDC_L_TARGET = new Map([
-  [0, 95.0], [2, 93.55], [3, 92.81], [5, 91.41], [7, 89.99],
-  [10, 87.87], [15, 84.46], [20, 81.17], [25, 77.66],
-  [30, 74.3], [40, 67.4], [50, 60.4], [60, 52.81],
-  [70, 44.71], [75, 40.37], [80, 35.68], [85, 30.82],
-  [90, 25.78], [95, 20.62], [98, 17.69], [100, 16.0],
-]);
+export const G7_NPDC_METHOD = "TR015 (2013/2022) NPDC";
+
+const TR015 = {
+  K: { a: 19.421, b: 0.967, c: 0.555, rr: 0.978223 },
+  CMY: { a: 24.321, b: 2.246, c: 0.670, rr: 0.956649 },
+};
 
 const DEFAULT_G7_PAPER_L = 95;
 
-export function g7NpdcLTarget(tone) {
-  const keys = [...G7_NPDC_L_TARGET.keys()].sort((a, b) => a - b);
-  const exact = G7_NPDC_L_TARGET.get(tone);
-  if (exact !== undefined) return exact;
+function tr015Tvi(tone, { a, b, c }) {
+  const x = tone / 100;
+  return a * (-4 * x * (x - 1)) + b * (21 * x * (x - 1) * (x - 0.5)) + c * (-64 * x * (x - 1) * (x - 0.5) ** 2);
+}
 
-  let lower = keys[0];
-  let upper = keys[keys.length - 1];
-  for (const key of keys) {
-    if (key <= tone) lower = key;
-    if (key >= tone && upper > tone) { upper = key; break; }
-  }
-  if (lower === upper) return G7_NPDC_L_TARGET.get(lower);
-  const ratio = (tone - lower) / (upper - lower);
-  return G7_NPDC_L_TARGET.get(lower)
-    + (G7_NPDC_L_TARGET.get(upper) - G7_NPDC_L_TARGET.get(lower)) * ratio;
+// Target reflectance relative to the substrate (0..1). solidRelativeY = Y(solid)/Y(paper);
+// without a measured solid the reference curve is used unscaled (RA = RR).
+export function tr015RelativeY(toneValue, kind = "K", solidRelativeY = NaN) {
+  const constants = TR015[kind === "CMY" ? "CMY" : "K"];
+  const tone = Math.min(100, Math.max(0, number(toneValue)));
+  if (!Number.isFinite(tone)) return NaN;
+  const yR = 1 - constants.rr * (tone + tr015Tvi(tone, constants)) / 100;
+  const ydyl = Number.isFinite(solidRelativeY) && solidRelativeY > 0 && solidRelativeY < 1 ? solidRelativeY : 1 - constants.rr;
+  const ra = 1 - ydyl;
+  const yC = (0.7 + 0.3 * Math.cbrt(ydyl)) ** 3;
+  if (yR > yC) return yR;
+  return yR - (ra - constants.rr) * (yC - yR) / (yC - 1 + constants.rr);
+}
+
+// Substrate-relative target L* (paper = 100).
+export function tr015RelativeL(tone, kind, paperL, solidL) {
+  const solidRelativeY = labLToRelativeY(solidL) / labLToRelativeY(paperL);
+  return relativeYToL(tr015RelativeY(tone, kind, solidRelativeY));
+}
+
+// Absolute target L* for a given substrate and solid.
+// Without solidL the unscaled TR015 reference curve is used.
+export function tr015AbsoluteL(tone, kind = "K", paperL = DEFAULT_G7_PAPER_L, solidL = NaN) {
+  const paperY = labLToRelativeY(paperL);
+  const solidRelativeY = Number.isFinite(number(solidL)) ? labLToRelativeY(solidL) / paperY : NaN;
+  return relativeYToL(tr015RelativeY(tone, kind, solidRelativeY) * paperY);
+}
+
+// K NPDC reference target L* on paper L* 95 (absolute L*).
+export function g7NpdcLTarget(tone) {
+  return tr015AbsoluteL(tone, "K");
+}
+
+// CMY gray NPDC reference target L* on paper L* 95 (absolute L*).
+export function g7CmyNpdcLTarget(tone) {
+  return tr015AbsoluteL(tone, "CMY");
+}
+
+function relativeYToL(y) {
+  if (!Number.isFinite(y) || y < 0) return NaN;
+  return y > (6 / 29) ** 3 ? 116 * Math.cbrt(y) - 16 : 903.3 * y;
 }
 
 // G7 Grayscale is substrate-relative: every patch is zeroed on the measured paper
@@ -62,35 +99,42 @@ export function g7NpdcLTarget(tone) {
 // Without this, a press sheet on paper with L* 93 fails the highlights even when its
 // tone reproduction is perfect. Pass `relative: false` for the old absolute check.
 export function buildNpdcVerification(kRows, options = {}) {
-  const paperL = Number.isFinite(number(options.paperL)) ? number(options.paperL) : DEFAULT_G7_PAPER_L;
-  const relative = options.relative !== false && Number.isFinite(number(options.paperL));
-  const referencePaperL = standardPaperL(options.standardPatchMap);
-  return kRows
-    .filter((row) => Number.isFinite(row.tone))
+  return buildToneVerification(kRows, "K", options.kSolidL, options).sort((a, b) => a.tone - b.tone);
+}
+
+// Shared by K and CMY: measured vs TR015 target L*, substrate-relative by default.
+function buildToneVerification(rows, kind, measuredSolidL, options) {
+  const hasPaper = Number.isFinite(number(options.paperL));
+  const paperL = hasPaper ? number(options.paperL) : DEFAULT_G7_PAPER_L;
+  const relative = options.relative !== false && hasPaper;
+  const solidL = Number.isFinite(number(measuredSolidL)) ? number(measuredSolidL) : NaN;
+  const targetSource = Number.isFinite(solidL) ? "tr015_measured_solid" : "tr015_reference";
+  return rows
+    .filter((row) => Number.isFinite(toneOf(row, kind)))
     .map((row) => {
-      const targetLab = targetKOnlyLab(row, options.standardPatchMap);
-      const absoluteTargetL = targetLab?.l ?? g7NpdcLTarget(row.tone);
-      const absoluteMeasuredL = Number.isFinite(row.lab?.l) ? row.lab.l : NaN;
+      const tone = toneOf(row, kind);
+      const relativeTargetL = Number.isFinite(solidL)
+        ? tr015RelativeL(tone, kind, paperL, solidL)
+        : relativeYToL(tr015RelativeY(tone, kind));
+      const absoluteTargetL = relativeYToL(labLToRelativeY(relativeTargetL) * labLToRelativeY(paperL));
+      const absoluteMeasuredL = Number.isFinite(number(row.lab?.l)) ? number(row.lab.l) : NaN;
       const measuredL = relative ? relativeL(absoluteMeasuredL, paperL) : absoluteMeasuredL;
-      const targetL = relative
-        ? relativeL(absoluteTargetL, targetLab ? referencePaperL : DEFAULT_G7_PAPER_L)
-        : absoluteTargetL;
-      const deltaL = Number.isFinite(measuredL) ? measuredL - targetL : NaN;
-      const weight = g7ToneWeight(row.tone);
+      const targetL = relative ? relativeTargetL : absoluteTargetL;
+      const deltaL = Number.isFinite(measuredL) && Number.isFinite(targetL) ? measuredL - targetL : NaN;
+      const weight = g7ToneWeight(tone);
       const signedWeightedDeltaL = Number.isFinite(deltaL) ? deltaL * weight : NaN;
       const measuredNpdc = neutralPrintDensityFromL(absoluteMeasuredL, paperL);
-      const targetNpdc = relative
-        ? neutralPrintDensityFromL(targetL, 100)
-        : neutralPrintDensityFromL(targetL, paperL);
+      const targetNpdc = neutralPrintDensityFromL(absoluteTargetL, paperL);
       return {
-        tone: row.tone,
+        ...(kind === "CMY" ? { label: row.label, cmyk: row.cmyk } : {}),
+        tone,
         measuredL,
         targetL,
         absoluteMeasuredL,
         absoluteTargetL,
         evaluation: relative ? "substrate_relative" : "absolute",
-        targetLab,
-        targetSource: targetLab ? "standard" : "fallback",
+        targetSource,
+        method: G7_NPDC_METHOD,
         measuredNpdc,
         targetNpdc,
         deltaNpdc: Number.isFinite(measuredNpdc) && Number.isFinite(targetNpdc) ? measuredNpdc - targetNpdc : NaN,
@@ -99,9 +143,14 @@ export function buildNpdcVerification(kRows, options = {}) {
         weight,
         signedWeightedDeltaL,
         weightedDeltaL: Number.isFinite(signedWeightedDeltaL) ? Math.abs(signedWeightedDeltaL) : NaN,
+        row,
       };
-    })
-    .sort((a, b) => a.tone - b.tone);
+    });
+}
+
+function toneOf(row, kind) {
+  if (Number.isFinite(number(row.tone))) return number(row.tone);
+  return kind === "K" ? number(row.cmyk?.k) : neutralGrayTone(row);
 }
 
 export function summarizeNpdc(rows, tolerances = {}) {
@@ -131,59 +180,28 @@ export const G7_GRAY_TOLERANCES = {
 };
 
 export function buildGrayVerification(grayRows, options = {}) {
-  const paperL = Number.isFinite(number(options.paperL)) ? number(options.paperL) : DEFAULT_G7_PAPER_L;
   const paperLab = isLab(options.paperLab) ? options.paperLab : null;
+  const solidLab = isLab(options.cmySolidLab) ? options.cmySolidLab : null;
   const relative = options.relative !== false && Number.isFinite(number(options.paperL));
-  const referencePaperL = standardPaperL(options.standardPatchMap);
-  return grayRows
-    .filter((row) => row.lab)
-    .map((row) => {
-      const tone = neutralGrayTone(row);
-      const targetLab = targetGrayLab(row, options.standardPatchMap);
-      const absoluteTargetL = targetLab?.l ?? (Number.isFinite(tone) ? g7NpdcLTarget(tone) : NaN);
-      const absoluteMeasuredL = number(row.lab.l);
-      const measuredL = relative ? relativeL(absoluteMeasuredL, paperL) : absoluteMeasuredL;
-      const targetL = relative
-        ? relativeL(absoluteTargetL, targetLab ? referencePaperL : DEFAULT_G7_PAPER_L)
-        : absoluteTargetL;
-      const deltaL = Number.isFinite(measuredL) && Number.isFinite(targetL) ? measuredL - targetL : NaN;
+  return buildToneVerification(grayRows.filter((row) => row.lab), "CMY", solidLab?.l, options)
+    .map(({ row, ...item }) => {
+      const tone = item.tone;
       const measuredA = number(row.lab.a);
       const measuredB = number(row.lab.b);
-      // Substrate-relative gray: the aim keeps a fading share of the paper tint,
-      // a*b* = paper a*b* x (1 - C/100). Published G7 guidance gives paper x 0.5 for
-      // the 50C/40M/40Y HR patch; the linear form between 0 and 100% is assumed.
-      const grayAim = relative && paperLab && Number.isFinite(tone)
-        ? { a: paperLab.a * (1 - clampTone(tone) / 100), b: paperLab.b * (1 - clampTone(tone) / 100) }
-        : null;
-      const targetA = grayAim ? grayAim.a : Number.isFinite(number(targetLab?.a)) ? number(targetLab.a) : 0;
-      const targetB = grayAim ? grayAim.b : Number.isFinite(number(targetLab?.b)) ? number(targetLab.b) : 0;
+      // TR015 gray balance: a*b* = substrate a*b* x (1 - C/100); above 50 % C it blends toward
+      // the measured CMY solid with weight ((C - 50)/50)^4 when that solid is not neutral.
+      const grayAim = relative && paperLab && Number.isFinite(tone) ? tr015GrayAim(tone, paperLab, solidLab) : null;
+      const targetA = grayAim ? grayAim.a : 0;
+      const targetB = grayAim ? grayAim.b : 0;
       const deltaA = Number.isFinite(measuredA) ? measuredA - targetA : NaN;
       const deltaB = Number.isFinite(measuredB) ? measuredB - targetB : NaN;
       const chroma = Number.isFinite(deltaA) && Number.isFinite(deltaB) ? Math.sqrt(deltaA ** 2 + deltaB ** 2) : NaN;
       const measuredChroma = Number.isFinite(measuredA) && Number.isFinite(measuredB) ? Math.sqrt(measuredA ** 2 + measuredB ** 2) : NaN;
-      const weight = g7ToneWeight(tone);
-      const signedWeightedDeltaL = Number.isFinite(deltaL) ? deltaL * weight : NaN;
-      const measuredNpdc = neutralPrintDensityFromL(absoluteMeasuredL, paperL);
-      const targetNpdc = relative
-        ? neutralPrintDensityFromL(targetL, 100)
-        : neutralPrintDensityFromL(targetL, paperL);
       return {
+        ...item,
         label: row.label,
-        tone,
         cmyk: row.cmyk,
-        measuredL,
-        targetL,
-        absoluteMeasuredL,
-        absoluteTargetL,
-        evaluation: relative ? "substrate_relative" : "absolute",
-        grayAimSource: grayAim ? "substrate_relative" : targetLab ? "standard" : "neutral",
-        targetLab,
-        targetSource: targetLab ? "standard" : "fallback",
-        measuredNpdc,
-        targetNpdc,
-        deltaNpdc: Number.isFinite(measuredNpdc) && Number.isFinite(targetNpdc) ? measuredNpdc - targetNpdc : NaN,
-        deltaL,
-        absDeltaL: Number.isFinite(deltaL) ? Math.abs(deltaL) : NaN,
+        grayAimSource: grayAim ? "substrate_relative" : "neutral",
         a: measuredA,
         b: measuredB,
         targetA,
@@ -192,13 +210,23 @@ export function buildGrayVerification(grayRows, options = {}) {
         deltaB,
         chroma,
         measuredChroma,
-        weight,
-        signedWeightedDeltaL,
-        weightedDeltaL: Number.isFinite(signedWeightedDeltaL) ? Math.abs(signedWeightedDeltaL) : NaN,
-        weightedChroma: Number.isFinite(chroma) ? chroma * weight : NaN,
+        weightedChroma: Number.isFinite(chroma) ? chroma * item.weight : NaN,
       };
     })
-    .sort((a, b) => a.tone - b.tone || a.label.localeCompare(b.label));
+    .sort((a, b) => a.tone - b.tone || String(a.label).localeCompare(String(b.label)));
+}
+
+export function tr015GrayAim(toneValue, paperLab, cmySolidLab = null) {
+  const tone = clampTone(toneValue);
+  const share = 1 - tone / 100;
+  let a = number(paperLab.a) * share;
+  let b = number(paperLab.b) * share;
+  if (cmySolidLab && tone > 50) {
+    const w = ((tone - 50) / 50) ** 4;
+    a = a * (1 - w) + number(cmySolidLab.a) * w;
+    b = b * (1 - w) + number(cmySolidLab.b) * w;
+  }
+  return { a, b };
 }
 
 export function summarizeGrayBalance(rows, tolerances = {}) {
@@ -260,11 +288,6 @@ export function relativeL(sampleL, paperL) {
   return ratio > (6 / 29) ** 3 ? 116 * Math.cbrt(ratio) - 16 : 903.3 * ratio;
 }
 
-function standardPaperL(standardPatchMap) {
-  const lab = standardPatchMap?.get?.(localCmykKey({ c: 0, m: 0, y: 0, k: 0 }))?.lab;
-  return isLab(lab) ? lab.l : DEFAULT_G7_PAPER_L;
-}
-
 function clampTone(tone) {
   return Math.min(100, Math.max(0, number(tone)));
 }
@@ -276,82 +299,8 @@ export function neutralPrintDensityFromL(sampleL, paperL = DEFAULT_G7_PAPER_L) {
   return Math.max(0, Math.log10(paperY / sampleY));
 }
 
-function targetKOnlyLab(row, standardPatchMap) {
-  if (!standardPatchMap?.size) return null;
-  const tone = number(row.tone ?? row.cmyk?.k);
-  if (!Number.isFinite(tone)) return null;
-  const exact = standardPatchMap.get(localCmykKey({ c: 0, m: 0, y: 0, k: tone }))?.lab;
-  if (isLab(exact)) return exact;
-  return interpolateTargetLab(standardTargetRows(standardPatchMap, isKOnlyTarget), tone);
-}
-
-function targetGrayLab(row, standardPatchMap) {
-  if (!standardPatchMap?.size) return null;
-  const exact = row.cmyk ? standardPatchMap.get(localCmykKey(row.cmyk))?.lab : null;
-  if (isLab(exact)) return exact;
-  const tone = neutralGrayTone(row);
-  if (!Number.isFinite(tone)) return null;
-  const grayRows = standardTargetRows(standardPatchMap, isGrayTarget)
-    .map((item) => ({ tone: neutralGrayTone({ cmyk: item.cmyk }), lab: item.lab }))
-    .filter((item) => Number.isFinite(item.tone) && isLab(item.lab));
-  return interpolateTargetLab(grayRows, tone);
-}
-
-function standardTargetRows(standardPatchMap, predicate) {
-  return [...standardPatchMap.values()]
-    .filter((item) => item?.cmyk && isLab(item.lab) && predicate(item.cmyk))
-    .map((item) => ({ tone: item.cmyk.k, cmyk: item.cmyk, lab: item.lab }))
-    .sort((a, b) => a.tone - b.tone);
-}
-
-function interpolateTargetLab(rows, toneValue) {
-  const rowsWithTone = rows
-    .map((row) => ({ ...row, tone: number(row.tone) }))
-    .filter((row) => Number.isFinite(row.tone) && isLab(row.lab))
-    .sort((a, b) => a.tone - b.tone);
-  if (!rowsWithTone.length) return null;
-  const tone = number(toneValue);
-  if (!Number.isFinite(tone)) return null;
-  const exact = rowsWithTone.find((row) => Math.abs(row.tone - tone) < 0.01);
-  if (exact) return exact.lab;
-  let lower = rowsWithTone[0];
-  let upper = rowsWithTone[rowsWithTone.length - 1];
-  for (const row of rowsWithTone) {
-    if (row.tone <= tone) lower = row;
-    if (row.tone >= tone) { upper = row; break; }
-  }
-  if (Math.abs(upper.tone - lower.tone) < 0.01) return lower.lab;
-  const ratio = (tone - lower.tone) / (upper.tone - lower.tone);
-  return {
-    l: lower.lab.l + (upper.lab.l - lower.lab.l) * ratio,
-    a: lower.lab.a + (upper.lab.a - lower.lab.a) * ratio,
-    b: lower.lab.b + (upper.lab.b - lower.lab.b) * ratio,
-  };
-}
-
-function isKOnlyTarget(cmyk) {
-  return nearZero(cmyk.c) && nearZero(cmyk.m) && nearZero(cmyk.y);
-}
-
-// Reference lookup only: characterization sets such as CRPC6 IT8.7/4 hold just a few
-// patches exactly on the G7 gray ratio, so the reference L* curve for CMY gray is
-// interpolated over the near-neutral C >= M = Y patches as before. Measured patches
-// are still selected strictly by isG7GrayCmyk.
-function isGrayTarget(cmyk) {
-  return nearZero(cmyk.k) && cmyk.c > 0.01 && cmyk.m > 0.01 && cmyk.y > 0.01
-    && Math.abs(cmyk.m - cmyk.y) <= 2.5 && cmyk.c >= cmyk.m - 3 && cmyk.c <= cmyk.m + 10;
-}
-
-function localCmykKey(cmyk) {
-  return ["c", "m", "y", "k"].map((key) => Number(cmyk[key]).toFixed(2)).join("/");
-}
-
 function isLab(lab) {
   return lab && [lab.l, lab.a, lab.b].every(Number.isFinite);
-}
-
-function nearZero(value) {
-  return Math.abs(number(value)) < 0.01;
 }
 
 function labLToRelativeY(lValue) {

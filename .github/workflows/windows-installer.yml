@@ -78,6 +78,11 @@ jobs:
       - name: Verify installer artifacts
         run: npm run verify:windows-artifacts
 
+      - name: Verify bundled resources (whitelist)
+        run: |
+          npm run verify:bundle
+          node scripts/verify-bundle.mjs --binary src-tauri/target/release/curvestudio.exe
+
       - name: Upload Windows installers
         uses: actions/upload-artifact@v7
         with:

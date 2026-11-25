@@ -104,6 +104,8 @@ run("npm", ["run", "verify:release"]);
 removeIfExists(appPath);
 removeIfExists(dmgPath);
 run("npm", ["run", "tauri:build"], { env: tauriBuildEnv() });
+// Final package must only embed whitelisted resources (release-resources.json).
+run("node", ["scripts/verify-bundle.mjs", "--binary", path.join(appPath, "Contents/MacOS")]);
 
 run("xattr", ["-cr", appPath]);
 run("codesign", [

@@ -523,16 +523,19 @@ export function g7Preview(options = {}) {
   const paperL = paperLab?.l;
   // G7 Grayscale is substrate-relative unless the caller explicitly asks for absolute.
   const relative = options.g7Evaluation !== "absolute";
+  // TR015 aims scale the shadows to the measured K solid and CMY overprint.
+  const kSolidLab = g7LabRows.find((row) => row.lab && isSolidCmyk(row.cmyk, "K"))?.lab;
+  const cmySolidLab = g7LabRows.find((row) => row.lab && isCmySolidCmyk(row.cmyk))?.lab;
   const npdcVerification = buildNpdcVerification(kLabRows, {
     paperL,
     relative,
-    standardPatchMap: options.standardPatchMap,
+    kSolidL: kSolidLab?.l,
   });
   const grayVerification = buildGrayVerification(grayRows, {
     paperL,
     paperLab,
+    cmySolidLab,
     relative,
-    standardPatchMap: options.standardPatchMap,
   });
   const npdcSummary = summarizeNpdc(npdcVerification, tolerances);
   const graySummary = summarizeGrayBalance(grayVerification, tolerances);
@@ -1099,6 +1102,10 @@ function isSolidCmyk(cmyk, channel) {
   const values = { C: cmyk.c, M: cmyk.m, Y: cmyk.y, K: cmyk.k };
   return Math.abs(values[channel] - 100) < 0.01
     && Object.entries(values).every(([candidate, value]) => candidate === channel || Math.abs(value) < 0.01);
+}
+
+function isCmySolidCmyk(cmyk) {
+  return Boolean(cmyk) && [cmyk.c, cmyk.m, cmyk.y].every((value) => Math.abs(value - 100) < 0.01) && Math.abs(cmyk.k) < 0.01;
 }
 
 function isKOnlyCmyk(cmyk) {

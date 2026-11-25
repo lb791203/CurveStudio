@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { classifyP2PPatch, g7NpdcLTarget, buildNpdcVerification, summarizeNpdc,
+import { classifyP2PPatch, g7NpdcLTarget, tr015RelativeL, tr015GrayAim, buildNpdcVerification, summarizeNpdc,
   buildGrayVerification, summarizeGrayBalance, buildColorspaceVerification,
   classifyColorspacePatches, g7ToneWeight, neutralPrintDensityFromL, summarizeWeightedDeltaL } from "../src/g7-targets.js";
 import { deltaE76 } from "../src/analysis-engine.js";
@@ -53,12 +53,12 @@ test("classifyP2PPatch identifies gray balance candidates", () => {
 
 test("g7NpdcLTarget returns targets at defined points", () => {
   assert.ok(g7NpdcLTarget(50) > 59 && g7NpdcLTarget(50) < 62);
-  assert.ok(g7NpdcLTarget(100) > 15 && g7NpdcLTarget(100) < 17);
+  assert.ok(g7NpdcLTarget(100) > 14.5 && g7NpdcLTarget(100) < 17);
   assert.ok(g7NpdcLTarget(10) > 87 && g7NpdcLTarget(10) < 89);
   assert.ok(Number.isFinite(g7NpdcLTarget(2)));
 });
 
-test("g7NpdcLTarget interpolates between defined points", () => {
+test("g7NpdcLTarget decreases monotonically", () => {
   const target37 = g7NpdcLTarget(37);
   const target35 = g7NpdcLTarget(35);
   const target40 = g7NpdcLTarget(40);
@@ -86,41 +86,6 @@ test("buildNpdcVerification also exposes NPDC density values", () => {
   assert.ok(Number.isFinite(row.measuredNpdc));
   assert.ok(Number.isFinite(row.targetNpdc));
   assert.ok(row.targetNpdc > 0.45 && row.targetNpdc < 0.55);
-});
-
-test("buildNpdcVerification can use selected standard K-only Lab as target", () => {
-  const standardPatchMap = new Map([
-    ["0.00/0.00/0.00/0.00", { cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: 0 } }],
-    ["0.00/0.00/0.00/40.00", { cmyk: { c: 0, m: 0, y: 0, k: 40 }, lab: { l: 67, a: 0, b: 0 } }],
-    ["0.00/0.00/0.00/60.00", { cmyk: { c: 0, m: 0, y: 0, k: 60 }, lab: { l: 53, a: 0, b: 0 } }],
-  ]);
-  const [row] = buildNpdcVerification([
-    { channel: "K", tone: 50, lab: { l: 61, a: 0, b: 0 } },
-  ], { paperL: 95, standardPatchMap, relative: false });
-
-  assert.equal(row.targetSource, "standard");
-  assert.equal(row.targetL, 60);
-  assert.equal(row.deltaL, 1);
-  assert.equal(row.evaluation, "absolute");
-});
-
-test("G7 NPDC is substrate-relative: a lighter/darker paper does not shift the result", () => {
-  const standardPatchMap = new Map([
-    ["0.00/0.00/0.00/0.00", { cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: 0 } }],
-    ["0.00/0.00/0.00/50.00", { cmyk: { c: 0, m: 0, y: 0, k: 50 }, lab: { l: 60, a: 0, b: 0 } }],
-  ]);
-  // Same relative tone reproduction as the reference, printed on a paper of L* 92:
-  // the patch has the same Y ratio to its paper as the reference 50% has to L* 95.
-  const sameRatioL = (() => {
-    const y = (l) => ((l + 16) / 116) ** 3;
-    const ratio = y(60) / y(95);
-    return 116 * Math.cbrt(y(92) * ratio) - 16;
-  })();
-  const [relative] = buildNpdcVerification([{ channel: "K", tone: 50, lab: { l: sameRatioL } }], { paperL: 92, standardPatchMap });
-  const [absolute] = buildNpdcVerification([{ channel: "K", tone: 50, lab: { l: sameRatioL } }], { paperL: 92, standardPatchMap, relative: false });
-  assert.equal(relative.evaluation, "substrate_relative");
-  assert.ok(Math.abs(relative.deltaL) < 1e-9);
-  assert.ok(Math.abs(absolute.deltaL) > 1.5);
 });
 
 test("G7 gray aim follows the paper tint: paper x 0.5 at the 50% HR patch", () => {
@@ -185,30 +150,51 @@ test("summarizeWeightedDeltaL uses per-patch weighted absolute errors", () => {
 
 // ─── Gray Balance ───
 
-test("buildGrayVerification computes chroma from target-relative a*/b*", () => {
-  const rows = [
-    { label: "Gray 50", lab: { a: 1, b: -1 } },
-    { label: "Gray 75", lab: { a: 2, b: 0.5 } },
-  ];
-  const result = buildGrayVerification(rows);
-  assert.equal(result.length, 2);
-  assert.ok(result[0].chroma > 0);
-  assert.ok(result[1].chroma > 0);
+test("TR015 K aim reproduces the CRPC6 K ramp (paper L* 95, K solid L* 16) within 0.7 L*", () => {
+  const crpc6K = { 10: 92.55, 25: 81.88, 50: 63.84, 75: 42.91, 90: 27.66 }; // substrate-relative L*
+  for (const [tone, expected] of Object.entries(crpc6K)) {
+    assert.ok(Math.abs(tr015RelativeL(Number(tone), "K", 95, 16) - expected) < 0.7, `K ${tone}`);
+  }
+  // CMY: the CRPC6 50/40/40 gray is L* 60.77 relative to paper with a CMY solid of L* 23.
+  assert.ok(Math.abs(tr015RelativeL(50, "CMY", 95, 23) - 60.77) < 0.3);
 });
 
-test("buildGrayVerification uses selected standard gray Lab for wDeltaCh", () => {
-  const standardPatchMap = new Map([
-    ["50.00/40.00/40.00/0.00", { cmyk: { c: 50, m: 40, y: 40, k: 0 }, lab: { l: 60, a: 2, b: -1 } }],
-  ]);
-  const [row] = buildGrayVerification([
-    { label: "Gray 50/40/40", cmyk: { c: 50, m: 40, y: 40, k: 0 }, lab: { l: 59, a: 3, b: -3 } },
-  ], { standardPatchMap });
+test("TR015 aim ends on the measured solid and keeps the highlights unchanged", () => {
+  const y = (l) => ((l + 16) / 116) ** 3;
+  const solidRelative = 116 * Math.cbrt(y(20) / y(93)) - 16;
+  assert.ok(Math.abs(tr015RelativeL(100, "K", 93, 20) - solidRelative) < 1e-6);
+  assert.ok(Math.abs(tr015RelativeL(10, "K", 93, 20) - tr015RelativeL(10, "K", 93, 12)) < 1e-9);
+  assert.ok(tr015RelativeL(80, "K", 93, 20) > tr015RelativeL(80, "K", 93, 12));
+});
 
-  assert.equal(row.targetSource, "standard");
-  assert.equal(row.deltaA, 1);
-  assert.equal(row.deltaB, -2);
-  assert.equal(row.chroma.toFixed(3), "2.236");
-  assert.ok(row.measuredChroma > row.chroma);
+test("G7 NPDC is substrate-relative: a lighter/darker paper does not shift the result", () => {
+  const y = (l) => ((l + 16) / 116) ** 3;
+  const targetRel = tr015RelativeL(50, "K", 95, 16);
+  // Same relative reproduction on a paper of L* 92 with the same relative solid.
+  const toAbs = (rel, paper) => 116 * Math.cbrt(((rel + 16) / 116) ** 3 * y(paper)) - 16;
+  const solid92 = toAbs(116 * Math.cbrt(y(16) / y(95)) - 16, 92);
+  const [relative] = buildNpdcVerification([{ channel: "K", tone: 50, lab: { l: toAbs(targetRel, 92) } }], { paperL: 92, kSolidL: solid92 });
+  assert.equal(relative.evaluation, "substrate_relative");
+  assert.ok(Math.abs(relative.deltaL) < 1e-6);
+});
+
+test("G7 gray aim blends toward a non-neutral CMY solid above 50% only", () => {
+  const paper = { l: 95, a: 1, b: -4 };
+  const solid = { l: 23, a: 2, b: 4 };
+  assert.deepEqual(tr015GrayAim(50, paper, solid), tr015GrayAim(50, paper, null));
+  const aim100 = tr015GrayAim(100, paper, solid);
+  assert.equal(aim100.a, 2);
+  assert.equal(aim100.b, 4);
+});
+
+test("buildGrayVerification needs a tone (CMYK) for each gray patch", () => {
+  const rows = [
+    { label: "Gray 50", cmyk: { c: 50, m: 40, y: 40, k: 0 }, lab: { l: 58, a: 1, b: -1 } },
+    { label: "no cmyk", lab: { a: 2, b: 0.5 } },
+  ];
+  const result = buildGrayVerification(rows);
+  assert.equal(result.length, 1);
+  assert.ok(result[0].chroma > 0);
 });
 
 test("summarizeGrayBalance passes when within tolerances", () => {

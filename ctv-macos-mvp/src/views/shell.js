@@ -9,7 +9,6 @@ import { algorithmDescription, deltaFormulaLabel } from "../ui-labels.js";
 import { displayPatchLabel, num, statusClass } from "./helpers.js?v=20260604-patch-labels-1";
 import { targetName, visibleWarnings } from "./data.js?v=20260525-statusbar-pass-1";
 import { buildAuditReportComparison } from "../audit-report.js";
-import { AUDIT_DEMO_ISO_12647_2_2007_DENSITY_TARGETS } from "../standards.js";
 import { canUseDesktopFileDialog } from "../desktop-io.js";
 
 export function renderShell(state, els) {
@@ -791,17 +790,6 @@ function standardDensityTargetInfo(standard, channel, tone) {
       range,
       source: standard?.densityTargetSource || t("audit_report_standard_density_source", "Standard density target"),
     };
-  }
-  const standardText = `${standard?.name || ""} ${standard?.printCondition || ""}`;
-  if (/ISO\s*12647-2:2007\s*Offset/i.test(standardText)) {
-    const auditTarget = auditNumber(AUDIT_DEMO_ISO_12647_2_2007_DENSITY_TARGETS[channel]?.[tone]);
-    if (Number.isFinite(auditTarget)) {
-      return {
-        value: auditTarget,
-        range,
-        source: t("audit_report_customer_density_source", "Customer audit report density target"),
-      };
-    }
   }
   return {
     value: NaN,
