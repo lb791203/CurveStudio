@@ -114,6 +114,8 @@ test("G7 exports include verification, NPDC, gray balance and Lab sections", () 
       completenessRows: [{ item: "K-only NPDC", count: 23, required: ">=5", status: "Pass" }],
       npdcRows: [{ tone: 50, measured: 64, target: 63, deltaTone: 1, deltaL: 2 }],
       grayBalanceRows: [{ label: "CMY Gray 50", a: 4, b: 5, chroma: 6.4, deltaE: 7 }],
+      npdcVerification: [{ tone: 50, evaluation: "substrate_relative", measuredL: 66.2, targetL: 64.9, deltaL: 1.3, weight: 1, weightedDeltaL: 1.3, deltaNpdc: 4.5, targetSource: "tr015_measured_solid" }],
+      grayVerification: [{ label: "CMY Gray 50", tone: 50, evaluation: "substrate_relative", measuredL: 60.4, targetL: 61.0, deltaL: -0.6, weight: 1, weightedDeltaL: 0.6, a: 4, b: 5, targetA: 0.5, targetB: -1, chroma: 6.9, weightedChroma: 6.9, targetSource: "tr015_measured_solid" }],
     },
     labRows: [{ label: "C 100%", source: "Measurement", cmyk: { c: 100, m: 0, y: 0, k: 0 }, lab: { l: 55, a: -35, b: -50 }, referenceLab: { l: 56, a: -36, b: -51 }, deltaE: 1.7, status: "Pass" }],
   };
@@ -124,11 +126,21 @@ test("G7 exports include verification, NPDC, gray balance and Lab sections", () 
   assert.match(csv, /# G7_SUMMARY/);
   assert.match(csv, /# G7_CONCLUSION/);
   assert.match(csv, /# G7_VERIFICATION/);
-  assert.match(csv, /# G7_NPDC/);
+  assert.match(csv, /# NOTICE/);
+  assert.match(csv, /G7®/);
+  assert.match(csv, /certified,false/);
+  assert.match(csv, /# G7_K_NPDC/);
+  assert.match(csv, /# G7_CMY_NPDC/);
   assert.match(csv, /# G7_GRAY_BALANCE/);
+  // delta_l is the L* difference used for the verdict, not the tone (NPDC %) difference.
+  assert.match(csv, /50,substrate_relative,66\.2,64\.9,1\.3,1,1\.3,tr015_measured_solid/);
+  assert.doesNotMatch(csv, /,4\.5,tr015/);
+  assert.match(csv, /CMY Gray 50,50,4,5,0\.5,-1,6\.9,1,6\.9/);
   assert.match(csv, /# LAB_DELTA_E/);
   assert.match(csv, /灰平衡最大 Ch/);
   assert.match(csv, /优先检查 CMY 中性灰/);
   assert.equal(json.type, "g7-verification-report");
   assert.equal(json.g7.status, "Fail");
+  assert.equal(json.certified, false);
+  assert.match(json.notice.zh, /非 Idealliance 认证/);
 });

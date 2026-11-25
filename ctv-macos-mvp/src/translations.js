@@ -403,7 +403,7 @@ export const TRANSLATIONS = {
     "verdict_warning_next": "用 {ratio}% 补偿强度按通道生成曲线，印刷后重新测量，逐轮收敛。",
     "verdict_danger": "先检查机器，再做正式曲线",
     "verdict_danger_next": "按下面提示排查印刷机；必须马上生产时，只用 {ratio}% 低强度补偿救急，并尽快复测。",
-    "g7_reference_only": "按 G7 方法做的参考检查，非 Idealliance 认证结果",
+    "g7_reference_only": "基于 G7® 方法的参考检查，非 Idealliance 认证结果",
     "g7_failed_items_label": "未达标项目",
     "verdict_mode": "当前曲线模式算不出阶调",
     "verdict_mode_next": "切换左侧“曲线模式”，或导入带密度/网点值的测量文件。",
