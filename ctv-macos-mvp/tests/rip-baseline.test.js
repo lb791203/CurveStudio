@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { calculateCompensation } from "../src/curve-engine.js";
+import { toSimpleRipCsv } from "../src/exporter.js";
 import { validateExportCurve } from "../src/curve-validation.js";
-import { addAppliedCurve, appliedCurveSnapshot, baselineCurvePoints, baselineFitsJob, baselineFromApplied, curvesNeedingPaperConfirmation, savedRunBaseline, withRunBaseline, confirmApplied, defaultBaseline, normalizeBaseline, unconfirmedCurvesForJob, withBaselineChannels } from "../src/rip-baseline.js";
+import { addAppliedCurve, appliedCurveSnapshot, baselineCurvePoints, baselineFitsJob, baselineFromApplied, curvesNeedingPaperConfirmation, savedRunBaseline, matchingSavedRun, confirmApplied, defaultBaseline, normalizeBaseline, unconfirmedCurvesForJob, withBaselineChannels } from "../src/rip-baseline.js";
 
 const job = { customer: "示例客户", press: "示例印机", paper: "铜版纸" };
 const gain = (tone, peak) => Math.min(100, tone + peak * Math.sin(Math.PI * tone / 100));
@@ -38,7 +39,7 @@ test("review #2: K-only retest keeps the previous C/M/Y curves in the full expor
   assert.deepEqual([...new Set(exportRows.map((row) => row.channel))].sort(), ["C", "K", "M", "Y"]);
   const c50 = exportRows.find((row) => row.channel === "C" && row.tone === 50);
   const c50Round1 = round1.find((row) => row.channel === "C" && row.tone === 50);
-  assert.ok(Math.abs(c50.outputTone - c50Round1.outputTone) < 0.001);
+  assert.equal(c50.outputTone, Number(c50Round1.outputTone.toFixed(2)));
   assert.equal(validateExportCurve(exportRows).ok, true);
 });
 
@@ -52,6 +53,17 @@ test("review #2: the baseline snapshot survives save/reopen unchanged", () => {
   const again = compute(measure(["C", "K"], 4), baselineCurvePoints(normalizeBaseline(JSON.parse(JSON.stringify(reopened)))));
   assert.deepEqual(again.map((row) => row.outputTone), round2.map((row) => row.outputTone));
   assert.equal(normalizeBaseline(undefined).kind, "linear");
+});
+
+test("a RIP baseline snapshot stores the exact two-decimal input and output written to the file", () => {
+  const rows = [
+    { channel: "K", tone: 0, outputTone: 0 },
+    { channel: "K", tone: 42.4967, outputTone: 49.3198 },
+    { channel: "K", tone: 100, outputTone: 100 },
+  ];
+  const csv = toSimpleRipCsv(rows, { standard: {}, job });
+  assert.match(csv, /^K,42\.50,49\.32,/m);
+  assert.deepEqual(appliedCurveSnapshot({ rows, job }).curvePoints.K, [[0, 0], [42.5, 49.32], [100, 100]]);
 });
 
 test("re-review S2: the same curve exported for another job does not drop the first job's record", () => {
@@ -113,14 +125,13 @@ test("round-4 S2: the same readings under another customer / press / paper never
   assert.equal(baselineFitsJob({ kind: "linear" }, jobB), true);
 });
 
-test("round-4 S2: a confirmed baseline is written into the matching saved run at once", () => {
+test("round-4 S2: find the matching saved run for an in-place baseline update", () => {
   const fingerprintOf = (run) => run.fp;
   const curve = baselineFromApplied(appliedCurveSnapshot({ rows: compute(measure(["C"], 20)), job, id: "c" }));
-  const runs = [{ fp: "m1", baseline: { kind: "linear" }, archive: { job, baseline: { kind: "linear" } } }];
-  const next = withRunBaseline(runs, job, "m1", fingerprintOf, curve);
-  assert.equal(next[0].archive.baseline.id, "c");
-  assert.equal(savedRunBaseline(next, job, "m1", fingerprintOf).id, "c");
-  assert.equal(withRunBaseline(runs, job, "other", fingerprintOf, curve), null);
+  const run = { fp: "m1", baseline: curve, archive: { job, baseline: curve } };
+  assert.equal(matchingSavedRun([run], job, "m1", fingerprintOf), run);
+  assert.equal(savedRunBaseline([run], job, "m1", fingerprintOf).id, "c");
+  assert.equal(matchingSavedRun([run], job, "other", fingerprintOf), null);
 });
 
 test("round-5 S2: a curve recorded with a blank paper is not auto-applied once the paper is filled in", () => {
@@ -134,4 +145,14 @@ test("round-5 S2: a curve recorded with a blank paper is not auto-applied once t
   assert.equal(defaultBaseline(known, blankPaper, { fingerprint: "m2" }).kind, "linear");
   // Same known paper: still the default.
   assert.equal(defaultBaseline(known, filled, { fingerprint: "m2" }).id, "k");
+});
+
+test("exporting the same values with the paper filled in does not inherit confirmation from a blank-paper export", () => {
+  const rows = compute(measure(["K"], 20));
+  const blank = appliedCurveSnapshot({ rows, job: { ...job, paper: "" }, id: "blank-paper" });
+  const recorded = confirmApplied([blank], blank.id);
+  const known = appliedCurveSnapshot({ rows, job, id: "known-paper" });
+  const list = addAppliedCurve(recorded, known);
+  assert.deepEqual(list.map(({ id, appliedAt }) => [id, Boolean(appliedAt)]), [[known.id, false], [blank.id, true]]);
+  assert.equal(defaultBaseline(list, job).kind, "linear");
 });

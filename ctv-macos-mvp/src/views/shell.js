@@ -323,6 +323,7 @@ export function renderReport(state, els) {
     <p>${escapeHtml(translateDynamicText(conclusion.summary || t("g7_report_not_run_help", "After running G7 verification, NPDC, gray balance, and ΔE conclusions will appear here.")))}</p>
     <p>K NPDC wΔL*: ${num(g7.kNpdcSummary?.weightedAverage)} / Max ${num(g7.kNpdcSummary?.weightedMax)} · CMY NPDC wΔL*: ${num(g7.grayNpdcSummary?.weightedAverage)} / Max ${num(g7.grayNpdcSummary?.weightedMax)} · Gray wΔCh Max: ${num(g7.maxGrayCh)} · Max ΔE: ${num(g7.maxDeltaE)}</p>
     <p class="report-notice">${escapeHtml(getLanguage() === "en" ? G7_REFERENCE_NOTICE.en : G7_REFERENCE_NOTICE.zh)} ${escapeHtml(G7_NPDC_METHOD)}</p>
+    ${g7.qualityNotes?.length ? reportList(t("reminder_label", "提醒"), g7.qualityNotes) : ""}
     ${reportList(t("main_issues_label", "Main Issues"), conclusion.priorityItems)}
     ${reportList(t("recommended_actions_label", "Recommended Actions"), conclusion.recommendations)}
   `;

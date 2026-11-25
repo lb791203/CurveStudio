@@ -55,4 +55,4 @@ jobs:
         run: |
           APP=$(ls -d src-tauri/target/release/bundle/macos/*.app | head -1)
           test -n "$APP"
-          node scripts/verify-bundle.mjs --binary "$APP/Contents/MacOS"
+          node scripts/verify-bundle.mjs --binary "$APP/Contents"

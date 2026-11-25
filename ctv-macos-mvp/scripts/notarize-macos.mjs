@@ -105,7 +105,7 @@ removeIfExists(appPath);
 removeIfExists(dmgPath);
 run("npm", ["run", "tauri:build"], { env: tauriBuildEnv() });
 // Final package must only embed whitelisted resources (release-resources.json).
-run("node", ["scripts/verify-bundle.mjs", "--binary", path.join(appPath, "Contents/MacOS")]);
+run("node", ["scripts/verify-bundle.mjs", "--binary", path.join(appPath, "Contents")]);
 
 run("xattr", ["-cr", appPath]);
 run("codesign", [
@@ -137,7 +137,7 @@ fs.writeFileSync(sumsPath, `${checksum}\n`);
 console.log(`\nNotarized DMG ready:\n${dmgPath}\n${checksum}`);
 
 // The shipped artefact itself: mount the stapled DMG read-only, check the app's signature
-// and Gatekeeper verdict, and scan its binary against the resource whitelist again.
+// and Gatekeeper verdict, and verify the bundled assets and loose files again.
 function verifyFinalDmg(dmg) {
   const mountPoint = fs.mkdtempSync(path.join(os.tmpdir(), "curvestudio-dmg-"));
   run("hdiutil", ["attach", dmg, "-readonly", "-nobrowse", "-mountpoint", mountPoint]);
@@ -147,7 +147,7 @@ function verifyFinalDmg(dmg) {
     const mountedApp = path.join(mountPoint, app);
     run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", mountedApp]);
     run("spctl", ["--assess", "--type", "execute", "--verbose=4", mountedApp]);
-    run("node", ["scripts/verify-bundle.mjs", "--binary", path.join(mountedApp, "Contents/MacOS")]);
+    run("node", ["scripts/verify-bundle.mjs", "--binary", path.join(mountedApp, "Contents")]);
   } finally {
     run("hdiutil", ["detach", mountPoint]);
   }

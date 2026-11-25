@@ -1,3 +1,5 @@
+import { toExportRows } from "./curve-engine.js";
+
 // What curve was in the RIP when the measured sheet was printed.
 //
 // Re-measurement stacks the new correction on that curve: plate = baseline(increment(tone)).
@@ -63,7 +65,7 @@ export function addAppliedCurve(list = [], snapshot) {
   const signature = JSON.stringify(snapshot.curvePoints);
   // The same curve exported for another job is a separate record; only repeats within one job collapse.
   const same = list.find((item) => item.id !== snapshot.id
-    && sameJob(item.job || {}, snapshot.job || {}) && JSON.stringify(item.curvePoints) === signature);
+    && sameJobExact(item.job, snapshot.job) && JSON.stringify(item.curvePoints) === signature);
   const rest = list.filter((item) => item.id !== snapshot.id && item !== same);
   // Re-exporting a curve that was already confirmed keeps the confirmation.
   const merged = same?.appliedAt ? { ...snapshot, appliedAt: same.appliedAt } : snapshot;
@@ -147,11 +149,12 @@ export function withBaselineChannels(results = [], baseline) {
 
 export function curvePointsFromRows(rows = []) {
   const byChannel = {};
-  for (const row of rows) {
-    const tone = Number(row.tone);
+  // Use the same serialized values as the RIP CSV and CGATS exporters.
+  for (const row of toExportRows(rows)) {
+    const tone = Number(row.inputTone);
     const output = Number(row.outputTone);
     if (!row.channel || !Number.isFinite(tone) || !Number.isFinite(output)) continue;
-    (byChannel[row.channel] ||= []).push([tone, Number(output.toFixed(3))]);
+    (byChannel[row.channel] ||= []).push([tone, output]);
   }
   for (const points of Object.values(byChannel)) points.sort((a, b) => a[0] - b[0]);
   return byChannel;
@@ -160,22 +163,11 @@ export function curvePointsFromRows(rows = []) {
 // Saved runs are matched on the exact job (customer, press and paper) and on the measurement
 // itself: the same readings filed under another job never bring that job's RIP curve along.
 export function savedRunBaseline(runs = [], job = {}, fingerprint = "", fingerprintOf = () => "") {
-  const run = matchingRun(runs, job, fingerprint, fingerprintOf);
+  const run = matchingSavedRun(runs, job, fingerprint, fingerprintOf);
   return run ? normalizeBaseline(run.archive?.baseline || run.baseline) : null;
 }
 
-// Confirming a baseline is recorded on the newest saved run of this job + measurement at once,
-// so re-importing the same file before a manual save keeps the confirmed curve.
-export function withRunBaseline(runs = [], job = {}, fingerprint = "", fingerprintOf = () => "", baseline) {
-  const run = matchingRun(runs, job, fingerprint, fingerprintOf);
-  if (!run) return null;
-  const stored = normalizeBaseline(baseline);
-  return runs.map((item) => (item === run
-    ? { ...item, baseline: stored, archive: item.archive ? { ...item.archive, baseline: stored } : item.archive }
-    : item));
-}
-
-function matchingRun(runs, job, fingerprint, fingerprintOf) {
+export function matchingSavedRun(runs, job, fingerprint, fingerprintOf) {
   if (!fingerprint) return null;
   return (runs || []).find((run) => (run?.archive?.baseline || run?.baseline)
     && sameJobExact(run.archive?.job || {}, job)
@@ -189,8 +181,8 @@ export function baselineFitsJob(baseline, job = {}) {
   return sameJob(baseline.job || {}, job);
 }
 
-function sameJobExact(a, b) {
-  return ["customer", "press", "paper"].every((key) => String(a[key] || "").trim() === String(b[key] || "").trim());
+export function sameJobExact(a = {}, b = {}) {
+  return ["customer", "press", "paper"].every((key) => String(a?.[key] || "").trim() === String(b?.[key] || "").trim());
 }
 
 function sameJob(a, b) {

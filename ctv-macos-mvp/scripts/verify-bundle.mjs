@@ -1,13 +1,10 @@
-// Release gate for bundled resources.
-//   node scripts/verify-bundle.mjs [dist]              check the built frontend tree
-//   node scripts/verify-bundle.mjs --binary <file...>   scan packaged app binaries / installers
-//   node scripts/verify-bundle.mjs --update-hashes      re-pin data file hashes after review
-// The frontend tree must match release-resources.json exactly (data files by SHA-256).
-// Binaries are scanned for embedded asset paths; any path outside the whitelist, or any
-// forbidden name, fails the release.
+// Release gate for the staged frontend, the built app, and unpacked installers.
+// The executable reports the actual Tauri asset table and the pinned sample data.
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { allowedFiles, loadWhitelist, sha256, toPosix, walk } from "./release-resources.mjs";
+import { allowedFiles, embeddedAssetFailures, loadWhitelist, sha256, toPosix, walk } from "./release-resources.mjs";
 
 const root = process.cwd();
 const whitelist = loadWhitelist(root);
@@ -22,53 +19,13 @@ if (args[0] === "--update-hashes") {
 }
 
 const allowed = new Set(allowedFiles(root, whitelist));
-// Tauri embeds the frontend as an asset table keyed by "/<path>". In a Mach-O binary those
-// keys sit back to back with no separator, and can run straight into the next symbol:
-//   "…application/json/src/features.js/src/exporter.jsIllegalEventName…"
-// The scan therefore reads keys key by key:
-//   - a whitelisted key must be present (plain substring test);
-//   - every key-like path under a frontend root is read up to its extension. An extension is only
-//     complete when no lowercase letter or digit follows (".js" vs ".json"), so an uppercase
-//     symbol name may follow, but ".", "-" or "_" may not ("src/app.js.bak" is another file);
-//   - colour or measurement data (.icc .icm .cxf .it8 .cgats) anywhere in the binary must be
-//     whitelisted, whatever folder it sits in.
-const ROOTS = String.raw`(?:samples|reference-data|src|assets|profiles)`;
-const EXTENSIONS = String.raw`(?:json|txt|csv|js|jsx|mjs|ts|map|css|html|svg|png|it8|cgats|icc|icm|cxf)`;
-const RESOURCE_PATH_SOURCE = String.raw`(${ROOTS}\/[A-Za-z0-9._\/-]+?\.${EXTENSIONS})(?![a-z0-9])`;
-const RESOURCE_PATH = new RegExp(RESOURCE_PATH_SOURCE);
-const RESOURCE_PATH_GLOBAL = new RegExp(RESOURCE_PATH_SOURCE, "g");
-// Data files are found by extension anywhere in the binary, in any letter case and in any folder.
-const ci = (word) => [...word].map((ch) => `[${ch}${ch.toUpperCase()}]`).join("");
-const DATA_EXTENSIONS = ["csv", "txt", "tsv", "it8", "cgats", "cxf", "icc", "icm"].map(ci).join("|");
-const DATA_FILE_GLOBAL = new RegExp(String.raw`([A-Za-z0-9._\/-]+?\.(?:${DATA_EXTENSIONS}))(?![a-z0-9])`, "g");
-const PATH_TAIL = /^[._-][A-Za-z0-9._-]*/;
+const MACOS_FILES = new Set(["Info.plist", "MacOS/curvestudio", "Resources/icon.icns", "_CodeSignature/CodeResources", "CodeResources"]);
+const DATA_FILENAME = /\.(csv|tsv|txt|it8|cgats|cxf|rwxf|icc|icm)(\.|$)/i;
 
 if (args[0] === "--binary") {
-  const binaries = args.slice(1);
-  if (!binaries.length) failures.push("no binary given");
-  for (const binary of binaries) {
-    // A directory (e.g. CurveStudio.app/Contents/MacOS or an unpacked installer) is scanned
-    // file by file, and the resource paths found are pooled per argument.
-    const targets = fs.existsSync(binary) && fs.statSync(binary).isDirectory() ? walk(binary) : [binary];
-    if (!targets.length) failures.push(`no files in ${binary}`);
-    const found = new Set();
-    const present = new Set();
-    for (const target of targets) {
-      const result = checkBinary(target);
-      for (const file of result.found) found.add(file);
-      for (const file of result.present) present.add(file);
-    }
-    // The embedded resource list must be exactly the whitelist: a file with no resource paths
-    // at all (wrong file, compressed or stripped assets) is a failure, not a pass.
-    const expected = [...allowed].filter((file) => RESOURCE_PATH.test(`/${file}`));
-    // Presence is a plain substring test, so how neighbouring keys are packed cannot hide a file.
-    const missing = expected.filter((file) => !present.has(file));
-    if (!found.size && !present.size) failures.push(`${binary}: no embedded resource paths found (not the app binary, or assets not inspectable)`);
-    else if (missing.length) {
-      failures.push(`${binary}: embedded resources do not match the whitelist, missing ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ` (+${missing.length - 5})` : ""}`);
-      for (const file of missing.slice(0, 3)) showContext(targets, file);
-    }
-  }
+  const targets = args.slice(1);
+  if (!targets.length) failures.push("no binary given");
+  for (const target of targets) checkPackage(path.resolve(target));
 } else {
   checkDist(path.resolve(root, args[0] || "dist"));
 }
@@ -96,54 +53,54 @@ function checkDist(dist) {
   }
 }
 
-function checkBinary(binary) {
-  if (!fs.existsSync(binary)) {
-    failures.push(`binary not found: ${binary}`);
-    return { found: new Set(), present: new Set() };
+function checkPackage(target) {
+  if (!fs.existsSync(target)) {
+    failures.push(`package not found: ${target}`);
+    return;
   }
-  const text = fs.readFileSync(binary).toString("latin1");
-  const found = new Set();
-  for (const match of text.matchAll(RESOURCE_PATH_GLOBAL)) {
-    const tail = text.slice(match.index + match[0].length).match(PATH_TAIL)?.[0] || "";
-    // "src/app.js" followed by ".bak" is the key "src/app.js.bak", not src/app.js.
-    found.add(match[1] + tail);
+  const isDirectory = fs.statSync(target).isDirectory();
+  const macBundle = isDirectory && path.basename(target) === "Contents";
+  const files = isDirectory ? walk(target) : [target];
+  const executables = [];
+  for (const file of files) {
+    const relative = toPosix(path.relative(target, file));
+    if (macBundle ? relative === "MacOS/curvestudio" : /^curvestudio(?:\.exe)?$/i.test(path.basename(file))) {
+      executables.push(file);
+    }
+    if (macBundle ? !MACOS_FILES.has(relative) : isDirectory && (DATA_FILENAME.test(relative) || forbiddenName(relative))) {
+      failures.push(`non-whitelisted packaged file: ${relative}`);
+    }
   }
-  // Each data key must be exactly a whitelisted path (same folder, same case). Whatever runs into
-  // it from the left is only accepted when it ends in "/" (the previous key or symbol).
-  for (const match of text.matchAll(DATA_FILE_GLOBAL)) {
-    const tail = text.slice(match.index + match[0].length).match(PATH_TAIL)?.[0] || "";
-    const key = match[1] + tail;
-    const ok = !tail && [...allowed].some((file) => key === file || key.endsWith(`/${file}`));
-    if (!ok) failures.push(`${path.basename(binary)} embeds non-whitelisted data file: ${key}`);
+  if (executables.length !== 1 || !fs.lstatSync(executables[0]).isFile()) {
+    failures.push(`${target}: expected one CurveStudio executable`);
+    return;
   }
-  const present = new Set([...allowed].filter((file) => text.includes(file)));
-  for (const file of found) {
-    if (!allowed.has(file)) failures.push(`${path.basename(binary)} embeds non-whitelisted resource: ${file}`);
+  checkExecutable(executables[0]);
+}
+
+function checkExecutable(binary) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "curvestudio-assets-"));
+  const filename = path.join(dir, "assets.json");
+  const dataFiles = Object.keys(whitelist.data);
+  try {
+    // Keep the known legacy markers check for native data outside the Tauri asset table.
+    const bytes = fs.readFileSync(binary);
+    for (const name of whitelist.forbidden) {
+      if (name !== "reference-data/" && bytes.includes(name)) failures.push(`${binary}: contains forbidden resource name: ${name}`);
+    }
+    const run = spawnSync(binary, ["--verify-embedded-assets", filename, ...dataFiles], { encoding: "utf8", timeout: 15000, windowsHide: true });
+    if (run.status !== 0) throw run.error || new Error(run.stderr?.trim() || `executable exited with ${run.status}`);
+    const manifest = JSON.parse(fs.readFileSync(filename, "utf8"));
+    const issues = embeddedAssetFailures(manifest, allowed, whitelist.data);
+    for (const issue of issues) failures.push(`${binary}: ${issue}`);
+    if (!issues.length) console.log(`${path.basename(binary)}: ${manifest.paths.length} embedded resources, ${dataFiles.length} samples verified by SHA-256`);
+  } catch (error) {
+    failures.push(`${binary}: could not read embedded asset manifest: ${error.message}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
-  for (const name of whitelist.forbidden) {
-    if (name !== "reference-data/" && text.includes(name)) failures.push(`${path.basename(binary)} contains forbidden resource name: ${name}`);
-  }
-  const embeddedData = Object.keys(whitelist.data).filter((file) => found.has(file)).length;
-  console.log(`${path.basename(binary)}: ${found.size} embedded resource paths, ${embeddedData} whitelisted data files`);
-  return { found, present };
 }
 
 function forbiddenName(file) {
-  return whitelist.forbidden.some((name) => file.includes(name));
-}
-
-// Diagnostics for a mismatch: print the bytes around where the missing name appears.
-function showContext(targets, file) {
-  const name = path.posix.basename(file);
-  for (const target of targets) {
-    const text = fs.readFileSync(target).toString("latin1");
-    let index = text.indexOf(name);
-    let shown = 0;
-    while (index !== -1 && shown < 3) {
-      const snippet = text.slice(Math.max(0, index - 60), index + name.length + 60).replace(/[^\x20-\x7e]/g, "·");
-      console.error(`  context ${path.basename(target)}@${index}: ${snippet}`);
-      index = text.indexOf(name, index + 1);
-      shown += 1;
-    }
-  }
+  return whitelist.forbidden.some((name) => file.toLowerCase().includes(name.toLowerCase()));
 }

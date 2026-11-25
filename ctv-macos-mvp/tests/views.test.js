@@ -731,6 +731,7 @@ test("renderReport summarizes field report sections", () => {
     ],
     g7: {
       status: "Fail",
+      qualityNotes: ["K 实地与纸白 L* 只差 5.0，反差偏低，请复核测量"],
       weightedAverage: 2.8,
       maxDeltaE: 6.3,
       maxNpdcDelta: 1.9,
@@ -769,6 +770,7 @@ test("renderReport summarizes field report sections", () => {
   // re-review M7: the printed report carries the same fixed reference / non-certification notice.
   assert.match(localEls.reportG7Conclusion.innerHTML, /非 Idealliance 认证结果/);
   assert.match(localEls.reportG7Conclusion.innerHTML, /TR 015-2022/);
+  assert.match(localEls.reportG7Conclusion.innerHTML, /反差偏低，请复核测量/);
   assert.match(localEls.reportLabSummary.innerHTML, /最大 ΔE/);
   assert.match(localEls.reportCurveSummary.innerHTML, /曲线质量|平均 \|TVI\/CTV 偏差\|/);
   assert.match(localEls.reportRunCompare.innerHTML, /已解决/);

@@ -104,6 +104,7 @@ export function toG7VerificationCsv(context) {
       ["type", "message"],
       ["title", g7.conclusion?.title || ""],
       ["summary", g7.conclusion?.summary || ""],
+      ...(g7.qualityNotes || []).map((item) => ["measurement_warning", item]),
       ...((g7.conclusion?.priorityItems || []).map((item) => ["priority", item])),
       ...((g7.conclusion?.recommendations || []).map((item) => ["recommendation", item])),
     ]),

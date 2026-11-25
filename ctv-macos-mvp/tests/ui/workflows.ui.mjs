@@ -234,11 +234,16 @@ test("UI round-5: confirming a baseline rewrites the saved Run's curve, metrics 
   await exportRip(page, "/tmp/a1.csv");
   await importSheet(page, "k2.csv", kSheet(4));
   const linearRun = (await storedRuns(page))[0];
+  await page.clock.setFixedTime(new Date("2035-12-31T09:00:00Z"));
   await chooseBaseline(page, "option.value !== 'linear' && option.value !== 'keep'");
   const exportedK50 = toneAt(await exportRip(page, "/tmp/a2.csv"), "K", 50);
   const runs = await storedRuns(page);
   const updated = runs[0];
   assert.equal(updated.runId, linearRun.runId, "the same Run is updated in place");
+  assert.equal(updated.storagePath, linearRun.storagePath);
+  assert.deepEqual(updated.archive.storagePlan, linearRun.archive.storagePlan);
+  const lastProjectPlan = await page.evaluate(() => JSON.parse(localStorage.getItem("ctv-run-state")).lastProject.storagePlan);
+  assert.deepEqual(lastProjectPlan, linearRun.archive.storagePlan);
   assert.equal(updated.archive.baseline.kind, "curve");
   assert.ok(Math.abs(pointAt(updated.curvePoints.K, 50) - exportedK50) < 0.01, `stored ${pointAt(updated.curvePoints.K, 50)} vs exported ${exportedK50}`);
   assert.notEqual(pointAt(updated.curvePoints.K, 50), pointAt(linearRun.curvePoints.K, 50));
@@ -261,10 +266,58 @@ test("UI round-5: a curve recorded with a blank paper is not applied after the p
   await exportRip(page, "/tmp/a1.csv");
   await importSheet(page, "k2.csv", kSheet(4));
   await chooseBaseline(page, "option.value !== 'linear' && option.value !== 'keep'");
-  await setJob(page, { customer: "客户A", press: "印机1", paper: "铜版纸" });
+  await page.locator("#jobPaperInput").evaluate((input) => {
+    input.value = "铜版纸";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  assert.equal(await page.$eval("#baselineSelect", (select) => select.value), "linear", "editing the paper invalidates the selection immediately");
   await importSheet(page, "k3.csv", kSheet(8));
   assert.equal(await page.$eval("#baselineSelect", (select) => select.value), "linear");
   assert.match(await page.$eval("#baseCurveText", (node) => node.textContent), /纸张未填写或与曲线记录不同/);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test("UI: an in-flight RIP export keeps the job and source measurement it was built for", async () => {
+  const { page, errors, close } = await openApp();
+  await setJob(page, { customer: "客户A", press: "印机1", paper: "铜版纸" });
+  await importSheet(page, "k1.csv", kSheet(20));
+  const sourceFingerprint = (await storedRuns(page))[0].measurementFingerprint;
+  await page.evaluate(() => {
+    window.__TAURI__.dialog.save = () => new Promise((resolve) => { window.__finishSave = resolve; });
+    document.querySelector("#exportSimpleRipButton").click();
+  });
+  await page.waitForFunction(() => typeof window.__finishSave === "function");
+  await setJob(page, { customer: "客户B", press: "印机2", paper: "胶版纸" });
+  await importSheet(page, "k2.csv", kSheet(4));
+  await page.evaluate(() => window.__finishSave("/tmp/a1.csv"));
+  await page.waitForFunction(() => localStorage.getItem("ctv-applied-curves"));
+  const [snapshot] = await page.evaluate(() => JSON.parse(localStorage.getItem("ctv-applied-curves")));
+  assert.deepEqual(snapshot.job, { customer: "客户A", press: "印机1", paper: "铜版纸" });
+  assert.equal(snapshot.sourceFingerprint, sourceFingerprint);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test("UI: confirming a reopened Run updates that specific Run when another has identical readings", async () => {
+  const { page, errors, close } = await openApp();
+  await setJob(page, { customer: "客户A", press: "印机1", paper: "铜版纸" });
+  await importSheet(page, "k1.csv", kSheet(20));
+  await exportRip(page, "/tmp/a1.csv");
+  await importSheet(page, "k2.csv", kSheet(4));
+  await page.locator("#jobNoteInput").evaluate((input) => { input.value = "newer run"; });
+  await page.locator("#saveRunButton").evaluate((button) => button.click());
+  const [newer, older] = await storedRuns(page);
+  assert.equal(newer.measurementFingerprint, older.measurementFingerprint);
+  await page.locator('[data-run-open-index="1"]').first().evaluate((button) => button.click());
+  await page.waitForFunction(() => document.querySelector("#jobNoteInput")?.value === "");
+  await chooseBaseline(page, "option.value !== 'linear' && option.value !== 'keep'");
+  const [unchanged, updated] = await storedRuns(page);
+  assert.deepEqual(unchanged, newer);
+  assert.equal(updated.runId, older.runId);
+  assert.equal(updated.baseline.kind, "curve");
+  await importSheet(page, "k2.csv", kSheet(4));
+  assert.equal(await page.$eval("#baselineSelect", (select) => select.value), updated.baseline.id);
   assert.deepEqual(errors, []);
   await close();
 });

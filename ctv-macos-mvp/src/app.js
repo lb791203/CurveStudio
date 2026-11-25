@@ -48,7 +48,7 @@ import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
 import { STANDARD_LIBRARY, addOrUpdateCustomStandard, archivedStandardAsCustom, buildPatchMap, cmykKey, hasStandard, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260604-density-targets-1";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 import { fetchTextResource } from "./network.js";
-import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCurvePoints, baselineFromApplied, confirmApplied, defaultBaseline, isConfirmedApplied, normalizeBaseline, savedRunBaseline, withRunBaseline, baselineFitsJob, curvesNeedingPaperConfirmation, unconfirmedCurvesForJob, withBaselineChannels } from "./rip-baseline.js";
+import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCurvePoints, baselineFromApplied, confirmApplied, defaultBaseline, isConfirmedApplied, normalizeBaseline, savedRunBaseline, matchingSavedRun, sameJobExact, curvesNeedingPaperConfirmation, unconfirmedCurvesForJob, withBaselineChannels } from "./rip-baseline.js";
 import { exportBlockedMessage, validateExportCurve } from "./curve-validation.js";
 import { validateMeasurements } from "./measurement-validation.js";
 import { buildManualMeasurementSet } from "./manual-apply.js";
@@ -264,6 +264,8 @@ const state = {
   runs: [],
   ratioAuto: true,
   baseline: { kind: "linear", auto: true },
+  baselineJob: {},
+  activeRunPath: "",
   appliedCurves: [],
   manualDirty: false,
   storageWarning: "",
@@ -578,6 +580,7 @@ function attachEvents() {
       state.appliedCurves = confirmApplied(state.appliedCurves, value);
       saveAppliedCurves(state.appliedCurves);
     }
+    state.baselineJob = currentJobFields();
     state.baseline = value === "linear"
       ? { kind: "linear", auto: false }
       : { ...baselineFromApplied(state.appliedCurves.find((item) => item.id === value)), auto: false };
@@ -587,8 +590,8 @@ function attachEvents() {
   for (const input of [els.jobCustomerInput, els.jobPressInput, els.jobPaperInput]) {
     input?.addEventListener("change", () => {
       if (!state.measurements.length) return;
-      // A curve chosen for another customer / press / paper never follows the job change.
-      if (!state.baseline?.auto && baselineFitsJob(state.baseline, currentJobFields())) return;
+      // A choice for this sheet stays valid only while the print condition stays the same.
+      if (sameJobExact(state.baselineJob, currentJobFields())) return;
       resetBaselineForNewMeasurement();
       calculate({ preserveRatio: true });
     });
@@ -1313,35 +1316,35 @@ function calculate(options = {}) {
 // was printed (state.baseline). New measurements default to the newest curve exported for the
 // same customer / press / paper; the user can switch to "linear" or another exported curve.
 function resetBaselineForNewMeasurement() {
+  state.baselineJob = currentJobFields();
   const fingerprint = measurementFingerprint(state.measurements);
+  const active = state.activeRunPath ? state.runs.find((run) => savedRunPath(run) === state.activeRunPath) : null;
   // The same measurement was saved before for this job: it was printed with the baseline recorded then.
-  const earlier = savedRunBaseline(state.runs, currentJobFields(), fingerprint, runMeasurementFingerprint);
+  const earlier = (active && savedRunBaseline([active], state.baselineJob, fingerprint, runMeasurementFingerprint))
+    || savedRunBaseline(state.runs, state.baselineJob, fingerprint, runMeasurementFingerprint);
+  state.activeRunPath = "";
   state.baseline = earlier
     ? { ...earlier, auto: true }
-    : defaultBaseline(state.appliedCurves, currentJobFields(), { fingerprint });
+    : defaultBaseline(state.appliedCurves, state.baselineJob, { fingerprint });
 }
 
 // The operator's baseline choice belongs to the current Run straight away, not only after a
 // manual save.
 function recordBaselineOnCurrentRun() {
   if (!state.measurements.length || !state.results.length || state.manualDirty) return;
-  const matched = withRunBaseline(state.runs, currentJobFields(), measurementFingerprint(state.measurements), runMeasurementFingerprint, state.baseline);
-  if (!matched) return;
+  const candidates = state.activeRunPath
+    ? state.runs.filter((run) => savedRunPath(run) === state.activeRunPath) : state.runs;
+  const previous = matchingSavedRun(candidates, currentJobFields(), measurementFingerprint(state.measurements), runMeasurementFingerprint);
+  if (!previous) return;
   // Rebuild the whole record from the recalculated state, so the stored curve, metrics,
   // warnings and gate match the new baseline (not only the baseline field).
-  const index = matched.findIndex((item, i) => item !== state.runs[i]);
-  const previous = state.runs[index];
-  const { run, archive } = buildRunRecord({});
-  const rebuilt = { ...run, name: previous.name, createdAt: previous.createdAt, runId: previous.runId, jobId: previous.jobId, jobKey: previous.jobKey };
-  const nextRuns = state.runs.map((item, i) => (i === index ? rebuilt : item));
-  const gate = storableIccGenerationGate(currentIccGenerationGate(nextRuns));
-  rebuilt.iccGenerationGate = gate;
-  rebuilt.archive = { ...rebuilt.archive, iccGenerationGate: gate };
-  const saved = saveRunsAndLastProject(nextRuns, { ...archive, iccGenerationGate: gate });
-  if (!saved.ok) return;
-  state.runs = nextRuns;
-  state.lastSavedRunSignature = currentRunSignature();
-  _renderRuns(state, els);
+  const { run, archive } = buildRunRecord({}, previous);
+  const nextRuns = state.runs.map((item) => (item === previous ? run : item));
+  persistRunRecord(run, archive, nextRuns, currentRunSignature());
+}
+
+function savedRunPath(run) {
+  return run.storagePath || run.archive?.storagePlan?.suggestedPath || "";
 }
 
 function currentJobFields() {
@@ -1369,6 +1372,7 @@ async function exportRipCurve(filename, build, type) {
     return;
   }
   const context = exportContext();
+  const snapshot = appliedCurveSnapshot({ rows, job: currentJobFields(), sourceFingerprint: measurementFingerprint(state.measurements) });
   const saved = await download(filename, build(rows, context), type);
   // Cancelled or failed save: nothing reached the RIP, so nothing is registered as a baseline.
   if (!saved) return;
@@ -1376,7 +1380,6 @@ async function exportRipCurve(filename, build, type) {
   // job can be stacked on exactly this curve.
   // Recorded as exported only; it becomes a default baseline once the operator confirms the
   // next sheet was printed with it.
-  const snapshot = appliedCurveSnapshot({ rows, job: currentJobFields(), sourceFingerprint: measurementFingerprint(state.measurements) });
   state.appliedCurves = addAppliedCurve(state.appliedCurves, snapshot);
   saveAppliedCurves(state.appliedCurves);
   renderBaseCurveNotice();
@@ -1917,8 +1920,13 @@ function saveCurrentRun(options = {}) {
   if (options.skipIfUnchanged && signature && signature === state.lastSavedRunSignature) return null;
   const { run, archive } = buildRunRecord(options);
   const nextRuns = [run, ...state.runs].slice(0, 24);
-  const gate = currentIccGenerationGate(nextRuns);
-  const storableGate = storableIccGenerationGate(gate);
+  if (!persistRunRecord(run, archive, nextRuns, signature, { selectJob: true })) return null;
+  if (options.switchToJob !== false) switchView("job");
+  return run;
+}
+
+function persistRunRecord(run, archive, nextRuns, signature, { selectJob = false } = {}) {
+  const storableGate = storableIccGenerationGate(currentIccGenerationGate(nextRuns));
   run.iccGenerationGate = storableGate;
   run.archive = { ...run.archive, iccGenerationGate: storableGate };
   const saved = saveRunsAndLastProject(nextRuns, { ...archive, iccGenerationGate: storableGate });
@@ -1927,22 +1935,27 @@ function saveCurrentRun(options = {}) {
     if (typeof window !== "undefined" && typeof window.alert === "function") window.alert(saved.warning);
     _renderRuns(state, els);
     _renderReport(state, els);
-    return null;
+    return false;
   }
   state.storageWarning = "";
   state.runs = nextRuns;
+  state.activeRunPath = savedRunPath(run);
+  if (selectJob) state.selectedJobKey = run.jobKey;
   state.lastSavedRunSignature = signature;
-  state.selectedJobKey = run.jobKey;
   _renderRuns(state, els);
   _renderReport(state, els);
-  if (options.switchToJob !== false) switchView("job");
-  return run;
+  return true;
 }
 
 // One saved Run: the measurement, the baseline it was computed on, and the curve, metrics and
 // warnings that follow from them. They are always written together.
-function buildRunRecord(options = {}) {
+function buildRunRecord(options = {}, previous) {
   const context = exportContext();
+  if (previous) {
+    context.jobId = previous.jobId || previous.archive?.storagePlan?.jobId || context.jobId;
+    context.runId = previous.runId || previous.archive?.storagePlan?.runId || context.runId;
+    context.suggestedArchivePath = savedRunPath(previous) || context.suggestedArchivePath;
+  }
   const archive = projectArchive(context);
   const metrics = buildRunMetrics({
     results: state.results,
@@ -1953,10 +1966,10 @@ function buildRunRecord(options = {}) {
   const jobName = jobDisplayName(context);
   const historyArchive = compactProjectArchiveForRun(archive);
   const run = {
-    name: options.namePrefix ? `${options.namePrefix} / ${context.runId}` : context.runId,
-    jobKey: context.jobId,
-    jobName,
-    createdAt: new Date().toLocaleString(),
+    name: previous?.name ?? (options.namePrefix ? `${options.namePrefix} / ${context.runId}` : context.runId),
+    jobKey: previous?.jobKey || context.jobId,
+    jobName: previous?.jobName || jobName,
+    createdAt: previous?.createdAt || new Date().toLocaleString(),
     jobId: context.jobId,
     runId: context.runId,
     storagePath: context.suggestedArchivePath,
@@ -2062,6 +2075,7 @@ function clearCurrentWorkspace() {
   state.manualDirty = false;
   state.selectedPatchIndex = null;
   state.lastSavedRunSignature = "";
+  state.activeRunPath = "";
   state.activeCurveChannel = "all";
   if (els.rawInput) els.rawInput.value = "";
   if (els.fileInput) els.fileInput.value = "";
@@ -2110,7 +2124,7 @@ async function restoreRunFromList(event) {
   if (!openTarget) return;
   const run = state.runs[Number(openTarget.dataset.runOpenIndex)];
   if (!run?.archive) return;
-  await restoreProjectArchive(run.archive);
+  await restoreProjectArchive(run.archive, savedRunPath(run));
 }
 
 async function renameRun(index) {
@@ -2281,7 +2295,7 @@ function runIdentity(run, index) {
   ].join("|");
 }
 
-async function restoreProjectArchive(archive) {
+async function restoreProjectArchive(archive, runPath = archive.storagePlan?.suggestedPath || "") {
   let archiveStandardWarning = "";
   if (archive.targetSnapshot && archive.settings?.target && !targetOptions().some((item) => item.id === archive.settings.target)) {
     upsertTarget(archive.settings.target, archive.targetSnapshot);
@@ -2379,6 +2393,8 @@ async function restoreProjectArchive(archive) {
   state.ratioAuto = false;
   state.curveOverrides = archive.curveOverrides || {};
   // Reopen with the baseline recorded for this measurement; never look it up again.
+  state.activeRunPath = runPath;
+  state.baselineJob = currentJobFields();
   state.baseline = { ...normalizeBaseline(archive.baseline), auto: false };
   calculate({ preserveRatio: true });
   state.lastSavedRunSignature = currentRunSignature();

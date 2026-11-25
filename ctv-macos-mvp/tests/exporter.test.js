@@ -95,6 +95,7 @@ test("G7 exports include verification, NPDC, gray balance and Lab sections", () 
     suggestedArchivePath: "jobs/demo/runs/run.json",
     g7: {
       status: "Fail",
+      qualityNotes: ["K 实地与纸白 L* 只差 5.0，反差偏低，请复核测量"],
       kOnlyCount: 23,
       labPatchCount: 53,
       grayPatchCount: 21,
@@ -125,6 +126,7 @@ test("G7 exports include verification, NPDC, gray balance and Lab sections", () 
 
   assert.match(csv, /# G7_SUMMARY/);
   assert.match(csv, /# G7_CONCLUSION/);
+  assert.match(csv, /measurement_warning,K 实地与纸白 L\* 只差 5\.0/);
   assert.match(csv, /# G7_VERIFICATION/);
   assert.match(csv, /# NOTICE/);
   assert.match(csv, /G7®/);

@@ -11,9 +11,37 @@ const TEXT_EXTENSIONS = new Set([".csv", ".txt", ".json", ".cgats", ".it8"]);
 
 // Text data is hashed with LF line endings, so a Windows checkout (core.autocrlf) pins the same content.
 export function sha256(file) {
-  let bytes = fs.readFileSync(file);
+  return sha256Bytes(file, fs.readFileSync(file));
+}
+
+export function sha256Bytes(file, bytes) {
   if (TEXT_EXTENSIONS.has(path.extname(file).toLowerCase())) bytes = Buffer.from(bytes.toString("latin1").replace(/\r\n/g, "\n"), "latin1");
   return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+
+export function embeddedAssetFailures(manifest, allowed, dataHashes) {
+  if (!Array.isArray(manifest?.paths) || !manifest.paths.every((key) => typeof key === "string")) {
+    return ["no readable embedded asset manifest"];
+  }
+  const paths = new Set(manifest.paths);
+  const expected = new Set([...allowed].map((name) => `/${name}`));
+  const failures = [];
+  for (const key of paths) {
+    if (!expected.has(key)) failures.push(`non-whitelisted embedded resource: ${key}`);
+  }
+  for (const key of expected) {
+    if (!paths.has(key)) failures.push(`missing embedded resource: ${key}`);
+  }
+  if (paths.size !== manifest.paths.length) failures.push("duplicate embedded asset keys");
+  for (const [file, hash] of Object.entries(dataHashes)) {
+    const bytes = manifest.data?.[file];
+    if (!Array.isArray(bytes) || !bytes.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) {
+      failures.push(`unreadable embedded data: ${file}`);
+    } else if (sha256Bytes(file, Buffer.from(bytes)) !== hash) {
+      failures.push(`embedded data hash mismatch: ${file}`);
+    }
+  }
+  return failures;
 }
 
 // Every file the release may contain, relative to the app root (forward slashes).
