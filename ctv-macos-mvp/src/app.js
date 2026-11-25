@@ -51,6 +51,7 @@ import { fetchTextResource } from "./network.js";
 import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCurvePoints, baselineFromApplied, defaultBaseline, normalizeBaseline, withBaselineChannels } from "./rip-baseline.js";
 import { exportBlockedMessage, validateExportCurve } from "./curve-validation.js";
 import { validateMeasurements } from "./measurement-validation.js";
+import { buildManualMeasurementSet } from "./manual-apply.js";
 import { escapeHtml } from "./shared.js";
 import { bindAsyncAction } from "./ui-actions.js";
 
@@ -1215,53 +1216,22 @@ function clearManualRows() {
 }
 
 function applyManualRows() {
-  const normalizedRows = state.manualRows.map(normalizeManualRow);
-  const solidDensities = solidDensityByChannel(normalizedRows);
-  const paperDensity = paperDensityFromRows(normalizedRows);
-  const labReferences = labReferenceByChannel(normalizedRows);
-  const curveRows = normalizedRows
-    .map((row) => enrichManualDensityRow(row, solidDensities, paperDensity))
-    .map((row) => enrichManualColorimetricRow(row, labReferences))
-    .filter((row) => canCalculateCurve(row));
-  // Same plausibility rules as file import.
-  const checked = validateMeasurements(curveRows.map((row) => ({ ...row, lab: labFromManual(row) })));
-  if (checked.warnings.length) {
-    const rejected = checked.warnings.filter((item) => /已忽略/.test(item));
-    if (rejected.length) window.alert(`${t("manual_rows_rejected", "以下手输数据不合理，已忽略：")}\n${rejected.slice(0, 10).join("\n")}`);
-  }
-  const validRows = new Set(checked.valid.map((row) => `${row.channel}|${row.tone}|${row.patchType}`));
-  curveRows.splice(0, curveRows.length, ...curveRows.filter((row) => validRows.has(`${row.channel}|${row.tone}|${row.patchType}`)));
+  const { acceptedRows, curveRows, measurements, rejected } = buildManualMeasurementSet(state.manualRows);
+  if (rejected.length) window.alert(`${t("manual_rows_rejected", "以下手输数据不合理，已忽略：")}\n${rejected.slice(0, 10).join("\n")}`);
 
   state.importInfo = {
     sourceFormat: "Manual Table",
     metadata: {},
     fields: ["patch_type", "channel", "tone", "measured_tone", "density", "lab_l", "lab_a", "lab_b", "source", "note"],
     rawRows: curveRows,
-    measurements: curveRows.map((row) => ({
-      patchType: row.patchType,
-      channel: row.channel,
-      tone: row.tone,
-      measuredTone: Number.isFinite(row.measuredTone) ? row.measuredTone : undefined,
-      measuredToneMethod: row.measuredToneMethod,
-      density: Number.isFinite(row.density) ? row.density : undefined,
-      solidDensity: Number.isFinite(solidDensities[row.channel]) ? solidDensities[row.channel] : undefined,
-      paperDensity: Number.isFinite(paperDensity) ? paperDensity : undefined,
-      colorimetricTone: Number.isFinite(row.colorimetricTone) ? row.colorimetricTone : undefined,
-      colorimetricMethod: row.colorimetricMethod,
-      instrumentCtv: Number.isFinite(row.instrumentCtv) ? row.instrumentCtv : undefined,
-      instrumentCtvMethod: row.instrumentCtvMethod,
-      lab: labFromManual(row),
-      source: row.source,
-      note: row.note,
-      sourceFormat: "Manual Table",
-    })),
+    measurements,
     warnings: [],
   };
   state.measurements = state.importInfo.measurements;
   state.manualDirty = false;
   state.curveOverrides = {};
   state.selectedPatchIndex = null;
-  els.rawInput.value = manualRowsToCsv(state.manualRows.map(normalizeManualRow));
+  els.rawInput.value = manualRowsToCsv(acceptedRows);
   resetBaselineForNewMeasurement();
   calculate();
   switchView("standard");

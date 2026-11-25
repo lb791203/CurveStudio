@@ -518,7 +518,7 @@ function measurementFromDirectRow(row, index, context) {
 
   return {
     channel,
-    tone: clamp(tone, 0, 100),
+    tone,
     patchType: readValue(row, "patch_type", "patch", "type") || "tone",
     sampleId: readValue(row, "sample_id", "sampleid", "sample_name"),
     lab: labFromRow(row),
@@ -535,7 +535,7 @@ function measurementFromPatchRow(row, channel, tone, context) {
   const sampleId = readValue(row, "sample_id", "sampleid", "sample_name", "sample_name");
   return {
     channel,
-    tone: clamp(tone, 0, 100),
+    tone,
     sampleId,
     lab: labFromRow(row),
     xyz: xyzFromRow(row),
@@ -633,7 +633,7 @@ function parseRow(row, headerMap, index) {
 
   return {
     channel,
-    tone: clamp(tone, 0, 100),
+    tone,
     measuredTvi: Number.isFinite(measuredTvi) ? measuredTvi : undefined,
     measuredTone: Number.isFinite(measuredTone) ? measuredTone : undefined,
     density: Number.isFinite(density) ? density : undefined,

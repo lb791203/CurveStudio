@@ -24,7 +24,9 @@ const LABELS = {
 export function measurementProblems(row = {}) {
   const problems = [];
   const check = (key, value, [min, max]) => {
-    if (value === undefined || value === null || value === "") return;
+    // Blank is "not measured" (a parsed empty cell is NaN); text that is not a number is caught
+    // earlier by manualInputProblems / the importer and never reaches here as NaN.
+    if (value === undefined || value === null || value === "" || (typeof value === "number" && Number.isNaN(value))) return;
     const numeric = Number(value);
     if (!Number.isFinite(numeric) || numeric < min || numeric > max) {
       problems.push({ field: key, value, message: `${LABELS[key] || key} ${formatValue(value)} 超出 ${min}–${max}` });
@@ -47,6 +49,18 @@ export function measurementProblems(row = {}) {
     problems.push({ field: "measuredTvi", value: measuredTvi, message: `实测网点 ${formatValue(measuredTone)} 与 TVI ${formatValue(measuredTvi)} 不一致` });
   }
   return problems;
+}
+
+// Raw manual-table cells: blank is allowed, anything else must be a number.
+const MANUAL_FIELDS = { tone: "网点", measuredTone: "实测网点", density: "密度", labL: "L*", labA: "a*", labB: "b*" };
+export function manualInputProblems(row = {}) {
+  return Object.entries(MANUAL_FIELDS)
+    .filter(([key]) => {
+      const value = row[key];
+      if (value === undefined || value === null || String(value).trim() === "") return false;
+      return !Number.isFinite(Number(String(value).trim().replace(",", ".")));
+    })
+    .map(([key, label]) => ({ field: key, value: row[key], message: `${label} "${row[key]}" 不是数字` }));
 }
 
 // Splits measurements into usable rows and warnings (one line per rejected row).
