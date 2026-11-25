@@ -445,7 +445,6 @@ test("renderShell keeps workflow context in the bottom status bar", () => {
     exportG7CsvButton: { disabled: false },
     exportG7JsonButton: { disabled: false },
     exportJsonButton: { disabled: false },
-    calculateButton: { disabled: false },
     applyManualButton: { disabled: false },
     clearManualButton: { disabled: false },
   });

@@ -54,7 +54,6 @@ export function renderShell(state, els) {
   }
   if (els.runG7Button) els.runG7Button.disabled = !hasMeasurements;
   if (els.generateG7CompensationButton) els.generateG7CompensationButton.disabled = !hasMeasurements;
-  if (els.calculateButton) els.calculateButton.disabled = !hasMeasurements || state.manualDirty;
   if (els.applyManualButton) els.applyManualButton.disabled = !state.manualRows.length;
   if (els.clearManualButton) els.clearManualButton.disabled = !state.manualRows.length;
   if (els.desktopOpenFileButton) {

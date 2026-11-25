@@ -478,7 +478,6 @@ body.dark-theme .standard-action-toolbar .danger-mini:hover {
   border-color: #b91c1c !important;
 }
 
-#calculateButton,
 #parseButton,
 #desktopOpenFileButton,
 #loadSampleButton,
@@ -3819,11 +3818,6 @@ body.dark-theme .status-bar-diagnosis.danger {
   background: var(--surface-soft) !important;
   border: 1px solid var(--line) !important;
   color: var(--ink) !important;
-}
-
-.sidebar .control-panel-widget #calculateButton {
-  min-height: 44px;
-  margin-top: 2px;
 }
 
 /* Premium Dark Theme Sidebar overrides */

@@ -62,7 +62,6 @@ const els = {
   desktopOpenFileButton: document.querySelector("#desktopOpenFileButton"),
   rawInput: document.querySelector("#rawInput"),
   parseButton: document.querySelector("#parseButton"),
-  calculateButton: document.querySelector("#calculateButton"),
   exportCsvButton: document.querySelector("#exportCsvButton"),
   exportHarmonyButton: document.querySelector("#exportHarmonyButton"),
   exportPrinergyButton: document.querySelector("#exportPrinergyButton"),
@@ -405,7 +404,6 @@ function attachEvents() {
 
   els.parseButton.addEventListener("click", parseAndCalculate);
   els.desktopOpenFileButton?.addEventListener("click", openWithDesktopDialog);
-  els.calculateButton.addEventListener("click", () => calculate({ preserveRatio: true }));
   bindAsyncAction(els.loadSampleButton, loadSelectedSample, {
     errorPrefix: t("sample_load_failed", "示例数据加载失败"),
   });
