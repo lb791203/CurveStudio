@@ -52,6 +52,7 @@ import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCur
 import { exportBlockedMessage, validateExportCurve } from "./curve-validation.js";
 import { validateMeasurements } from "./measurement-validation.js";
 import { buildManualMeasurementSet } from "./manual-apply.js";
+import { applyFeatureFlags, isViewEnabled } from "./features.js";
 import { escapeHtml } from "./shared.js";
 import { bindAsyncAction } from "./ui-actions.js";
 
@@ -297,6 +298,7 @@ const state = {
 queueMicrotask(initialize);
 
 async function initialize() {
+  applyFeatureFlags(document);
   // Initialize theme from localStorage
   const savedTheme = localStorage.getItem("theme");
   if (savedTheme === "dark") {
@@ -1821,6 +1823,7 @@ function switchView(view) {
   if (stepDefaultViewMap[view]) {
     view = stepDefaultViewMap[view];
   }
+  if (!isViewEnabled(view)) view = "measurement";
   
   const step = viewToStepMap[view] || "acquisition";
   state.activeView = view;
