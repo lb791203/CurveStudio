@@ -187,6 +187,7 @@ export function projectArchive(context) {
     curveQuality,
     curveSafety: context.curveSafety || [],
     curveOverrides: context.curveOverrides || {},
+    baseline: context.baseline || { kind: "linear" },
     labVerification: context.labRows,
     g7: context.g7,
     generatedAt: context.generatedAt,

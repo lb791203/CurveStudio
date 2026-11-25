@@ -2,6 +2,7 @@ const LOCAL_STORAGE_WARN_BYTES = 4 * 1024 * 1024;
 const RUNS_KEY = "ctv-runs";
 const LAST_PROJECT_KEY = "ctv-last-project";
 const COMPACT_IMPORT_RAW_ROW_LIMIT = 24;
+const APPLIED_CURVES_KEY = "ctv-applied-curves";
 
 export function loadStoredRuns() {
   try {
@@ -10,6 +11,20 @@ export function loadStoredRuns() {
   } catch {
     return [];
   }
+}
+
+// Curves that were exported to the RIP (see rip-baseline.js).
+export function loadAppliedCurves() {
+  try {
+    const items = JSON.parse(localStorage.getItem(APPLIED_CURVES_KEY) || "[]");
+    return Array.isArray(items) ? items : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveAppliedCurves(items) {
+  return saveStorageJson(APPLIED_CURVES_KEY, items, "已导出曲线");
 }
 
 export function loadLastProject() {

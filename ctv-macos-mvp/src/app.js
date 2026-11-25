@@ -42,13 +42,16 @@ import {
   solidDensityByChannel,
   updateManualRowFromEvent,
 } from "./manual-table.js";
-import { clearStoredProject, compactProjectArchiveForRun, loadLastProject, loadStoredRuns, saveLastProject, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js?v=20260524-clear-current-run";
+import { clearStoredProject, compactProjectArchiveForRun, loadAppliedCurves, loadLastProject, loadStoredRuns, saveAppliedCurves, saveLastProject, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js?v=20260524-clear-current-run";
 import { buildCompensationSimulation } from "./compensation-simulation.js";
 import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
 import { STANDARD_LIBRARY, addOrUpdateCustomStandard, archivedStandardAsCustom, buildPatchMap, cmykKey, hasStandard, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260604-density-targets-1";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 import { auditMeasurementCsv } from "./audit-report.js";
 import { fetchJsonResource, fetchTextResource } from "./network.js";
+import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCurvePoints, baselineFromApplied, defaultBaseline, normalizeBaseline, withBaselineChannels } from "./rip-baseline.js";
+import { exportBlockedMessage, validateExportCurve } from "./curve-validation.js";
+import { escapeHtml } from "./shared.js";
 import { bindAsyncAction } from "./ui-actions.js";
 
 const CUSTOM_STANDARDS_KEY = "ctv-custom-standards";
@@ -103,7 +106,7 @@ const els = {
   limitInput: document.querySelector("#limitInput"),
   ratioInput: document.querySelector("#ratioInput"),
   baseCurveNotice: document.querySelector("#baseCurveNotice"),
-  baseCurveInput: document.querySelector("#baseCurveInput"),
+  baselineSelect: document.querySelector("#baselineSelect"),
   baseCurveText: document.querySelector("#baseCurveText"),
   customTvi25Input: document.querySelector("#customTvi25Input"),
   customTvi50Input: document.querySelector("#customTvi50Input"),
@@ -259,8 +262,8 @@ const state = {
   curveOverrides: {},
   runs: [],
   ratioAuto: true,
-  stackOnBaseCurve: true,
-  baseCurveRun: null,
+  baseline: { kind: "linear", auto: true },
+  appliedCurves: [],
   manualDirty: false,
   storageWarning: "",
   activeCurveChannel: "all",
@@ -442,11 +445,11 @@ function attachEvents() {
   els.deviceDisconnectButton?.addEventListener("click", disconnectDevice);
   els.deviceCalibrateButton?.addEventListener("click", calibrateDevice);
   els.deviceReadPatchButton?.addEventListener("click", readDevicePatch);
-  els.exportCsvButton.addEventListener("click", () => download("ctv-compensation-curve.csv", withExportHeader(toCsv(state.results), exportContext()), "text/csv"));
-  els.exportHarmonyButton.addEventListener("click", () => download("rip-manual-entry.csv", withExportHeader(toHarmonyCsv(state.results), exportContext()), "text/csv"));
-  els.exportPrinergyButton.addEventListener("click", () => download("rip-input-output.csv", toPrinergyCsv(state.results, exportContext()), "text/csv"));
-  els.exportSimpleRipButton.addEventListener("click", () => download("rip-simple-input-output.csv", toSimpleRipCsv(state.results, exportContext()), "text/csv"));
-  els.exportCgatsButton.addEventListener("click", () => download("ctv-compensation-curve.cgats.txt", withExportHeader(toCgatsText(state.results), exportContext()), "text/plain"));
+  els.exportCsvButton.addEventListener("click", () => exportRipCurve("ctv-compensation-curve.csv", (rows, context) => withExportHeader(toCsv(rows), context), "text/csv"));
+  els.exportHarmonyButton.addEventListener("click", () => exportRipCurve("rip-manual-entry.csv", (rows, context) => withExportHeader(toHarmonyCsv(rows), context), "text/csv"));
+  els.exportPrinergyButton.addEventListener("click", () => exportRipCurve("rip-input-output.csv", (rows, context) => toPrinergyCsv(rows, context), "text/csv"));
+  els.exportSimpleRipButton.addEventListener("click", () => exportRipCurve("rip-simple-input-output.csv", (rows, context) => toSimpleRipCsv(rows, context), "text/csv"));
+  els.exportCgatsButton.addEventListener("click", () => exportRipCurve("ctv-compensation-curve.cgats.txt", (rows, context) => withExportHeader(toCgatsText(rows), context), "text/plain"));
   els.exportG7CsvButton.addEventListener("click", () => download("g7-verification-report.csv", toG7VerificationCsv(exportContext()), "text/csv"));
   els.exportG7JsonButton.addEventListener("click", () => download("g7-verification-report.json", JSON.stringify(g7ReportArchive(exportContext()), null, 2), "application/json"));
   els.exportJsonButton.addEventListener("click", () => download("ctv-project-export.json", JSON.stringify(projectArchive(exportContext()), null, 2), "application/json"));
@@ -565,10 +568,21 @@ function attachEvents() {
     el.addEventListener("change", () => calculate({ preserveRatio: true }));
   }
   els.smoothInput.addEventListener("input", renderControlValues);
-  els.baseCurveInput?.addEventListener("change", () => {
-    state.stackOnBaseCurve = els.baseCurveInput.checked;
+  els.baselineSelect?.addEventListener("change", () => {
+    const value = els.baselineSelect.value;
+    if (value === "keep") return;
+    state.baseline = value === "linear"
+      ? { kind: "linear", auto: false }
+      : { ...baselineFromApplied(state.appliedCurves.find((item) => item.id === value)), auto: false };
     calculate({ preserveRatio: true });
   });
+  for (const input of [els.jobCustomerInput, els.jobPressInput, els.jobPaperInput]) {
+    input?.addEventListener("change", () => {
+      if (!state.baseline?.auto || !state.measurements.length) return;
+      resetBaselineForNewMeasurement();
+      calculate({ preserveRatio: true });
+    });
+  }
   els.ratioInput.addEventListener("change", () => {
     state.ratioAuto = false;
     calculate({ preserveRatio: true });
@@ -972,6 +986,7 @@ function parseAndCalculate(options = {}) {
   state.curveOverrides = {};
   state.selectedPatchIndex = null;
   state.ratioAuto = true;
+  resetBaselineForNewMeasurement();
   calculate();
 }
 
@@ -1061,6 +1076,7 @@ function loadImportedMeasurement(importInfo, text) {
   state.ratioAuto = true;
   els.rawInput.value = text;
   autoSelectModeForData();
+  resetBaselineForNewMeasurement();
   calculate();
 }
 
@@ -1350,6 +1366,7 @@ function applyManualRows() {
   state.curveOverrides = {};
   state.selectedPatchIndex = null;
   els.rawInput.value = manualRowsToCsv(state.manualRows.map(normalizeManualRow));
+  resetBaselineForNewMeasurement();
   calculate();
   switchView("standard");
 }
@@ -1374,8 +1391,7 @@ function calculate(options = {}) {
     ? preDiagnosis.ratio
     : Number(els.ratioInput.value);
   if (Number(els.ratioInput.value) !== effectiveRatio) els.ratioInput.value = effectiveRatio;
-  state.baseCurveRun = findBaseCurveRun();
-  const baseCurve = state.stackOnBaseCurve && state.baseCurveRun ? runCurvePoints(state.baseCurveRun) : null;
+  const baseCurve = baselineCurvePoints(state.baseline);
   const calculatedRows = calculateCompensation(state.measurements, {
     ...baseOptions,
     compensationRatio: effectiveRatio,
@@ -1414,19 +1430,45 @@ function calculate(options = {}) {
   render();
 }
 
-// Re-measurement loop: the previous saved run of the same customer + press (with a different
-// measurement) holds the curve that was on the plates when this sheet was printed.
-function findBaseCurveRun() {
-  if (!state.measurements.length) return null;
-  const customer = els.jobCustomerInput.value.trim();
-  const press = els.jobPressInput.value.trim();
-  const fingerprint = measurementFingerprint(state.measurements);
-  return (state.runs || []).find((run) => {
-    const job = run.archive?.job || {};
-    if (String(job.customer || "").trim() !== customer || String(job.press || "").trim() !== press) return false;
-    if (runMeasurementFingerprint(run) === fingerprint) return false;
-    return Object.keys(runCurvePoints(run) || {}).length > 0;
-  }) || null;
+// Re-measurement loop: each measurement carries the curve that was in the RIP when the sheet
+// was printed (state.baseline). New measurements default to the newest curve exported for the
+// same customer / press / paper; the user can switch to "linear" or another exported curve.
+function resetBaselineForNewMeasurement() {
+  state.baseline = defaultBaseline(state.appliedCurves, currentJobFields());
+}
+
+function currentJobFields() {
+  return {
+    customer: els.jobCustomerInput.value.trim(),
+    press: els.jobPressInput.value.trim(),
+    paper: els.jobPaperInput.value.trim(),
+  };
+}
+
+function ripExportRows() {
+  return withBaselineChannels(state.results, state.baseline);
+}
+
+async function exportRipCurve(filename, build, type) {
+  if (!state.results.length) return;
+  if (state.manualDirty) {
+    window.alert(t("manual_dirty_warning", "手动测量表已修改，请先点击「应用测量表」重新生成曲线后再导出。"));
+    return;
+  }
+  const rows = ripExportRows();
+  const validation = validateExportCurve(rows);
+  if (!validation.ok) {
+    window.alert(exportBlockedMessage(validation, t));
+    return;
+  }
+  const context = exportContext();
+  await download(filename, build(rows, context), type);
+  // An exported curve is what goes into the RIP: remember it so the next measurement of this
+  // job can be stacked on exactly this curve.
+  const snapshot = appliedCurveSnapshot({ rows, job: currentJobFields() });
+  state.appliedCurves = addAppliedCurve(state.appliedCurves, snapshot);
+  saveAppliedCurves(state.appliedCurves);
+  renderBaseCurveNotice();
 }
 
 function measurementFingerprint(measurements = []) {
@@ -1446,12 +1488,6 @@ function runMeasurementFingerprint(run) {
   return Array.isArray(measurements) ? measurementFingerprint(measurements) : "";
 }
 
-function runCurvePoints(run) {
-  if (run.curvePoints && typeof run.curvePoints === "object") return run.curvePoints;
-  const rows = Array.isArray(run.archive?.results) ? run.archive.results : [];
-  return curvePointsFromResults(rows);
-}
-
 function curvePointsFromResults(rows = []) {
   const byChannel = {};
   for (const row of rows) {
@@ -1465,14 +1501,30 @@ function curvePointsFromResults(rows = []) {
 }
 
 function renderBaseCurveNotice() {
-  if (!els.baseCurveNotice) return;
-  const run = state.baseCurveRun;
-  els.baseCurveNotice.hidden = !run;
-  if (!run) return;
-  els.baseCurveInput.checked = state.stackOnBaseCurve;
-  els.baseCurveText.textContent = state.stackOnBaseCurve
-    ? t("base_curve_on", "已叠加上一轮曲线（{time}）：结果是完整曲线，可直接替换 RIP 里的旧曲线。").replace("{time}", run.createdAt || "")
-    : t("base_curve_off", "未叠加上一轮曲线：按印版为线性计算。只有复测前已把 RIP 曲线恢复为线性时才这样用。");
+  if (!els.baseCurveNotice || !els.baselineSelect) return;
+  const hasData = state.measurements.length > 0;
+  els.baseCurveNotice.hidden = !hasData;
+  if (!hasData) return;
+  const baseline = state.baseline || { kind: "linear" };
+  const options = appliedCurvesForJob(state.appliedCurves, currentJobFields());
+  const selectedId = baseline.kind === "curve" ? baseline.id : "linear";
+  const optionHtml = [
+    `<option value="linear">${escapeHtml(t("baseline_linear", "线性（RIP 未加曲线）"))}</option>`,
+    ...options.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(t("baseline_exported", "已导出曲线 {time}").replace("{time}", formatLocalTime(item.createdAt)))}</option>`),
+  ];
+  if (baseline.kind === "curve" && !options.some((item) => item.id === baseline.id)) {
+    optionHtml.push(`<option value="keep">${escapeHtml(t("baseline_saved", "本次记录的曲线 {time}").replace("{time}", formatLocalTime(baseline.createdAt)))}</option>`);
+  }
+  els.baselineSelect.innerHTML = optionHtml.join("");
+  els.baselineSelect.value = options.some((item) => item.id === selectedId) || selectedId === "linear" ? selectedId : "keep";
+  els.baseCurveText.textContent = baseline.kind === "curve"
+    ? t("base_curve_on", "结果已叠加这条曲线，可直接替换 RIP 里的旧曲线。")
+    : t("base_curve_off", "按印版线性计算。");
+}
+
+function formatLocalTime(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value || "") : date.toLocaleString();
 }
 
 function calculationOptions() {
@@ -1717,6 +1769,7 @@ function exportContext() {
     measurements: state.measurements,
     results: state.results,
     curveOverrides: state.curveOverrides,
+    baseline: normalizeBaseline(state.baseline),
     labRows: state.labRows,
     g7: state.g7,
   };
@@ -1980,7 +2033,7 @@ function saveCurrentRun(options = {}) {
     metrics,
     measurementFingerprint: measurementFingerprint(state.measurements),
     curvePoints: curvePointsFromResults(state.results),
-    stackedOnRun: state.stackOnBaseCurve && state.baseCurveRun ? state.baseCurveRun.runId || state.baseCurveRun.createdAt || "" : "",
+    baseline: normalizeBaseline(state.baseline),
     archive: historyArchive,
   };
   const nextRuns = [run, ...state.runs].slice(0, 24);
@@ -2241,6 +2294,7 @@ function persistCurrentProjectDraft() {
 
 function loadRuns() {
   state.runs = loadStoredRuns();
+  state.appliedCurves = loadAppliedCurves();
 }
 
 async function restoreLastProjectDraft() {
@@ -2392,6 +2446,8 @@ async function restoreProjectArchive(archive) {
   state.manualDirty = false;
   state.ratioAuto = false;
   state.curveOverrides = archive.curveOverrides || {};
+  // Reopen with the baseline recorded for this measurement; never look it up again.
+  state.baseline = { ...normalizeBaseline(archive.baseline), auto: false };
   calculate({ preserveRatio: true });
   state.lastSavedRunSignature = currentRunSignature();
   switchView("job");
