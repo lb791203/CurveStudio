@@ -49,8 +49,8 @@ function withLocalStorage(storage, callback) {
 test("compactProjectArchiveForRun keeps restore data but drops bulky raw import payload", () => {
   const rawRows = Array.from({ length: 60 }, (_, index) => ({
     sample_name: `A${index + 1}`,
-    spectral_400: index,
-    spectral_410: index + 1,
+    cmyk_c: 0, cmyk_m: 0, cmyk_y: 0, cmyk_k: index,
+    ...Object.fromEntries(Array.from({ length: 31 }, (_, band) => [`spectral_nm${400 + band * 10}`, 0.8 - index / 100])),
   }));
   const archive = {
     job: { customer: "Demo" },
@@ -68,8 +68,10 @@ test("compactProjectArchiveForRun keeps restore data but drops bulky raw import 
   assert.equal(compact.results.length, 1);
   assert.equal(compact.labVerification.length, 1);
   assert.equal(compact.importInfo.rawRowCount, 60);
-  assert.equal(compact.importInfo.rawRows.length, 24);
-  assert.equal(compact.importInfo.rawRowsCompacted, true);
+  // review M4: every patch is kept so the run reopens to the same G7 result.
+  assert.equal(compact.importInfo.rawRows.length, 60);
+  assert.equal(compact.importInfo.rawRowsCompacted, false);
+  assert.ok(compact.importInfo.rawRows.every((row) => Number.isFinite(row.lab_l) && !("spectral_nm400" in row)));
   assert.equal(compact.rawInputCompacted, true);
   assert.ok(compact.rawInput.length <= 1000);
 });
@@ -109,6 +111,15 @@ test("run storage reports quota failures and does not continue a combined save",
     assert.equal(result.ok, false);
     assert.match(result.warning, /Run 历史 写入失败：quota exceeded/);
     assert.deepEqual(storage.calls.filter(([operation]) => operation === "set").map(([, key]) => key), ["ctv-runs"]);
+  });
+});
+
+test("review M4: a failed project write rolls back the run history", () => {
+  const storage = memoryStorage({ initial: { "ctv-runs": "[{\"runId\":\"old\"}]" }, throwOnSet: "ctv-last-project" });
+  withLocalStorage(storage, () => {
+    const result = saveRunsAndLastProject([{ runId: "new" }, { runId: "old" }], { job: {} });
+    assert.equal(result.ok, false);
+    assert.deepEqual(loadStoredRuns(), [{ runId: "old" }]);
   });
 });
 

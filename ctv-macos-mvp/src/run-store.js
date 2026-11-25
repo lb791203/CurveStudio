@@ -1,7 +1,8 @@
+import { labFromSpectralRow, spectralSamples } from "./spectral-color.js";
+
 const LOCAL_STORAGE_WARN_BYTES = 4 * 1024 * 1024;
 const RUNS_KEY = "ctv-runs";
 const LAST_PROJECT_KEY = "ctv-last-project";
-const COMPACT_IMPORT_RAW_ROW_LIMIT = 24;
 const APPLIED_CURVES_KEY = "ctv-applied-curves";
 
 export function loadStoredRuns() {
@@ -35,26 +36,63 @@ export function loadLastProject() {
   }
 }
 
+// Both writes succeed or neither is kept: if the project write fails, the previous run
+// history is put back so history and last project never disagree.
 export function saveRunsAndLastProject(runs, archive) {
+  let previousRuns = null;
+  try {
+    previousRuns = localStorage.getItem(RUNS_KEY);
+  } catch {
+    previousRuns = null;
+  }
   const runResult = saveStorageJson(RUNS_KEY, runs, "Run 历史");
   if (!runResult.ok) return runResult;
-  return saveStorageJson(LAST_PROJECT_KEY, archive, "最近项目");
+  const projectResult = saveStorageJson(LAST_PROJECT_KEY, archive, "最近项目");
+  if (!projectResult.ok) {
+    try {
+      if (previousRuns === null) localStorage.removeItem(RUNS_KEY);
+      else localStorage.setItem(RUNS_KEY, previousRuns);
+    } catch {
+      // Nothing more can be done; the warning below still reaches the user.
+    }
+  }
+  return projectResult;
 }
 
+// Run history must reopen to the same result, so every patch row is kept. Only the bulky
+// spectral columns are replaced by the Lab computed from them (which is all the G7 and Lab
+// checks use), and the raw text input is truncated.
 export function compactProjectArchiveForRun(archive = {}) {
   const rawRows = Array.isArray(archive.importInfo?.rawRows) ? archive.importInfo.rawRows : [];
+  const compactRows = rawRows.map(compactSpectralRow);
   return {
     ...archive,
     importInfo: {
       ...(archive.importInfo || {}),
-      rawRows: rawRows.slice(0, COMPACT_IMPORT_RAW_ROW_LIMIT),
+      rawRows: compactRows,
       rawRowCount: rawRows.length,
-      rawRowsCompacted: rawRows.length > COMPACT_IMPORT_RAW_ROW_LIMIT,
+      rawRowsCompacted: false,
+      spectralCompacted: compactRows.some((row, index) => row !== rawRows[index]),
     },
     rawInput: archive.rawInput ? String(archive.rawInput).slice(0, 1000) : "",
     rawInputCompacted: Boolean(archive.rawInput),
   };
 }
+
+function compactSpectralRow(row) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return row;
+  if (!spectralSamples(row).length) return row;
+  const lab = labFromSpectralRow(row);
+  const kept = Object.fromEntries(Object.entries(row).filter(([key]) => !SPECTRAL_KEY.test(String(key).toLowerCase())));
+  if (lab && !Number.isFinite(Number(kept.lab_l))) {
+    kept.lab_l = Number(lab.l.toFixed(3));
+    kept.lab_a = Number(lab.a.toFixed(3));
+    kept.lab_b = Number(lab.b.toFixed(3));
+  }
+  return kept;
+}
+
+const SPECTRAL_KEY = /(?:spectral_nm|nm_?|spectrum_?)\d{3}$/;
 
 export function saveLastProject(archive) {
   return saveStorageJson(LAST_PROJECT_KEY, archive, "最近项目");
