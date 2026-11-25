@@ -8,14 +8,16 @@
     "dev:node": "node scripts/serve-static.mjs",
     "build:dist": "node scripts/build-dist.mjs",
     "test": "node scripts/run-tests.mjs",
+    "test:ui": "node --test tests/ui/workflows.ui.mjs",
     "audit:release": "node scripts/audit-release.mjs",
     "verify:windows-artifacts": "node scripts/verify-windows-artifacts.mjs",
     "validate:fixtures": "node scripts/validate-importers.mjs",
-    "verify:release": "npm run audit:release && npm test && npm run validate:fixtures && npm run build:dist",
+    "verify:release": "npm run audit:release && npm test && npm run validate:fixtures && npm run build:dist && npm run verify:bundle",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "tauri:build:windows": "tauri build --config src-tauri/tauri.windows.conf.json",
-    "macos:release:notarize": "node scripts/notarize-macos.mjs"
+    "macos:release:notarize": "node scripts/notarize-macos.mjs",
+    "verify:bundle": "node scripts/verify-bundle.mjs dist"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.4"

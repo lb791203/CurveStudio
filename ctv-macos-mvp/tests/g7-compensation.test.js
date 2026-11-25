@@ -146,3 +146,20 @@ test("gray split corrects toward the gray target, not toward a*=b*=0", () => {
   assert.equal(y.g7Delta, 0);
   assert.equal(result.grayDiagnostics[0].weightedDeltaCh, 0);
 });
+
+test("review M2: G7 compensation stops when data is incomplete or strength/limit is 0", async () => {
+  const { buildG7Compensation } = await import("../src/g7-compensation.js");
+  const baseRows = ["C", "M", "Y", "K"].flatMap((channel) => [0, 25, 50, 75, 100].map((tone) => ({ channel, tone, outputTone: tone })));
+  const g7 = {
+    status: "Fail",
+    npdcVerification: [25, 50, 75].map((tone) => ({ tone, measuredL: 70 - tone / 2, targetL: 72 - tone / 2, deltaL: -2 })),
+    grayVerification: [0, 25, 50, 75, 100].map((tone) => ({ tone, a: 4, b: 6, deltaA: 4, deltaB: 6, measuredL: 60, targetL: 60 })),
+  };
+  assert.equal(buildG7Compensation({ g7: { ...g7, status: "Data Incomplete", missing: ["x"] }, baseRows }).status, "Blocked");
+  for (const options of [{ ratio: 0, limit: 12 }, { ratio: 0.5, limit: 0 }]) {
+    const result = buildG7Compensation({ g7, baseRows, ...options });
+    assert.ok(result.rows.every((row) => Math.abs(row.outputTone - row.baseOutputTone) < 1e-9), JSON.stringify(options));
+  }
+  const result = buildG7Compensation({ g7, baseRows, ratio: 0.5, limit: 12 });
+  for (const row of result.rows.filter((item) => item.tone === 0 || item.tone === 100)) assert.equal(row.outputTone, row.tone);
+});

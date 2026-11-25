@@ -1,6 +1,7 @@
 import { groupByChannel, number, metadataLooksReference } from "./shared.js";
 import { formatManualActionZh } from "./formatters.js";
-import { densityFromSpectralRow, labFromSpectralRow, labFromXyz, xyzFromSpectralRow } from "./spectral-color.js?v=20260520-patchmap";
+import { validateMeasurements } from "./measurement-validation.js";
+import { densityFromSpectralRow, labFromSpectralRow, labFromXyz100, xyzFromSpectralRow } from "./spectral-color.js?v=20260520-patchmap";
 
 const CHANNELS = ["C", "M", "Y", "K"];
 const DEFAULT_OUTPUT_GRID = [0, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 100];
@@ -76,11 +77,13 @@ export function parseImportText(text, options = {}) {
   const normalized = normalizeLineEndings(text);
   if (!normalized.trim()) return emptyImport("Empty", ["No input text."]);
 
-  if (/\bBEGIN_DATA_FORMAT\b/i.test(normalized) && /\bBEGIN_DATA\b/i.test(normalized)) {
-    return parseCgatsText(normalized, options);
-  }
-
-  return parseDelimitedImport(normalized, options);
+  const parsed = /\bBEGIN_DATA_FORMAT\b/i.test(normalized) && /\bBEGIN_DATA\b/i.test(normalized)
+    ? parseCgatsText(normalized, options)
+    : parseDelimitedImport(normalized, options);
+  // Same plausibility rules as the manual table: impossible values are dropped with a
+  // per-row warning instead of silently feeding the curve.
+  const { valid, warnings } = validateMeasurements(parsed.measurements);
+  return { ...parsed, measurements: valid, warnings: [...parsed.warnings, ...warnings] };
 }
 
 export function calculateCompensation(measurements, options) {
@@ -332,6 +335,11 @@ export function murrayDaviesToneFromDensity(tintDensity, solidDensity, paperDens
   return clamp(100 * (1 - 10 ** (-tintRelative)) / (1 - 10 ** (-solidRelative)), 0, 100);
 }
 
+export function spotColorToneDetailsFromLab(toneLab, paperLab, solidLab) {
+  if (!toneLab || !paperLab || !solidLab) return { raw: NaN, flags: [] };
+  return spotColorToneDetails(vectorFromLab(toneLab), vectorFromLab(paperLab), vectorFromLab(solidLab));
+}
+
 export function spotColorToneValueFromLab(toneLab, paperLab, solidLab) {
   if (!toneLab || !paperLab || !solidLab) return NaN;
   return spotColorToneValue(vectorFromLab(toneLab), vectorFromLab(paperLab), vectorFromLab(solidLab));
@@ -339,7 +347,8 @@ export function spotColorToneValueFromLab(toneLab, paperLab, solidLab) {
 
 export function spotColorToneValueFromXyz(toneXyz, paperXyz, solidXyz) {
   if (!toneXyz || !paperXyz || !solidXyz) return NaN;
-  return spotColorToneValue(vectorFromXyz(toneXyz), vectorFromXyz(paperXyz), vectorFromXyz(solidXyz));
+  const scale = xyzScaleFromPaper(paperXyz);
+  return spotColorToneValue(vectorFromXyz(toneXyz, scale), vectorFromXyz(paperXyz, scale), vectorFromXyz(solidXyz, scale));
 }
 
 export function targetSeries(targetId) {
@@ -403,6 +412,12 @@ function parseCgatsText(text, options = {}) {
   const warnings = [];
   if (!fields.length) warnings.push("CGATS data format was not found.");
   if (!dataRows.length) warnings.push("CGATS data table was empty.");
+  const declaredSets = Number(metadata.number_of_sets);
+  if (Number.isFinite(declaredSets) && dataRows.length && declaredSets !== dataRows.length) {
+    warnings.push(`CGATS 声明 ${declaredSets} 个色块，实际读到 ${dataRows.length} 个；文件可能不完整。`);
+  }
+  const shortRows = dataRows.filter((row) => fields.length && row.length !== fields.length).length;
+  if (shortRows) warnings.push(`${shortRows} 行数据的列数与 DATA_FORMAT（${fields.length} 列）不一致。`);
   if (measurements.length && !measurements.some(hasUsableMetric)) {
     warnings.push("Imported patches do not contain TVI, measured tone, density, or usable spectral data.");
   }
@@ -427,7 +442,11 @@ function parseDelimitedImport(text, options = {}) {
   if (!lines.length) return emptyImport("Delimited", ["No data rows found."]);
 
   const delimiter = detectDelimiter(lines[0]);
-  const rows = lines.map((line) => trimTrailingEmpty(splitDelimitedLine(line, delimiter))).filter((row) => row.length);
+  // With ";" or tab separators a comma is a decimal separator (e.g. "0,85").
+  const decimalComma = delimiter !== ",";
+  const rows = lines
+    .map((line) => trimTrailingEmpty(splitDelimitedLine(line, delimiter)).map((cell) => (decimalComma ? decimalCommaToPoint(cell) : cell)))
+    .filter((row) => row.length);
   const header = rows[0].map(normalizeHeader);
   const hasHeader = looksLikeHeader(header);
 
@@ -504,7 +523,7 @@ function measurementFromDirectRow(row, index, context) {
 
   return {
     channel,
-    tone: clamp(tone, 0, 100),
+    tone,
     patchType: readValue(row, "patch_type", "patch", "type") || "tone",
     sampleId: readValue(row, "sample_id", "sampleid", "sample_name"),
     lab: labFromRow(row),
@@ -521,7 +540,7 @@ function measurementFromPatchRow(row, channel, tone, context) {
   const sampleId = readValue(row, "sample_id", "sampleid", "sample_name", "sample_name");
   return {
     channel,
-    tone: clamp(tone, 0, 100),
+    tone,
     sampleId,
     lab: labFromRow(row),
     xyz: xyzFromRow(row),
@@ -579,6 +598,8 @@ function measurementMetrics(row, channel, tone, context) {
     measuredTone: Number.isFinite(measuredTone) ? measuredTone : undefined,
     measuredToneMethod,
     colorimetricTone: Number.isFinite(colorimetric.tone) ? colorimetric.tone : undefined,
+    colorimetricToneRaw: Number.isFinite(colorimetric.raw) ? colorimetric.raw : undefined,
+    colorimetricFlags: colorimetric.flags?.length ? colorimetric.flags : undefined,
     colorimetricMethod: colorimetric.method,
     instrumentCtv: Number.isFinite(instrumentCtv.value) ? instrumentCtv.value : undefined,
     instrumentCtvMethod: instrumentCtv.method,
@@ -617,7 +638,7 @@ function parseRow(row, headerMap, index) {
 
   return {
     channel,
-    tone: clamp(tone, 0, 100),
+    tone,
     measuredTvi: Number.isFinite(measuredTvi) ? measuredTvi : undefined,
     measuredTone: Number.isFinite(measuredTone) ? measuredTone : undefined,
     density: Number.isFinite(density) ? density : undefined,
@@ -707,6 +728,23 @@ function smoothChannel(items, strength) {
   return sorted;
 }
 
+// Work cap: a real test chart has well under a hundred tones per channel. Very dense data
+// (thousands of points) is averaged into 0.1 % tone bins, at most 1001 points, so the
+// inversion stays fast on the UI thread whatever the data looks like.
+const MAX_RESPONSE_POINTS = 1001;
+function capResponseResolution(tones) {
+  if (tones.size <= MAX_RESPONSE_POINTS) return tones;
+  const binned = new Map();
+  for (const [tone, bucket] of tones) {
+    const key = Math.round(tone * 10) / 10;
+    const target = binned.get(key) || { sum: 0, count: 0 };
+    target.sum += bucket.sum;
+    target.count += bucket.count;
+    binned.set(key, target);
+  }
+  return binned;
+}
+
 // Measured press response per channel: nominal tone -> measured printed tone.
 // Repeated tones are averaged and 0 -> 0 / 100 -> 100 anchors are added when missing
 // (tone value is paper/solid-relative by definition).
@@ -723,11 +761,15 @@ function buildResponseCurves(resolved) {
     tones.set(key, bucket);
   }
   const curves = new Map();
-  for (const [channel, tones] of byChannel) {
+  for (const [channel, rawTones] of byChannel) {
+    const tones = capResponseResolution(rawTones);
     const points = [...tones].map(([tone, bucket]) => [tone, bucket.sum / bucket.count]);
     if (!points.some(([tone]) => tone === 0)) points.push([0, 0]);
     if (!points.some(([tone]) => tone === 100)) points.push([100, 100]);
     points.sort((a, b) => a[0] - b[0]);
+    // A monotone response (the normal case) is inverted by binary search; noisy data falls
+    // back to the full crossing scan.
+    points.monotone = points.every((point, index) => index === 0 || point[1] >= points[index - 1][1]);
     // Need at least one real measurement between the anchors to say anything.
     curves.set(channel, points.length >= 3 ? points : null);
   }
@@ -740,19 +782,72 @@ function buildResponseCurves(resolved) {
 // neighbourhood instead of the whole curve.
 function invertResponse(points, printedTone, nominalTone) {
   if (!points || !Number.isFinite(printedTone)) return NaN;
-  const candidates = [];
-  for (let i = 1; i < points.length; i += 1) {
+  if (points.monotone) return invertMonotone(points, printedTone, nominalTone);
+  return invertNearestCrossing(points, printedTone, nominalTone);
+}
+
+// Non-monotonic data: walk outward from the nominal tone and stop as soon as no remaining
+// segment can hold a crossing closer than the best one found. Noisy but nearly monotonic
+// data (the usual case) touches only a few segments instead of all of them.
+function invertNearestCrossing(points, printedTone, nominalTone) {
+  const n = points.length;
+  if (n < 2) return NaN;
+  let lo = 0; let hi = n - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (points[mid][0] < nominalTone) lo = mid + 1; else hi = mid;
+  }
+  // Segment i joins points[i-1] and points[i].
+  let left = Math.max(1, Math.min(lo, n - 1));
+  let right = left + 1;
+  const segmentDistance = (i) => Math.max(0, points[i - 1][0] - nominalTone, nominalTone - points[i][0]);
+  const crossing = (i) => {
     const [x1, y1] = points[i - 1];
     const [x2, y2] = points[i];
-    const low = Math.min(y1, y2);
-    const high = Math.max(y1, y2);
-    if (printedTone < low || printedTone > high) continue;
-    candidates.push(Math.abs(y2 - y1) < 1e-6 ? x1 : x1 + (printedTone - y1) * (x2 - x1) / (y2 - y1));
+    if (printedTone < Math.min(y1, y2) || printedTone > Math.max(y1, y2)) return NaN;
+    return Math.abs(y2 - y1) < 1e-6 ? x1 : x1 + (printedTone - y1) * (x2 - x1) / (y2 - y1);
+  };
+  let best = NaN;
+  let bestDistance = Infinity;
+  while (left >= 1 || right <= n - 1) {
+    const leftDistance = left >= 1 ? segmentDistance(left) : Infinity;
+    const rightDistance = right <= n - 1 ? segmentDistance(right) : Infinity;
+    const useLeft = leftDistance <= rightDistance;
+    const distance = useLeft ? leftDistance : rightDistance;
+    if (distance > bestDistance) break;
+    const value = crossing(useLeft ? left : right);
+    if (useLeft) left -= 1; else right += 1;
+    if (Number.isFinite(value) && Math.abs(value - nominalTone) < bestDistance) {
+      best = value;
+      bestDistance = Math.abs(value - nominalTone);
+    }
   }
-  if (!candidates.length) return NaN;
-  return candidates.reduce((best, value) => (
-    Math.abs(value - nominalTone) < Math.abs(best - nominalTone) ? value : best
-  ), candidates[0]);
+  return best;
+}
+
+function invertMonotone(points, printedTone, nominalTone) {
+  if (printedTone < points[0][1] || printedTone > points.at(-1)[1]) return NaN;
+  // First and last segment that contain printedTone (flat runs can span several segments).
+  const lowerBound = (predicate) => {
+    let lo = 1; let hi = points.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (predicate(points[mid][1])) hi = mid; else lo = mid + 1;
+    }
+    return lo;
+  };
+  const first = lowerBound((y) => y >= printedTone);
+  const last = lowerBound((y) => y > printedTone);
+  const solve = (i) => {
+    const [x1, y1] = points[i - 1];
+    const [x2, y2] = points[i];
+    return Math.abs(y2 - y1) < 1e-6 ? x1 : x1 + (printedTone - y1) * (x2 - x1) / (y2 - y1);
+  };
+  if (first === last) return solve(first);
+  // Flat region: every input inside it prints the same tone; stay closest to nominal.
+  const from = solve(first);
+  const to = solve(last);
+  return Math.min(Math.max(nominalTone, Math.min(from, to)), Math.max(from, to));
 }
 
 function interpolate(points, tone) {
@@ -857,6 +952,11 @@ function setMetadata(metadata, key, value) {
   else metadata[key] = [metadata[key], value];
 }
 
+function decimalCommaToPoint(cell) {
+  const text = String(cell).trim();
+  return /^[-+]?\d+,\d+$/.test(text) ? text.replace(",", ".") : cell;
+}
+
 function objectFromFields(fields, cells) {
   return fields.reduce((acc, field, index) => {
     const key = normalizeHeader(field);
@@ -896,16 +996,28 @@ function colorimetricToneFromColor(row, paperRow, solidRow) {
   const sampleLab = labFromRow(row);
   const paperLab = labFromRow(paperRow || {});
   const solidLab = labFromRow(solidRow || {});
-  const labTone = spotColorToneValueFromLab(sampleLab, paperLab, solidLab);
-  if (Number.isFinite(labTone)) return { tone: labTone, method: "iso_20654_lab" };
+  if (sampleLab && paperLab && solidLab) {
+    const details = spotColorToneDetails(vectorFromLab(sampleLab), vectorFromLab(paperLab), vectorFromLab(solidLab));
+    if (Number.isFinite(details.raw) || details.flags.length) return colorimetricResult(details, "iso_20654_lab");
+  }
 
   const sampleXyz = xyzFromRow(row);
   const paperXyz = xyzFromRow(paperRow || {});
   const solidXyz = xyzFromRow(solidRow || {});
-  const xyzTone = spotColorToneValueFromXyz(sampleXyz, paperXyz, solidXyz);
-  if (Number.isFinite(xyzTone)) return { tone: xyzTone, method: "iso_20654_xyz_d50" };
+  if (sampleXyz && paperXyz && solidXyz) {
+    const scale = xyzScaleFromPaper(paperXyz);
+    const details = spotColorToneDetails(vectorFromXyz(sampleXyz, scale), vectorFromXyz(paperXyz, scale), vectorFromXyz(solidXyz, scale));
+    if (Number.isFinite(details.raw) || details.flags.length) return colorimetricResult(details, "iso_20654_xyz_d50");
+  }
 
   return { tone: NaN, method: undefined };
+}
+
+// A flagged patch (CTV outside 0–100, or paper and solid too close) is excluded from the curve
+// inversion: its raw value and the reason are kept for display, but it gives no tone.
+function colorimetricResult(details, method) {
+  const excluded = details.flags.length > 0;
+  return { tone: excluded ? NaN : details.raw, raw: details.raw, flags: details.flags, method: excluded ? undefined : method };
 }
 
 function isColorimetricMeasurementCandidate(row, context) {
@@ -922,9 +1034,21 @@ function isColorimetricMeasurementCandidate(row, context) {
 
 
 function spotColorToneValue(toneVector, paperVector, solidVector) {
+  return clamp(spotColorToneDetails(toneVector, paperVector, solidVector).raw, 0, 100);
+}
+
+// Unclamped SCTV plus flags: values outside 0-100 and a paper/solid pair too close together
+// are reported instead of being silently clipped.
+const MIN_PAPER_SOLID_DISTANCE = 10;
+function spotColorToneDetails(toneVector, paperVector, solidVector) {
   const full = vectorDistance(solidVector, paperVector);
-  if (!Number.isFinite(full) || full <= 0.001) return NaN;
-  return clamp((vectorDistance(toneVector, paperVector) / full) * 100, 0, 100);
+  if (!Number.isFinite(full)) return { raw: NaN, flags: [] };
+  if (full <= 0.001) return { raw: NaN, flags: ["low_contrast"] };
+  const raw = (vectorDistance(toneVector, paperVector) / full) * 100;
+  const flags = [];
+  if (raw < -0.5 || raw > 100.5) flags.push("out_of_range");
+  if (full < MIN_PAPER_SOLID_DISTANCE) flags.push("low_contrast");
+  return { raw, flags };
 }
 
 // ISO 20654:2017 formulas (1)-(9): SCTV is a distance in (Vx, Vy, Vz), where
@@ -935,10 +1059,9 @@ function vectorFromLab(lab) {
   return { x: lab.l + (116 / 500) * lab.a, y: lab.l, z: lab.l - (116 / 200) * lab.b };
 }
 
-function vectorFromXyz(xyz) {
-  const normalized = normalizeXyzScale(xyz);
-  if (!normalized) return null;
-  return vectorFromLab(labFromXyz(normalized));
+function vectorFromXyz(xyz, scale = 1) {
+  if (!xyz || ![xyz.x, xyz.y, xyz.z].every(Number.isFinite)) return null;
+  return vectorFromLab(labFromXyz100({ x: xyz.x * scale, y: xyz.y * scale, z: xyz.z * scale }));
 }
 
 function vectorDistance(a, b) {
@@ -946,11 +1069,11 @@ function vectorDistance(a, b) {
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2);
 }
 
-function normalizeXyzScale(xyz) {
-  if (!xyz || ![xyz.x, xyz.y, xyz.z].every(Number.isFinite)) return null;
-  const max = Math.max(xyz.x, xyz.y, xyz.z);
-  if (max > 0 && max <= 1.5) return { x: xyz.x * 100, y: xyz.y * 100, z: xyz.z * 100 };
-  return xyz;
+// XYZ range (0-1 or 0-100) is decided once per paper/tone/solid set from the paper, never
+// per patch: a dark patch on the 0-100 scale can have all values below 1.5.
+function xyzScaleFromPaper(paperXyz) {
+  const max = Math.max(paperXyz.x, paperXyz.y, paperXyz.z);
+  return max > 0 && max <= 1.5 ? 100 : 1;
 }
 
 function labFromRow(row) {

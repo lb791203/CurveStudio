@@ -135,7 +135,7 @@ test("ISO 20654 Lab CTV uses the Vx/Vy/Vz distance, not the Lab Delta E distance
 });
 
 test("ISO 20654 CTV on a magenta 50% patch differs from the Lab Delta E ratio", () => {
-  // Paper, M50 and M solid from samples/g7-p2p51-simulated.txt; expected value computed by hand
+  // Paper, M50 and M solid values (synthetic); expected value computed by hand
   // from ISO 20654 formula (1) with Vx = L + 116a/500, Vy = L, Vz = L - 116b/200.
   const paper = { l: 93.5, a: 1, b: -5.5 };
   const m50 = { l: 66.5, a: 40.47, b: -8.21 };
@@ -440,4 +440,50 @@ test("re-measure stacks the new correction on the previous round's curve", () =>
   assert.equal(at(stacked, 50).stackedOnBaseCurve, true);
   assert.equal(at(stacked, 0).outputTone, 0);
   assert.equal(at(stacked, 100).outputTone, 100);
+});
+
+test("review M6: inverting 10,000 measured points stays fast", async () => {
+  const { calculateCompensation } = await import("../src/curve-engine.js");
+  const measurements = Array.from({ length: 10000 }, (_, index) => {
+    const tone = index / 100;
+    return { channel: "C", tone, measuredTone: Math.min(100, tone + 14 * Math.sin(Math.PI * tone / 100)) };
+  });
+  const start = Date.now();
+  const rows = calculateCompensation(measurements, { mode: "tvi", target: "isoA", compensationRatio: 100, limit: 18 });
+  assert.ok(rows.length > 0);
+  assert.ok(Date.now() - start < 1000, `took ${Date.now() - start} ms`);
+});
+
+test("re-review M6: noisy (non-monotonic) 10,000-point data inverts quickly and matches the full scan", async () => {
+  const { calculateCompensation } = await import("../src/curve-engine.js");
+  let seed = 7;
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const measurements = Array.from({ length: 10000 }, (_, index) => {
+    const tone = index / 100;
+    const noise = (random() - 0.5) * 0.6; // small interleaved noise breaks monotonicity
+    return { channel: "C", tone, measuredTone: Math.max(0, Math.min(100, tone + 14 * Math.sin(Math.PI * tone / 100) + noise)) };
+  });
+  const start = Date.now();
+  const rows = calculateCompensation(measurements, { mode: "tvi", target: "isoA", compensationRatio: 100, limit: 18 });
+  const elapsed = Date.now() - start;
+  assert.ok(rows.length > 0);
+  assert.ok(elapsed < 600, `took ${elapsed} ms`);
+});
+
+test("round-3 M6: 10,000 points whose crossings lie far from the nominal tone stay fast (work cap)", async () => {
+  const { calculateCompensation } = await import("../src/curve-engine.js");
+  // Noisy, nearly flat response: for most tones the only crossing of the target is in the
+  // last segment (towards the 100 % anchor), so an unbounded search walks the whole curve
+  // for every one of the 10,000 points.
+  let seed = 11;
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const measurements = Array.from({ length: 10000 }, (_, index) => {
+    const tone = index / 100;
+    return { channel: "C", tone, measuredTone: 5 + random() };
+  });
+  const start = Date.now();
+  const rows = calculateCompensation(measurements, { mode: "tvi", target: "isoA", compensationRatio: 100, limit: 18 });
+  const elapsed = Date.now() - start;
+  assert.ok(rows.length > 0);
+  assert.ok(elapsed < 1000, `took ${elapsed} ms`);
 });

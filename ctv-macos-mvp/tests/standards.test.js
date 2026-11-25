@@ -92,7 +92,6 @@ test("reimported reference standards replace older duplicates", () => {
 
 test("standard presets carry their own acceptance tolerances", () => {
   const gracol = standardById("gracol2013_crpc6");
-  const auditDemo = standardById("iso12647_2_2007_offset_audit_demo");
   const isoTvi = standardById("iso_tvi_b");
   const pc1 = standardById("iso12647_2_2013_pc1");
   const pc6 = standardById("iso12647_2_2013_pc6");
@@ -105,12 +104,9 @@ test("standard presets carry their own acceptance tolerances", () => {
 
 
   assert.equal(standardById("fogra39").id, "gracol2013_crpc1"); // removed preset falls back
-  assert.equal(standardById("sml_printspec_xl75_6c").id, "iso12647_2_2007_offset_audit_demo"); // renamed preset keeps saved projects
-  assert.equal(auditDemo.name, "ISO 12647-2:2007 Offset");
-  assert.match(auditDemo.referencePath, /iso12647-2-2007-offset-audit-demo\.txt$/);
-  assert.deepEqual(auditDemo.channelTargets, { K: "isoB" });
-  assert.equal(auditDemo.deltaE.fail, 5);
-  assert.equal(auditDemo.g7.enabled, false);
+  // The audit demo preset was removed; saved projects that used it restore as custom standards.
+  assert.equal(hasStandard("iso12647_2_2007_offset_audit_demo"), false);
+  assert.equal(hasStandard("sml_printspec_xl75_6c"), false);
 
   assert.equal(isoTvi.acceptancePreset, "ISO 12647-2 TVI field audit");
   assert.equal(isoTvi.toneTolerances.C.tvi[25], 3);
@@ -129,22 +125,9 @@ test("standard presets carry their own acceptance tolerances", () => {
   assert.equal(pc6.printCondition, "PC6 / PS6 / CD6");
 });
 
-test("audit demo standard reference file contains target Lab values", () => {
-  const text = fs.readFileSync("reference-data/standards/audit-demo/iso12647-2-2007-offset-audit-demo.txt", "utf8");
-  const parsed = parseImportText(text);
-  const map = buildPatchMap(parsed.rawRows);
-
-  assert.equal(parsed.warnings.length, 0);
-  assert.equal(parsed.rawRows.length, 9);
-  assert.equal(map.get("0.00/0.00/0.00/0.00").lab.l, 92);
-  assert.deepEqual(map.get("100.00/0.00/0.00/0.00").lab, { l: 54, a: -36, b: -49 });
-  assert.deepEqual(map.get("100.00/100.00/0.00/0.00").lab, { l: 24, a: 16, b: -45 });
-});
-
 test("removed built-in presets restore from the archive snapshot instead of another print condition", () => {
   setCustomStandards([]);
   assert.equal(hasStandard("fogra39"), false);
-  assert.equal(hasStandard("sml_printspec_xl75_6c"), true);
 
   const snapshot = {
     id: "fogra39",

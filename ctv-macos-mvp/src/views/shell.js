@@ -1,15 +1,15 @@
 import { channelsPresent } from "../curve-engine.js";
 import { summarizeLabVerification } from "../analysis-engine.js?v=20260522-g7-verify";
-import { buildSuggestedArchivePath, summarizeCurveSafety } from "../exporter.js?v=20260521-icc-p4";
+import { buildSuggestedArchivePath, G7_REFERENCE_NOTICE, summarizeCurveSafety } from "../exporter.js?v=20260521-icc-p4";
+import { G7_NPDC_METHOD } from "../g7-targets.js";
 import { buildIccGenerationGate } from "../icc-generation-gate.js?v=20260525-statusbar-pass-1";
 import { compareRuns, formatMetricChange } from "../run-compare.js?v=20260521-icc-p4";
 import { escapeAttr, escapeHtml } from "../shared.js";
-import { t, translateDynamicText } from "../translations.js";
+import { getLanguage, t, translateDynamicText } from "../translations.js";
 import { algorithmDescription, deltaFormulaLabel } from "../ui-labels.js";
 import { displayPatchLabel, num, statusClass } from "./helpers.js?v=20260604-patch-labels-1";
 import { targetName, visibleWarnings } from "./data.js?v=20260525-statusbar-pass-1";
 import { buildAuditReportComparison } from "../audit-report.js";
-import { AUDIT_DEMO_ISO_12647_2_2007_DENSITY_TARGETS } from "../standards.js";
 import { canUseDesktopFileDialog } from "../desktop-io.js";
 
 export function renderShell(state, els) {
@@ -55,7 +55,6 @@ export function renderShell(state, els) {
   }
   if (els.runG7Button) els.runG7Button.disabled = !hasMeasurements;
   if (els.generateG7CompensationButton) els.generateG7CompensationButton.disabled = !hasMeasurements;
-  if (els.calculateButton) els.calculateButton.disabled = !hasMeasurements || state.manualDirty;
   if (els.applyManualButton) els.applyManualButton.disabled = !state.manualRows.length;
   if (els.clearManualButton) els.clearManualButton.disabled = !state.manualRows.length;
   if (els.desktopOpenFileButton) {
@@ -322,7 +321,9 @@ export function renderReport(state, els) {
   els.reportG7Conclusion.innerHTML = `
     <p><span class="status ${statusClass(conclusion.level || g7.status)}">${escapeHtml(translateDynamicText(conclusion.title || t("g7_not_run_label", "G7 Not Run")))}</span></p>
     <p>${escapeHtml(translateDynamicText(conclusion.summary || t("g7_report_not_run_help", "After running G7 verification, NPDC, gray balance, and ΔE conclusions will appear here.")))}</p>
-    <p>NPDC wΔL*: ${num(g7.weightedAverage)} / Max ${num(g7.maxNpdcDelta)} / Gray wΔCh Max: ${num(g7.maxGrayCh)} / Max ΔE: ${num(g7.maxDeltaE)}</p>
+    <p>K NPDC wΔL*: ${num(g7.kNpdcSummary?.weightedAverage)} / Max ${num(g7.kNpdcSummary?.weightedMax)} · CMY NPDC wΔL*: ${num(g7.grayNpdcSummary?.weightedAverage)} / Max ${num(g7.grayNpdcSummary?.weightedMax)} · Gray wΔCh Max: ${num(g7.maxGrayCh)} · Max ΔE: ${num(g7.maxDeltaE)}</p>
+    <p class="report-notice">${escapeHtml(getLanguage() === "en" ? G7_REFERENCE_NOTICE.en : G7_REFERENCE_NOTICE.zh)} ${escapeHtml(G7_NPDC_METHOD)}</p>
+    ${g7.qualityNotes?.length ? reportList(t("reminder_label", "提醒"), g7.qualityNotes) : ""}
     ${reportList(t("main_issues_label", "Main Issues"), conclusion.priorityItems)}
     ${reportList(t("recommended_actions_label", "Recommended Actions"), conclusion.recommendations)}
   `;
@@ -791,17 +792,6 @@ function standardDensityTargetInfo(standard, channel, tone) {
       range,
       source: standard?.densityTargetSource || t("audit_report_standard_density_source", "Standard density target"),
     };
-  }
-  const standardText = `${standard?.name || ""} ${standard?.printCondition || ""}`;
-  if (/ISO\s*12647-2:2007\s*Offset/i.test(standardText)) {
-    const auditTarget = auditNumber(AUDIT_DEMO_ISO_12647_2_2007_DENSITY_TARGETS[channel]?.[tone]);
-    if (Number.isFinite(auditTarget)) {
-      return {
-        value: auditTarget,
-        range,
-        source: t("audit_report_customer_density_source", "Customer audit report density target"),
-      };
-    }
   }
   return {
     value: NaN,

@@ -2,7 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { analyzeCurveSafety, buildLabVerificationRows, deltaE2000, deltaE76, deltaE94, deltaECMC, diagnosePress, g7Preview, summarizeLabVerification } from "../src/analysis-engine.js";
-import { g7NpdcLTarget } from "../src/g7-targets.js";
+import { g7CmyNpdcLTarget, g7NpdcLTarget, tr015AbsoluteL } from "../src/g7-targets.js";
+import { g7GrayMagentaYellowFor } from "../src/shared.js";
+
+const g7Gray = (tone) => ({ c: tone, m: g7GrayMagentaYellowFor(tone), y: g7GrayMagentaYellowFor(tone), k: 0 });
+const kRamp = (lOffset = 0) => [10, 20, 30, 40, 50].map((tone) => ({
+  label: `K ${tone}%`,
+  cmyk: { c: 0, m: 0, y: 0, k: tone },
+  lab: { l: g7NpdcLTarget(tone) + lOffset, a: 0, b: 0 },
+  deltaE: 1,
+}));
 
 test("Delta E formulas return stable finite values", () => {
   const sample = { l: 50, a: 2.6772, b: -79.7751 };
@@ -145,6 +154,7 @@ test("g7Preview can validate complete manual-equivalent G7 data", () => {
   }));
   const labRows = [
     { label: "Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: -2 }, deltaE: 1 },
+    ...kRamp(),
     ...["C", "M", "Y", "K"].map((channel) => ({
       label: `${channel} 100%`,
       cmyk: {
@@ -153,13 +163,14 @@ test("g7Preview can validate complete manual-equivalent G7 data", () => {
         y: channel === "Y" ? 100 : 0,
         k: channel === "K" ? 100 : 0,
       },
-      lab: { l: 50, a: 0, b: 0 },
+      lab: { l: channel === "K" ? g7NpdcLTarget(100) : 50, a: 0, b: 0 },
       deltaE: 1,
     })),
+    { label: "CMY 100%", cmyk: { c: 100, m: 100, y: 100, k: 0 }, lab: { l: g7CmyNpdcLTarget(100), a: 0, b: 0 }, deltaE: 1 },
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
-      cmyk: { c: tone, m: tone, y: tone, k: 0 },
-      lab: { l: g7NpdcLTarget(tone), a: 0.5, b: -0.5 },
+      cmyk: g7Gray(tone),
+      lab: { l: g7CmyNpdcLTarget(tone), a: 0.5, b: -0.5 },
       deltaE: 1,
     })),
   ];
@@ -183,6 +194,7 @@ test("g7Preview treats G7 grayscale overruns as Fail, not Warning", () => {
   }));
   const labRows = [
     { label: "Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: -2 }, deltaE: 1 },
+    ...kRamp(),
     ...["C", "M", "Y", "K"].map((channel) => ({
       label: `${channel} 100%`,
       cmyk: {
@@ -191,13 +203,14 @@ test("g7Preview treats G7 grayscale overruns as Fail, not Warning", () => {
         y: channel === "Y" ? 100 : 0,
         k: channel === "K" ? 100 : 0,
       },
-      lab: { l: 50, a: 0, b: 0 },
+      lab: { l: channel === "K" ? g7NpdcLTarget(100) : 50, a: 0, b: 0 },
       deltaE: 1,
     })),
+    { label: "CMY 100%", cmyk: { c: 100, m: 100, y: 100, k: 0 }, lab: { l: g7CmyNpdcLTarget(100), a: 0, b: 0 }, deltaE: 1 },
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
-      cmyk: { c: tone, m: tone, y: tone, k: 0 },
-      lab: { l: g7NpdcLTarget(tone), a: 2, b: -0.5 },
+      cmyk: g7Gray(tone),
+      lab: { l: g7CmyNpdcLTarget(tone), a: 2, b: -0.5 },
       deltaE: 1,
     })),
   ];
@@ -232,6 +245,7 @@ test("g7Preview conclusion identifies failed G7 verification priorities", () => 
   }));
   const labRows = [
     { label: "Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: -2 }, deltaE: 1 },
+    ...kRamp(),
     ...["C", "M", "Y", "K"].map((channel) => ({
       label: `${channel} 100%`,
       cmyk: {
@@ -240,12 +254,13 @@ test("g7Preview conclusion identifies failed G7 verification priorities", () => 
         y: channel === "Y" ? 100 : 0,
         k: channel === "K" ? 100 : 0,
       },
-      lab: { l: 50, a: 0, b: 0 },
+      lab: { l: channel === "K" ? g7NpdcLTarget(100) : 50, a: 0, b: 0 },
       deltaE: 1,
     })),
+    { label: "CMY 100%", cmyk: { c: 100, m: 100, y: 100, k: 0 }, lab: { l: g7CmyNpdcLTarget(100), a: 0, b: 0 }, deltaE: 1 },
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
-      cmyk: { c: tone, m: tone, y: tone, k: 0 },
+      cmyk: g7Gray(tone),
       lab: { l: 70, a: 8, b: -8 },
       deltaE: 9,
     })),
@@ -365,14 +380,29 @@ test("diagnosePress does not pass a press whose control points exceed the standa
     tviDelta: channel === "K" && tone === 25 ? 7 : channel === "K" && tone === 50 ? 5 : 1,
   })));
   const toneTolerances = Object.fromEntries(["C", "M", "Y", "K"].map((channel) => [channel, { tvi: { 25: 3, 50: 4, 75: 3 } }]));
-  const withoutTolerance = diagnosePress(rows);
-  assert.equal(withoutTolerance.level, "pass");
+  // Without standard tolerances the default ±5 still catches K 25% +7.
+  assert.equal(diagnosePress(rows).level, "warning");
   const diagnosis = diagnosePress(rows, { toneTolerances, metric: "tvi" });
   assert.equal(diagnosis.level, "warning");
   assert.match(diagnosis.title, /超出容差/);
   assert.equal(diagnosis.toleranceIssues.length, 2);
   assert.match(diagnosis.messages[0], /K 25% TVI 偏差 \+7\.0%，超出容差 ±3%/);
-  assert.equal(diagnosePress(rows, { toneTolerances, metric: null }).level, "pass");
+});
+
+test("review M3: a large under-gain at a measured point is never a pass", () => {
+  const rows = ["C", "M", "Y", "K"].flatMap((channel) => [25, 40, 50, 75].map((tone) => ({
+    channel, tone, tviDelta: channel === "C" && tone === 40 ? -30 : 0.5,
+  })));
+  const diagnosis = diagnosePress(rows);
+  assert.notEqual(diagnosis.level, "pass");
+  assert.ok(diagnosis.messages.some((text) => /^C /.test(text)));
+});
+
+test("review M3: missing control points give 'to be re-measured', not a pass", () => {
+  const rows = ["C", "M", "Y", "K"].flatMap((channel) => [25, 50].map((tone) => ({ channel, tone, tviDelta: 0.5 })));
+  const diagnosis = diagnosePress(rows);
+  assert.equal(diagnosis.level, "incomplete");
+  assert.match(diagnosis.messages[0], /75/);
 });
 
 test("diagnosePress speaks CTV in CTV mode", () => {
@@ -381,4 +411,138 @@ test("diagnosePress speaks CTV in CTV mode", () => {
   assert.ok(ctv.messages.every((text) => !/\bTVI\b/.test(text)));
   const tvi = diagnosePress(rows, { metric: "tvi" });
   assert.ok(tvi.messages.some((text) => /\bTVI\b/.test(text)));
+});
+
+function g7BaseLabRows({ kLOffset = 0, includeK = true } = {}) {
+  return [
+    { label: "Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: -2 }, deltaE: 1 },
+    ...(includeK ? kRamp(kLOffset) : []),
+    ...["C", "M", "Y", "K"].map((channel) => ({
+      label: `${channel} 100%`,
+      cmyk: { c: channel === "C" ? 100 : 0, m: channel === "M" ? 100 : 0, y: channel === "Y" ? 100 : 0, k: channel === "K" ? 100 : 0 },
+      lab: { l: channel === "K" ? g7NpdcLTarget(100) : 50, a: 0, b: 0 },
+      deltaE: 1,
+    })),
+    { label: "CMY 100%", cmyk: { c: 100, m: 100, y: 100, k: 0 }, lab: { l: g7CmyNpdcLTarget(100), a: 0, b: 0 }, deltaE: 1 },
+    ...[25, 50, 75].map((tone) => ({
+      label: `Gray ${tone}`,
+      cmyk: g7Gray(tone),
+      lab: { l: g7CmyNpdcLTarget(tone), a: 0, b: -2 * (1 - tone / 100) },
+      deltaE: 1,
+    })),
+  ];
+}
+
+test("review #4: K tone records without Lab never let G7 pass", () => {
+  // 13 K grid points from the curve, no measured K Lab at all.
+  const results = [5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95].map((tone) => ({ channel: "K", tone, measuredTone: tone + 10, targetTone: tone + 10 }));
+  const measurements = [{ channel: "K", tone: 50, measuredTone: 64 }];
+  const g7 = g7Preview({ results, measurements, labRows: g7BaseLabRows({ includeK: false }) });
+
+  assert.equal(g7.kOnlyCount, 0);
+  assert.equal(g7.status, "Data Incomplete");
+  assert.ok(g7.missing.some((item) => /K-only/.test(item)));
+});
+
+test("review #4: a failing K ramp is not averaged away by good CMY gray", () => {
+  const g7 = g7Preview({ labRows: g7BaseLabRows({ kLOffset: -6 }) });
+
+  assert.equal(g7.kNpdcSummary.status, "Fail");
+  assert.equal(g7.grayNpdcSummary.status, "Pass");
+  assert.equal(g7.verificationRows.find((row) => row.item === "K NPDC wΔL* 平均").status, "Fail");
+  assert.equal(g7.status, "Fail");
+});
+
+test("review #4: complete K, CMY and gray data can pass", () => {
+  const g7 = g7Preview({ labRows: g7BaseLabRows() });
+  assert.equal(g7.kOnlyCount, 5);
+  assert.equal(g7.grayPatchCount, 3);
+  assert.equal(g7.status, "Pass");
+});
+
+test("review #4: a patch named Gray with non-G7 CMYK is not a gray-balance patch", () => {
+  const labRows = g7BaseLabRows().filter((row) => !row.label.startsWith("Gray"));
+  labRows.push(
+    { label: "Gray 25", cmyk: { c: 25, m: 25, y: 25, k: 0 }, lab: { l: 75, a: 0, b: 0 }, deltaE: 1 },
+    { label: "neutral 50", cmyk: { c: 50, m: 50, y: 50, k: 0 }, lab: { l: 60, a: 0, b: 0 }, deltaE: 1 },
+    { label: "CMY 75", cmyk: { c: 75, m: 75, y: 75, k: 0 }, lab: { l: 40, a: 0, b: 0 }, deltaE: 1 },
+  );
+  const g7 = g7Preview({ labRows });
+  assert.equal(g7.grayPatchCount, 0);
+  assert.equal(g7.status, "Data Incomplete");
+});
+
+test("review #4: duplicate K patches count once", () => {
+  const labRows = [...g7BaseLabRows({ includeK: false }), ...kRamp().slice(0, 2), ...kRamp().slice(0, 2), ...kRamp().slice(0, 2)];
+  const g7 = g7Preview({ labRows });
+  assert.equal(g7.kOnlyCount, 2);
+  assert.equal(g7.status, "Data Incomplete");
+});
+
+test("re-review S4: G7 cannot pass on reference aims when paper, K solid or CMY solid Lab is missing", () => {
+  const without = (label) => g7Preview({ labRows: g7BaseLabRows().filter((row) => row.label !== label) });
+  const noCmy = without("CMY 100%");
+  assert.equal(noCmy.status, "Data Incomplete");
+  assert.ok(noCmy.missing.some((item) => /CMY 三色实地/.test(item)));
+  const noK = without("K 100%");
+  assert.equal(noK.status, "Data Incomplete");
+  assert.ok(noK.missing.some((item) => /K 实地/.test(item)));
+  const paperWithoutLab = g7Preview({ labRows: g7BaseLabRows().map((row) => row.label === "Paper" ? { ...row, lab: null } : row) });
+  assert.equal(paperWithoutLab.status, "Data Incomplete");
+});
+
+test("re-review M3: an off-grid measured patch (C 35 % at −30) is not lost to the output grid", async () => {
+  const { buildDiagnosticRows, calculateCompensation } = await import("../src/curve-engine.js");
+  const { releaseDiagnosis } = await import("../src/analysis-engine.js");
+  const gain = { 25: 13, 50: 17, 75: 13 }; // ISO A-like targets, all in tolerance
+  const measurements = ["C", "M", "Y", "K"].flatMap((channel) => [25, 50, 75].map((tone) => ({ channel, tone, measuredTone: tone + gain[tone] })));
+  measurements.push({ channel: "C", tone: 35, measuredTone: 35 - 30 + 15 });
+  const options = { mode: "tvi", target: "isoA", smooth: "medium", limit: 18, compensationRatio: 100 };
+  const diagnosticRows = buildDiagnosticRows(measurements, options);
+  const grid = calculateCompensation(measurements, options);
+  const decision = releaseDiagnosis(diagnosticRows, grid, {});
+  assert.notEqual(decision.level, "pass");
+});
+
+test("round-3 S4: a K solid Lab the importer rejects (L* 123) cannot come back through raw rows and pass G7", () => {
+  const labRows = g7BaseLabRows().filter((row) => row.label !== "K 100%");
+  const rawRows = [{ sample_id: "K100", cmyk_c: "0", cmyk_m: "0", cmyk_y: "0", cmyk_k: "100", lab_l: "123", lab_a: "0", lab_b: "0" }];
+  const g7 = g7Preview({ labRows, rawRows });
+  assert.equal(g7.status, "Data Incomplete");
+  assert.ok(g7.missing.some((item) => /K 实地缺少有效 Lab/.test(item)));
+  assert.ok(g7.missing.some((item) => /超出合理范围/.test(item)));
+});
+
+test("round-3 S4: a solid that is not darker than paper white is Data Incomplete, not a reference-curve pass", () => {
+  const lighterK = g7BaseLabRows().map((row) => row.label === "K 100%" ? { ...row, lab: { l: 97, a: 0, b: 0 } } : row);
+  const g7 = g7Preview({ labRows: lighterK });
+  assert.equal(g7.status, "Data Incomplete");
+  assert.ok(g7.missing.some((item) => /K 实地不比纸白暗/.test(item)));
+  const lighterCmy = g7BaseLabRows().map((row) => row.label === "CMY 100%" ? { ...row, lab: { l: 96, a: 0, b: 0 } } : row);
+  assert.equal(g7Preview({ labRows: lighterCmy }).status, "Data Incomplete");
+});
+
+test("round-4 S4: a low-contrast but valid sheet (paper L* 95, solids L* 90) on TR 015 aims is not Data Incomplete", () => {
+  const paperL = 95;
+  const solidL = 90;
+  const rows = [
+    { label: "Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: paperL, a: 0, b: -2 }, deltaE: 1 },
+    ...[10, 20, 30, 40, 50].map((tone) => ({ label: `K ${tone}%`, cmyk: { c: 0, m: 0, y: 0, k: tone }, lab: { l: tr015AbsoluteL(tone, "K", paperL, solidL), a: 0, b: 0 }, deltaE: 1 })),
+    ...["C", "M", "Y", "K"].map((channel) => ({
+      label: `${channel} 100%`,
+      cmyk: { c: channel === "C" ? 100 : 0, m: channel === "M" ? 100 : 0, y: channel === "Y" ? 100 : 0, k: channel === "K" ? 100 : 0 },
+      lab: { l: channel === "K" ? solidL : 50, a: 0, b: 0 },
+      deltaE: 1,
+    })),
+    { label: "CMY 100%", cmyk: { c: 100, m: 100, y: 100, k: 0 }, lab: { l: solidL, a: 0, b: 0 }, deltaE: 1 },
+    ...[25, 50, 75].map((tone) => ({ label: `Gray ${tone}`, cmyk: g7Gray(tone), lab: { l: tr015AbsoluteL(tone, "CMY", paperL, solidL), a: 0, b: -2 * (1 - tone / 100) }, deltaE: 1 })),
+  ];
+  const g7 = g7Preview({ labRows: rows });
+  assert.deepEqual(g7.missing, []);
+  assert.equal(g7.status, "Pass");
+  // The low contrast is shown as its own quality note, not as a data error.
+  assert.ok(g7.qualityNotes.some((item) => /K 实地与纸白 L\* 只差 5\.0/.test(item)));
+  // A solid exactly as light as paper is still invalid.
+  const equal = rows.map((row) => row.label === "K 100%" ? { ...row, lab: { l: paperL, a: 0, b: 0 } } : row);
+  assert.equal(g7Preview({ labRows: equal }).status, "Data Incomplete");
 });

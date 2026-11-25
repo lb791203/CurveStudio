@@ -1,0 +1,29 @@
+{
+  "_comment": "Release resource whitelist. Only these files ship in the app. Data files are pinned by SHA-256: changing one needs a review that it is self-made or synthetic, then `node scripts/verify-bundle.mjs --update-hashes`.",
+  "code": {
+    "files": [
+      "index.html"
+    ],
+    "directories": {
+      "src": [
+        ".js",
+        ".css"
+      ]
+    }
+  },
+  "data": {
+    "samples/ctv-lab-demo.csv": "6b6f2c5fa07ed9be53414e47d05a18f84bd32fac1d699815caa649e226161990",
+    "samples/g7-demo-synthetic.txt": "a33a61f0def49bd3152a69e6a46b85bd4b4b1b2aadc01dbffde9c3d2fe936558",
+    "samples/sample-measurements.csv": "7061d344e8ed28e9868902de87ba66e506af920b6b135fccb3382f0380319ef1"
+  },
+  "forbidden": [
+    "kba-presets",
+    "audit-report-demo",
+    "iso12647-2-2007-offset-audit-demo",
+    "CGATS21-2-CRPC",
+    "P2P51.txt",
+    "P2P25.txt",
+    "g7-p2p51-simulated",
+    "reference-data/"
+  ]
+}

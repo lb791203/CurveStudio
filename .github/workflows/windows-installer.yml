@@ -78,6 +78,28 @@ jobs:
       - name: Verify installer artifacts
         run: npm run verify:windows-artifacts
 
+      - name: Verify bundled resources (whitelist)
+        run: |
+          npm run verify:bundle
+          node scripts/verify-bundle.mjs --binary src-tauri/target/release/curvestudio.exe
+
+      - name: Verify contents of the final installers
+        run: |
+          $ErrorActionPreference = "Stop"
+          $nsis = Get-ChildItem "src-tauri/target/release/bundle/nsis/CurveStudio_${env:CURVESTUDIO_VERSION}_*.exe" | Select-Object -First 1
+          $msi = Get-ChildItem "src-tauri/target/release/bundle/msi/CurveStudio_${env:CURVESTUDIO_VERSION}_*.msi" | Select-Object -First 1
+          if (-not $nsis -or -not $msi) { throw "installer not found" }
+          $nsisDir = Join-Path $env:RUNNER_TEMP "nsis-unpacked"
+          $msiDir = Join-Path $env:RUNNER_TEMP "msi-unpacked"
+          & 7z x $nsis.FullName "-o$nsisDir" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "7z could not unpack $($nsis.Name)" }
+          $p = Start-Process msiexec.exe -ArgumentList "/a `"$($msi.FullName)`" /qn TARGETDIR=`"$msiDir`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "msiexec /a failed for $($msi.Name): $($p.ExitCode)" }
+          node scripts/verify-bundle.mjs --binary $nsisDir
+          if ($LASTEXITCODE -ne 0) { throw "NSIS installer content check failed" }
+          node scripts/verify-bundle.mjs --binary $msiDir
+          if ($LASTEXITCODE -ne 0) { throw "MSI installer content check failed" }
+
       - name: Upload Windows installers
         uses: actions/upload-artifact@v7
         with:

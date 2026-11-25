@@ -88,7 +88,7 @@ export function labFromXyz(xyz) {
   return labFromXyz100(normalizeXyzScale(xyz));
 }
 
-function labFromXyz100(normalized) {
+export function labFromXyz100(normalized) {
   if (!normalized || ![normalized.x, normalized.y, normalized.z].every(Number.isFinite)) return null;
   const fx = cieLabCompression(normalized.x / D50_XYZ.x);
   const fy = cieLabCompression(normalized.y / D50_XYZ.y);

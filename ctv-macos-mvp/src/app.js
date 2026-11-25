@@ -8,7 +8,7 @@ import {
   toHarmonyCsv,
   upsertTarget,
 } from "./curve-engine.js?v=20260521-icc-p4";
-import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview } from "./analysis-engine.js?v=20260522-g7-verify";
+import { analyzeCurveSafety, buildLabVerificationRows, diagnosePress, g7Preview, releaseDiagnosis } from "./analysis-engine.js?v=20260522-g7-verify";
 import { applyCurveOverrides, curveRowKey, pruneCurveOverrides } from "./curve-overrides.js";
 import { buildSuggestedArchivePath, g7ReportArchive, projectArchive, summarizeCurveSafety, toG7VerificationCsv, toPrinergyCsv, toSimpleRipCsv, withExportHeader } from "./exporter.js?v=20260524-standards-runs";
 import { renderStandard as _renderStandard, renderMeasurement as _renderMeasurement, targetName } from "./views/data.js?v=20260603-standard-simple-1";
@@ -22,7 +22,7 @@ import { DEVICE_ADAPTERS, buildMeasurementQueue, buildSdkMeasurementRow, calibra
 import { inspectImport } from "./import-inspector.js?v=20260525-statusbar-pass-1";
 import { buildIccStandardPair } from "./icc-pairing.js?v=20260521-icc-p4";
 import { parseIccProfile } from "./icc-profile.js?v=20260521-icc-p4";
-import { canUseTauriCommandBridge, invokeTauriCommand, openTextFileDesktop, saveTextFileDesktop, saveBinaryFileDesktop } from "./desktop-io.js";
+import { canUseTauriCommandBridge, decodeTextBytes, invokeTauriCommand, openTextFileDesktop, saveTextFileDesktop, saveBinaryFileDesktop } from "./desktop-io.js";
 import { buildIccExportPackage, exportMeasurementToCgats } from "./icc-generator.js";
 import { t, translateDynamicText, updateDomTranslations, getLanguage, setLanguage } from "./translations.js";
 import {
@@ -42,13 +42,18 @@ import {
   solidDensityByChannel,
   updateManualRowFromEvent,
 } from "./manual-table.js";
-import { clearStoredProject, compactProjectArchiveForRun, loadLastProject, loadStoredRuns, saveLastProject, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js?v=20260524-clear-current-run";
+import { clearStoredProject, compactProjectArchiveForRun, loadAppliedCurves, loadLastProject, loadStoredRuns, saveAppliedCurves, saveLastProject, saveRunsAndLastProject, saveStoredRuns } from "./run-store.js?v=20260524-clear-current-run";
 import { buildCompensationSimulation } from "./compensation-simulation.js";
 import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
 import { STANDARD_LIBRARY, addOrUpdateCustomStandard, archivedStandardAsCustom, buildPatchMap, cmykKey, hasStandard, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260604-density-targets-1";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
-import { auditMeasurementCsv } from "./audit-report.js";
-import { fetchJsonResource, fetchTextResource } from "./network.js";
+import { fetchTextResource } from "./network.js";
+import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCurvePoints, baselineFromApplied, confirmApplied, defaultBaseline, isConfirmedApplied, normalizeBaseline, savedRunBaseline, matchingSavedRun, sameJobExact, curvesNeedingPaperConfirmation, unconfirmedCurvesForJob, withBaselineChannels } from "./rip-baseline.js";
+import { exportBlockedMessage, validateExportCurve } from "./curve-validation.js";
+import { validateMeasurements } from "./measurement-validation.js";
+import { buildManualMeasurementSet } from "./manual-apply.js";
+import { applyFeatureFlags, isViewEnabled } from "./features.js";
+import { escapeHtml } from "./shared.js";
 import { bindAsyncAction } from "./ui-actions.js";
 
 const CUSTOM_STANDARDS_KEY = "ctv-custom-standards";
@@ -59,7 +64,6 @@ const els = {
   desktopOpenFileButton: document.querySelector("#desktopOpenFileButton"),
   rawInput: document.querySelector("#rawInput"),
   parseButton: document.querySelector("#parseButton"),
-  calculateButton: document.querySelector("#calculateButton"),
   exportCsvButton: document.querySelector("#exportCsvButton"),
   exportHarmonyButton: document.querySelector("#exportHarmonyButton"),
   exportPrinergyButton: document.querySelector("#exportPrinergyButton"),
@@ -103,7 +107,7 @@ const els = {
   limitInput: document.querySelector("#limitInput"),
   ratioInput: document.querySelector("#ratioInput"),
   baseCurveNotice: document.querySelector("#baseCurveNotice"),
-  baseCurveInput: document.querySelector("#baseCurveInput"),
+  baselineSelect: document.querySelector("#baselineSelect"),
   baseCurveText: document.querySelector("#baseCurveText"),
   customTvi25Input: document.querySelector("#customTvi25Input"),
   customTvi50Input: document.querySelector("#customTvi50Input"),
@@ -259,8 +263,10 @@ const state = {
   curveOverrides: {},
   runs: [],
   ratioAuto: true,
-  stackOnBaseCurve: true,
-  baseCurveRun: null,
+  baseline: { kind: "linear", auto: true },
+  baselineJob: {},
+  activeRunPath: "",
+  appliedCurves: [],
   manualDirty: false,
   storageWarning: "",
   activeCurveChannel: "all",
@@ -288,11 +294,13 @@ const state = {
   },
 };
 
-let kbaPresetCache = null;
 
-initialize();
+// Start after the whole module has evaluated: built-in standards now load synchronously,
+// so the first render must not run before module-level constants are initialised.
+queueMicrotask(initialize);
 
 async function initialize() {
+  applyFeatureFlags(document);
   // Initialize theme from localStorage
   const savedTheme = localStorage.getItem("theme");
   if (savedTheme === "dark") {
@@ -390,7 +398,7 @@ function attachEvents() {
       event.target.value = "";
       return;
     }
-    const text = await file.text();
+    const text = decodeTextBytes(await file.arrayBuffer());
     if (file.name.toLowerCase().endsWith(".json") && await restoreProjectFromText(text)) {
       event.target.value = "";
       return;
@@ -401,7 +409,6 @@ function attachEvents() {
 
   els.parseButton.addEventListener("click", parseAndCalculate);
   els.desktopOpenFileButton?.addEventListener("click", openWithDesktopDialog);
-  els.calculateButton.addEventListener("click", () => calculate({ preserveRatio: true }));
   bindAsyncAction(els.loadSampleButton, loadSelectedSample, {
     errorPrefix: t("sample_load_failed", "示例数据加载失败"),
   });
@@ -442,11 +449,11 @@ function attachEvents() {
   els.deviceDisconnectButton?.addEventListener("click", disconnectDevice);
   els.deviceCalibrateButton?.addEventListener("click", calibrateDevice);
   els.deviceReadPatchButton?.addEventListener("click", readDevicePatch);
-  els.exportCsvButton.addEventListener("click", () => download("ctv-compensation-curve.csv", withExportHeader(toCsv(state.results), exportContext()), "text/csv"));
-  els.exportHarmonyButton.addEventListener("click", () => download("rip-manual-entry.csv", withExportHeader(toHarmonyCsv(state.results), exportContext()), "text/csv"));
-  els.exportPrinergyButton.addEventListener("click", () => download("rip-input-output.csv", toPrinergyCsv(state.results, exportContext()), "text/csv"));
-  els.exportSimpleRipButton.addEventListener("click", () => download("rip-simple-input-output.csv", toSimpleRipCsv(state.results, exportContext()), "text/csv"));
-  els.exportCgatsButton.addEventListener("click", () => download("ctv-compensation-curve.cgats.txt", withExportHeader(toCgatsText(state.results), exportContext()), "text/plain"));
+  els.exportCsvButton.addEventListener("click", () => exportRipCurve("ctv-compensation-curve.csv", (rows, context) => withExportHeader(toCsv(rows), context), "text/csv"));
+  els.exportHarmonyButton.addEventListener("click", () => exportRipCurve("rip-manual-entry.csv", (rows, context) => withExportHeader(toHarmonyCsv(rows), context), "text/csv"));
+  els.exportPrinergyButton.addEventListener("click", () => exportRipCurve("rip-input-output.csv", (rows, context) => toPrinergyCsv(rows, context), "text/csv"));
+  els.exportSimpleRipButton.addEventListener("click", () => exportRipCurve("rip-simple-input-output.csv", (rows, context) => toSimpleRipCsv(rows, context), "text/csv"));
+  els.exportCgatsButton.addEventListener("click", () => exportRipCurve("ctv-compensation-curve.cgats.txt", (rows, context) => withExportHeader(toCgatsText(rows), context), "text/plain"));
   els.exportG7CsvButton.addEventListener("click", () => download("g7-verification-report.csv", toG7VerificationCsv(exportContext()), "text/csv"));
   els.exportG7JsonButton.addEventListener("click", () => download("g7-verification-report.json", JSON.stringify(g7ReportArchive(exportContext()), null, 2), "application/json"));
   els.exportJsonButton.addEventListener("click", () => download("ctv-project-export.json", JSON.stringify(projectArchive(exportContext()), null, 2), "application/json"));
@@ -565,10 +572,30 @@ function attachEvents() {
     el.addEventListener("change", () => calculate({ preserveRatio: true }));
   }
   els.smoothInput.addEventListener("input", renderControlValues);
-  els.baseCurveInput?.addEventListener("change", () => {
-    state.stackOnBaseCurve = els.baseCurveInput.checked;
+  els.baselineSelect?.addEventListener("change", () => {
+    const value = els.baselineSelect.value;
+    if (value === "keep") return;
+    if (value !== "linear") {
+      // Choosing a curve here is the operator's confirmation that it was loaded in the RIP.
+      state.appliedCurves = confirmApplied(state.appliedCurves, value);
+      saveAppliedCurves(state.appliedCurves);
+    }
+    state.baselineJob = currentJobFields();
+    state.baseline = value === "linear"
+      ? { kind: "linear", auto: false }
+      : { ...baselineFromApplied(state.appliedCurves.find((item) => item.id === value)), auto: false };
     calculate({ preserveRatio: true });
+    recordBaselineOnCurrentRun();
   });
+  for (const input of [els.jobCustomerInput, els.jobPressInput, els.jobPaperInput]) {
+    input?.addEventListener("change", () => {
+      if (!state.measurements.length) return;
+      // A choice for this sheet stays valid only while the print condition stays the same.
+      if (sameJobExact(state.baselineJob, currentJobFields())) return;
+      resetBaselineForNewMeasurement();
+      calculate({ preserveRatio: true });
+    });
+  }
   els.ratioInput.addEventListener("change", () => {
     state.ratioAuto = false;
     calculate({ preserveRatio: true });
@@ -664,7 +691,12 @@ function persistCustomStandards(items) {
   }
 }
 
+// Each selection gets a sequence number; a slower, older request never overwrites the Lab
+// reference of a standard chosen later.
+let standardRequestSeq = 0;
+
 async function loadStandard(id) {
+  const request = ++standardRequestSeq;
   state.standard = cloneData(standardById(id));
   state.standardId = state.standard.id;
   state.standardImport = null;
@@ -686,9 +718,11 @@ async function loadStandard(id) {
   } else if (state.standard.referencePath) {
     try {
       const text = await fetchTextResource(state.standard.referencePath, { label: "standard reference file" });
+      if (request !== standardRequestSeq) return;
       state.standardImport = parseImportText(text);
       state.standardPatchMap = buildPatchMap(state.standardImport.rawRows);
     } catch (error) {
+      if (request !== standardRequestSeq) return;
       state.standardImport = { warnings: [`标准文件加载失败: ${error.message}`], rawRows: [] };
       state.standardPatchMap = new Map();
     }
@@ -849,9 +883,7 @@ function standardNameFromImportedReference(imported, fileName) {
     imported?.metadata?.descriptor,
     imported?.metadata?.originator,
   ].filter(Boolean).join(" ");
-  if (/audit demo|ISO 12647-2/i.test(`${descriptor} ${fileName}`)) {
-    return "ISO 12647-2:2007 Offset";
-  }
+  if (descriptor.trim()) return descriptor.trim().slice(0, 80);
   return fileName.replace(/\.(txt|it8|cgats|csv)$/i, "").replace(/[-_]+/g, " ").trim() || "Imported Standard";
 }
 
@@ -963,92 +995,32 @@ function cloneData(value) {
 
 function parseAndCalculate(options = {}) {
   if (!options.skipConfirm && !confirmDataOverwrite(t("confirm_parse_overwrite", "解析文本数据会替换当前工作区数据。"))) return;
-  if (!options.preserveAuditReport) state.auditReport = null;
+  state.auditReport = null;
   state.importInfo = parseImportText(els.rawInput.value, { densityFilter: state.settings.densityFilter });
-  if (state.auditReport) applyAuditReportImportMetadata(state.importInfo, state.auditReport);
   state.measurements = state.importInfo.measurements;
   state.manualRows = [];
   state.manualDirty = false;
   state.curveOverrides = {};
   state.selectedPatchIndex = null;
   state.ratioAuto = true;
+  resetBaselineForNewMeasurement();
   calculate();
 }
 
+// A real measurement file never pulls in demo data: demo audit data is only loaded from the
+// explicit "load sample" entry. The file is parsed and validated before any state changes.
 async function importMeasurementText(text, options = {}) {
-  state.auditReport = await detectAuditReportForImport(text, options.sourceName);
-  if (state.auditReport) {
-    await loadAuditReportStandard(state.auditReport);
-    applyAuditReportJobFields(state.auditReport);
-  }
   const incoming = parseImportText(text, { densityFilter: state.settings.densityFilter });
   if (!incoming.measurements.length) {
     window.alert(t("import_no_usable_measurements", "导入文件没有可计算测点，请检查文件格式或测量字段。"));
     return false;
   }
-  if (state.auditReport) applyAuditReportImportMetadata(incoming, state.auditReport);
   saveCurrentRun({ switchToJob: false, namePrefix: t("run_name_previous_import", "上一份测量"), skipIfUnchanged: true });
+  state.auditReport = null;
   loadImportedMeasurement(incoming, text);
   saveCurrentRun({ switchToJob: false, namePrefix: t("run_name_imported_measurement", "导入测量") });
   render();
   return true;
-}
-
-async function detectAuditReportForImport(text, sourceName = "") {
-  const marker = `${sourceName || ""}\n${text || ""}`;
-  if (!/audit demo|ISO 12647-2:2007/i.test(marker)) return null;
-  try {
-    return await responseJson("./samples/audit-report-demo.json");
-  } catch (error) {
-    console.warn("Audit report metadata could not be attached", error);
-    return null;
-  }
-}
-
-async function loadAuditReportStandard(report) {
-  const marker = [
-    report?.standard?.name,
-    report?.source?.software,
-    report?.job?.customerName,
-    report?.job?.machineModel,
-  ].filter(Boolean).join(" ");
-  const match = STANDARD_LIBRARY.find((item) => (
-    item.id === "iso12647_2_2007_offset_audit_demo" &&
-    /audit demo|ISO 12647-2:2007/i.test(marker)
-  ));
-  if (!match || state.standard?.id === match.id) return;
-  await loadStandard(match.id);
-}
-
-function applyAuditReportImportMetadata(importInfo, report) {
-  if (!importInfo || !report?.standard) return;
-  importInfo.metadata = {
-    ...(importInfo.metadata || {}),
-    measurement_condition: importInfo.metadata?.measurement_condition || report.standard.measurementCondition || "",
-    illuminant: importInfo.metadata?.illuminant || report.standard.illuminant || "",
-    observer: importInfo.metadata?.observer || report.standard.observer || "",
-    density_filter: importInfo.metadata?.density_filter || report.standard.densityFilter || "",
-    backing: importInfo.metadata?.backing || report.standard.backing || "",
-  };
-}
-
-function applyAuditReportJobFields(report, options = {}) {
-  if (!report) return;
-  const overwrite = Boolean(options.overwrite);
-  const setValue = (input, value) => {
-    if (!input || !value) return;
-    const current = String(input.value || "").trim();
-    if (overwrite || !current || /^(现场客户|Field Customer|KBA)$/i.test(current)) {
-      input.value = value;
-    }
-  };
-  setValue(els.jobCustomerInput, report.job?.customerName || report.job?.supplier);
-  setValue(els.jobPressInput, report.job?.machineModel || report.job?.pressPrinter);
-  setValue(els.jobPaperInput, report.job?.substrateName);
-  setValue(els.jobDeviceInput, report.source?.software);
-  if (els.jobNoteInput && (overwrite || !String(els.jobNoteInput.value || "").trim())) {
-    els.jobNoteInput.value = `${report.source?.software || "Audit report"} summary sample; not a full CGATS/P2P measurement file.`;
-  }
 }
 
 function loadImportedMeasurement(importInfo, text) {
@@ -1061,6 +1033,7 @@ function loadImportedMeasurement(importInfo, text) {
   state.ratioAuto = true;
   els.rawInput.value = text;
   autoSelectModeForData();
+  resetBaselineForNewMeasurement();
   calculate();
 }
 
@@ -1085,26 +1058,11 @@ function autoSelectModeForData() {
 async function loadSelectedSample() {
   if (!confirmDataOverwrite(t("confirm_sample_overwrite", "载入示例会替换当前工作区数据。"))) return;
   const selected = els.sampleSelect.value;
-  if (selected === "kba105" || selected === "kba162") {
-    await loadManualPreset(selected);
-    return;
-  }
   const samplePaths = {
     sample: "./samples/sample-measurements.csv",
     ctvLab: "./samples/ctv-lab-demo.csv",
-    p2p51: "./samples/g7-p2p51-simulated.txt",
-    auditDemo: "./samples/audit-report-demo.json",
+    p2p51: "./samples/g7-demo-synthetic.txt",
   };
-  if (selected === "auditDemo") {
-    const report = await responseJson(samplePaths.auditDemo);
-    state.auditReport = report;
-    await loadAuditReportStandard(report);
-    els.rawInput.value = auditMeasurementCsv(report);
-    applyAuditReportJobFields(report, { overwrite: true });
-    parseAndCalculate({ skipConfirm: true, preserveAuditReport: true });
-    switchView("report");
-    return;
-  }
   els.rawInput.value = await fetchTextResource(samplePaths[selected] || samplePaths.sample, { label: "sample measurement" });
   state.auditReport = null;
   parseAndCalculate({ skipConfirm: true });
@@ -1120,46 +1078,6 @@ async function loadSelectedSample() {
     calculate({ preserveRatio: true });
     switchView("g7");
   }
-}
-
-async function responseJson(path) {
-  return fetchJsonResource(path);
-}
-
-async function loadManualPreset(key) {
-  const preset = (await loadKbaPresets())[key];
-  if (!preset) return;
-  state.auditReport = null;
-  state.manualRows = kbaPresetRows(preset);
-  state.manualDirty = false;
-  state.curveOverrides = {};
-  state.selectedPatchIndex = null;
-  els.jobPressInput.value = preset.press;
-  els.modeSelect.value = "tvi";
-  els.targetSelect.value = state.standard.target || "isoB";
-  state.ratioAuto = true;
-  applyManualRows();
-  switchView("curve");
-}
-
-async function loadKbaPresets() {
-  if (kbaPresetCache) return kbaPresetCache;
-  kbaPresetCache = await fetchJsonResource("./samples/kba-presets.json", { label: "KBA preset" });
-  return kbaPresetCache;
-}
-
-function kbaPresetRows(preset) {
-  return Object.entries(preset.channels || {}).flatMap(([channel, data]) => (
-    (data.points || []).map(([tone, measuredTone]) => defaultManualRow({
-      patchType: "tone",
-      channel,
-      tone,
-      measuredTone,
-      density: data.density ?? "",
-      source: preset.source,
-      note: "",
-    }))
-  ));
 }
 
 function addManualRow() {
@@ -1311,45 +1229,24 @@ function clearManualRows() {
 }
 
 function applyManualRows() {
-  const normalizedRows = state.manualRows.map(normalizeManualRow);
-  const solidDensities = solidDensityByChannel(normalizedRows);
-  const paperDensity = paperDensityFromRows(normalizedRows);
-  const labReferences = labReferenceByChannel(normalizedRows);
-  const curveRows = normalizedRows
-    .map((row) => enrichManualDensityRow(row, solidDensities, paperDensity))
-    .map((row) => enrichManualColorimetricRow(row, labReferences))
-    .filter((row) => canCalculateCurve(row));
+  const { acceptedRows, curveRows, measurements, rejected, warnings } = buildManualMeasurementSet(state.manualRows);
+  const notices = [...rejected, ...warnings];
+  if (notices.length) window.alert(`${t("manual_rows_rejected", "以下手输数据不合理，已忽略：")}\n${notices.slice(0, 10).join("\n")}`);
 
   state.importInfo = {
     sourceFormat: "Manual Table",
     metadata: {},
     fields: ["patch_type", "channel", "tone", "measured_tone", "density", "lab_l", "lab_a", "lab_b", "source", "note"],
     rawRows: curveRows,
-    measurements: curveRows.map((row) => ({
-      patchType: row.patchType,
-      channel: row.channel,
-      tone: row.tone,
-      measuredTone: Number.isFinite(row.measuredTone) ? row.measuredTone : undefined,
-      measuredToneMethod: row.measuredToneMethod,
-      density: Number.isFinite(row.density) ? row.density : undefined,
-      solidDensity: Number.isFinite(solidDensities[row.channel]) ? solidDensities[row.channel] : undefined,
-      paperDensity: Number.isFinite(paperDensity) ? paperDensity : undefined,
-      colorimetricTone: Number.isFinite(row.colorimetricTone) ? row.colorimetricTone : undefined,
-      colorimetricMethod: row.colorimetricMethod,
-      instrumentCtv: Number.isFinite(row.instrumentCtv) ? row.instrumentCtv : undefined,
-      instrumentCtvMethod: row.instrumentCtvMethod,
-      lab: labFromManual(row),
-      source: row.source,
-      note: row.note,
-      sourceFormat: "Manual Table",
-    })),
-    warnings: [],
+    measurements,
+    warnings,
   };
   state.measurements = state.importInfo.measurements;
   state.manualDirty = false;
   state.curveOverrides = {};
   state.selectedPatchIndex = null;
-  els.rawInput.value = manualRowsToCsv(state.manualRows.map(normalizeManualRow));
+  els.rawInput.value = manualRowsToCsv(acceptedRows);
+  resetBaselineForNewMeasurement();
   calculate();
   switchView("standard");
 }
@@ -1374,8 +1271,7 @@ function calculate(options = {}) {
     ? preDiagnosis.ratio
     : Number(els.ratioInput.value);
   if (Number(els.ratioInput.value) !== effectiveRatio) els.ratioInput.value = effectiveRatio;
-  state.baseCurveRun = findBaseCurveRun();
-  const baseCurve = state.stackOnBaseCurve && state.baseCurveRun ? runCurvePoints(state.baseCurveRun) : null;
+  const baseCurve = baselineCurvePoints(state.baseline);
   const calculatedRows = calculateCompensation(state.measurements, {
     ...baseOptions,
     compensationRatio: effectiveRatio,
@@ -1383,7 +1279,9 @@ function calculate(options = {}) {
   });
   state.curveOverrides = pruneCurveOverrides(calculatedRows, state.curveOverrides);
   state.results = applyCurveOverrides(calculatedRows, state.curveOverrides);
-  state.diagnosis = diagnosePress(state.results.length ? state.results : diagnosticRows, diagnosisOptions);
+  // Release decisions come from the measured points; the fixed output grid would drop an
+  // off-grid patch (e.g. C 35 %) and could turn a warning into a pass.
+  state.diagnosis = releaseDiagnosis(diagnosticRows, state.results, diagnosisOptions);
   if (!state.results.length && !diagnosticRows.length && state.measurements.length) {
     // Data was imported but the current curve mode cannot use it (e.g. a Lab-only P2P file in TVI/G7 mode).
     const hasColorimetric = state.measurements.some((row) => Number.isFinite(row.colorimetricTone));
@@ -1414,19 +1312,77 @@ function calculate(options = {}) {
   render();
 }
 
-// Re-measurement loop: the previous saved run of the same customer + press (with a different
-// measurement) holds the curve that was on the plates when this sheet was printed.
-function findBaseCurveRun() {
-  if (!state.measurements.length) return null;
-  const customer = els.jobCustomerInput.value.trim();
-  const press = els.jobPressInput.value.trim();
+// Re-measurement loop: each measurement carries the curve that was in the RIP when the sheet
+// was printed (state.baseline). New measurements default to the newest curve exported for the
+// same customer / press / paper; the user can switch to "linear" or another exported curve.
+function resetBaselineForNewMeasurement() {
+  state.baselineJob = currentJobFields();
   const fingerprint = measurementFingerprint(state.measurements);
-  return (state.runs || []).find((run) => {
-    const job = run.archive?.job || {};
-    if (String(job.customer || "").trim() !== customer || String(job.press || "").trim() !== press) return false;
-    if (runMeasurementFingerprint(run) === fingerprint) return false;
-    return Object.keys(runCurvePoints(run) || {}).length > 0;
-  }) || null;
+  const active = state.activeRunPath ? state.runs.find((run) => savedRunPath(run) === state.activeRunPath) : null;
+  // The same measurement was saved before for this job: it was printed with the baseline recorded then.
+  const earlier = (active && savedRunBaseline([active], state.baselineJob, fingerprint, runMeasurementFingerprint))
+    || savedRunBaseline(state.runs, state.baselineJob, fingerprint, runMeasurementFingerprint);
+  state.activeRunPath = "";
+  state.baseline = earlier
+    ? { ...earlier, auto: true }
+    : defaultBaseline(state.appliedCurves, state.baselineJob, { fingerprint });
+}
+
+// The operator's baseline choice belongs to the current Run straight away, not only after a
+// manual save.
+function recordBaselineOnCurrentRun() {
+  if (!state.measurements.length || !state.results.length || state.manualDirty) return;
+  const candidates = state.activeRunPath
+    ? state.runs.filter((run) => savedRunPath(run) === state.activeRunPath) : state.runs;
+  const previous = matchingSavedRun(candidates, currentJobFields(), measurementFingerprint(state.measurements), runMeasurementFingerprint);
+  if (!previous) return;
+  // Rebuild the whole record from the recalculated state, so the stored curve, metrics,
+  // warnings and gate match the new baseline (not only the baseline field).
+  const { run, archive } = buildRunRecord({}, previous);
+  const nextRuns = state.runs.map((item) => (item === previous ? run : item));
+  persistRunRecord(run, archive, nextRuns, currentRunSignature());
+}
+
+function savedRunPath(run) {
+  return run.storagePath || run.archive?.storagePlan?.suggestedPath || "";
+}
+
+function currentJobFields() {
+  return {
+    customer: els.jobCustomerInput.value.trim(),
+    press: els.jobPressInput.value.trim(),
+    paper: els.jobPaperInput.value.trim(),
+  };
+}
+
+function ripExportRows() {
+  return withBaselineChannels(state.results, state.baseline);
+}
+
+async function exportRipCurve(filename, build, type) {
+  if (!state.results.length) return;
+  if (state.manualDirty) {
+    window.alert(t("manual_dirty_warning", "手动测量表已修改，请先点击「应用测量表」重新生成曲线后再导出。"));
+    return;
+  }
+  const rows = ripExportRows();
+  const validation = validateExportCurve(rows);
+  if (!validation.ok) {
+    window.alert(exportBlockedMessage(validation, t));
+    return;
+  }
+  const context = exportContext();
+  const snapshot = appliedCurveSnapshot({ rows, job: currentJobFields(), sourceFingerprint: measurementFingerprint(state.measurements) });
+  const saved = await download(filename, build(rows, context), type);
+  // Cancelled or failed save: nothing reached the RIP, so nothing is registered as a baseline.
+  if (!saved) return;
+  // An exported curve is what goes into the RIP: remember it so the next measurement of this
+  // job can be stacked on exactly this curve.
+  // Recorded as exported only; it becomes a default baseline once the operator confirms the
+  // next sheet was printed with it.
+  state.appliedCurves = addAppliedCurve(state.appliedCurves, snapshot);
+  saveAppliedCurves(state.appliedCurves);
+  renderBaseCurveNotice();
 }
 
 function measurementFingerprint(measurements = []) {
@@ -1446,12 +1402,6 @@ function runMeasurementFingerprint(run) {
   return Array.isArray(measurements) ? measurementFingerprint(measurements) : "";
 }
 
-function runCurvePoints(run) {
-  if (run.curvePoints && typeof run.curvePoints === "object") return run.curvePoints;
-  const rows = Array.isArray(run.archive?.results) ? run.archive.results : [];
-  return curvePointsFromResults(rows);
-}
-
 function curvePointsFromResults(rows = []) {
   const byChannel = {};
   for (const row of rows) {
@@ -1465,14 +1415,39 @@ function curvePointsFromResults(rows = []) {
 }
 
 function renderBaseCurveNotice() {
-  if (!els.baseCurveNotice) return;
-  const run = state.baseCurveRun;
-  els.baseCurveNotice.hidden = !run;
-  if (!run) return;
-  els.baseCurveInput.checked = state.stackOnBaseCurve;
-  els.baseCurveText.textContent = state.stackOnBaseCurve
-    ? t("base_curve_on", "已叠加上一轮曲线（{time}）：结果是完整曲线，可直接替换 RIP 里的旧曲线。").replace("{time}", run.createdAt || "")
-    : t("base_curve_off", "未叠加上一轮曲线：按印版为线性计算。只有复测前已把 RIP 曲线恢复为线性时才这样用。");
+  if (!els.baseCurveNotice || !els.baselineSelect) return;
+  const hasData = state.measurements.length > 0;
+  els.baseCurveNotice.hidden = !hasData;
+  if (!hasData) return;
+  const baseline = state.baseline || { kind: "linear" };
+  const options = appliedCurvesForJob(state.appliedCurves, currentJobFields());
+  const selectedId = baseline.kind === "curve" ? baseline.id : "linear";
+  const optionHtml = [
+    `<option value="linear">${escapeHtml(t("baseline_linear", "线性（RIP 未加曲线）"))}</option>`,
+    ...options.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml((isConfirmedApplied(item)
+      ? t("baseline_applied", "已装入 RIP 的曲线 {time}")
+      : t("baseline_exported", "已导出曲线 {time}（未确认装入 RIP）")).replace("{time}", formatLocalTime(item.createdAt)))}</option>`),
+  ];
+  if (baseline.kind === "curve" && !options.some((item) => item.id === baseline.id)) {
+    optionHtml.push(`<option value="keep">${escapeHtml(t("baseline_saved", "本次记录的曲线 {time}").replace("{time}", formatLocalTime(baseline.createdAt)))}</option>`);
+  }
+  els.baselineSelect.innerHTML = optionHtml.join("");
+  els.baselineSelect.value = options.some((item) => item.id === selectedId) || selectedId === "linear" ? selectedId : "keep";
+  const fingerprint = { fingerprint: measurementFingerprint(state.measurements) };
+  const pending = unconfirmedCurvesForJob(state.appliedCurves, currentJobFields(), fingerprint);
+  const paperUnknown = curvesNeedingPaperConfirmation(state.appliedCurves, currentJobFields(), fingerprint);
+  els.baseCurveText.textContent = baseline.kind === "curve"
+    ? t("base_curve_on", "结果已叠加这条曲线，可直接替换 RIP 里的旧曲线。")
+    : paperUnknown.length
+      ? t("base_curve_paper_unknown", "纸张未填写或与曲线记录不同，未自动套用旧曲线。请确认 RIP 里装的是哪条曲线。")
+      : pending.length
+      ? t("base_curve_pending", "按印版线性计算。若这张纸是用已导出的曲线印的，请在上面选择它。")
+      : t("base_curve_off", "按印版线性计算。");
+}
+
+function formatLocalTime(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value || "") : date.toLocaleString();
 }
 
 function calculationOptions() {
@@ -1717,6 +1692,7 @@ function exportContext() {
     measurements: state.measurements,
     results: state.results,
     curveOverrides: state.curveOverrides,
+    baseline: normalizeBaseline(state.baseline),
     labRows: state.labRows,
     g7: state.g7,
   };
@@ -1724,15 +1700,16 @@ function exportContext() {
   return context;
 }
 
+// Returns true only when the file was actually written (desktop) or handed to the browser download.
 async function download(filename, content, type, options = {}) {
-  if (!options.allowWithoutResults && !state.results.length && !filename.includes("project")) return;
+  if (!options.allowWithoutResults && !state.results.length && !filename.includes("project")) return false;
   if (!options.skipManualDirty && state.manualDirty && !filename.includes("project")) {
     window.alert(t("manual_dirty_warning", "手动测量表已修改，请先点击「应用测量表」重新生成曲线后再导出。"));
-    return;
+    return false;
   }
   try {
     const desktop = await saveTextFileDesktop({ filename, contents: content });
-    if (desktop.handled) return;
+    if (desktop.handled) return Boolean(desktop.path) && !desktop.canceled;
   } catch (error) {
     window.alert(t("desktop_save_failed", `桌面保存失败，已改用浏览器下载：${error.message || error}`));
   }
@@ -1743,6 +1720,7 @@ async function download(filename, content, type, options = {}) {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+  return true;
 }
 
 async function downloadBinary(filename, content, type, options = {}) {
@@ -1895,6 +1873,7 @@ function switchView(view) {
   if (stepDefaultViewMap[view]) {
     view = stepDefaultViewMap[view];
   }
+  if (!isViewEnabled(view)) view = "measurement";
   
   const step = viewToStepMap[view] || "acquisition";
   state.activeView = view;
@@ -1939,7 +1918,44 @@ function saveCurrentRun(options = {}) {
   }
   const signature = currentRunSignature();
   if (options.skipIfUnchanged && signature && signature === state.lastSavedRunSignature) return null;
+  const { run, archive } = buildRunRecord(options);
+  const nextRuns = [run, ...state.runs].slice(0, 24);
+  if (!persistRunRecord(run, archive, nextRuns, signature, { selectJob: true })) return null;
+  if (options.switchToJob !== false) switchView("job");
+  return run;
+}
+
+function persistRunRecord(run, archive, nextRuns, signature, { selectJob = false } = {}) {
+  const storableGate = storableIccGenerationGate(currentIccGenerationGate(nextRuns));
+  run.iccGenerationGate = storableGate;
+  run.archive = { ...run.archive, iccGenerationGate: storableGate };
+  const saved = saveRunsAndLastProject(nextRuns, { ...archive, iccGenerationGate: storableGate });
+  if (!saved.ok) {
+    state.storageWarning = saved.warning;
+    if (typeof window !== "undefined" && typeof window.alert === "function") window.alert(saved.warning);
+    _renderRuns(state, els);
+    _renderReport(state, els);
+    return false;
+  }
+  state.storageWarning = "";
+  state.runs = nextRuns;
+  state.activeRunPath = savedRunPath(run);
+  if (selectJob) state.selectedJobKey = run.jobKey;
+  state.lastSavedRunSignature = signature;
+  _renderRuns(state, els);
+  _renderReport(state, els);
+  return true;
+}
+
+// One saved Run: the measurement, the baseline it was computed on, and the curve, metrics and
+// warnings that follow from them. They are always written together.
+function buildRunRecord(options = {}, previous) {
   const context = exportContext();
+  if (previous) {
+    context.jobId = previous.jobId || previous.archive?.storagePlan?.jobId || context.jobId;
+    context.runId = previous.runId || previous.archive?.storagePlan?.runId || context.runId;
+    context.suggestedArchivePath = savedRunPath(previous) || context.suggestedArchivePath;
+  }
   const archive = projectArchive(context);
   const metrics = buildRunMetrics({
     results: state.results,
@@ -1950,10 +1966,10 @@ function saveCurrentRun(options = {}) {
   const jobName = jobDisplayName(context);
   const historyArchive = compactProjectArchiveForRun(archive);
   const run = {
-    name: options.namePrefix ? `${options.namePrefix} / ${context.runId}` : context.runId,
-    jobKey: context.jobId,
-    jobName,
-    createdAt: new Date().toLocaleString(),
+    name: previous?.name ?? (options.namePrefix ? `${options.namePrefix} / ${context.runId}` : context.runId),
+    jobKey: previous?.jobKey || context.jobId,
+    jobName: previous?.jobName || jobName,
+    createdAt: previous?.createdAt || new Date().toLocaleString(),
     jobId: context.jobId,
     runId: context.runId,
     storagePath: context.suggestedArchivePath,
@@ -1980,30 +1996,10 @@ function saveCurrentRun(options = {}) {
     metrics,
     measurementFingerprint: measurementFingerprint(state.measurements),
     curvePoints: curvePointsFromResults(state.results),
-    stackedOnRun: state.stackOnBaseCurve && state.baseCurveRun ? state.baseCurveRun.runId || state.baseCurveRun.createdAt || "" : "",
+    baseline: normalizeBaseline(state.baseline),
     archive: historyArchive,
   };
-  const nextRuns = [run, ...state.runs].slice(0, 24);
-  const gate = currentIccGenerationGate(nextRuns);
-  const storableGate = storableIccGenerationGate(gate);
-  run.iccGenerationGate = storableGate;
-  run.archive = { ...run.archive, iccGenerationGate: storableGate };
-  const saved = saveRunsAndLastProject(nextRuns, { ...archive, iccGenerationGate: storableGate });
-  if (!saved.ok) {
-    state.storageWarning = saved.warning;
-    if (typeof window !== "undefined" && typeof window.alert === "function") window.alert(saved.warning);
-    _renderRuns(state, els);
-    _renderReport(state, els);
-    return null;
-  }
-  state.storageWarning = "";
-  state.runs = nextRuns;
-  state.lastSavedRunSignature = signature;
-  state.selectedJobKey = run.jobKey;
-  _renderRuns(state, els);
-  _renderReport(state, els);
-  if (options.switchToJob !== false) switchView("job");
-  return run;
+  return { run, archive };
 }
 
 function storableIccGenerationGate(gate) {
@@ -2047,6 +2043,8 @@ function currentRunSignature() {
       finiteSignature(row.density),
     ]),
     overrides: state.curveOverrides,
+    // A different RIP baseline is a different Run, so saving after a baseline change is never skipped.
+    baseline: normalizeBaseline(state.baseline),
   });
 }
 
@@ -2077,6 +2075,7 @@ function clearCurrentWorkspace() {
   state.manualDirty = false;
   state.selectedPatchIndex = null;
   state.lastSavedRunSignature = "";
+  state.activeRunPath = "";
   state.activeCurveChannel = "all";
   if (els.rawInput) els.rawInput.value = "";
   if (els.fileInput) els.fileInput.value = "";
@@ -2125,7 +2124,7 @@ async function restoreRunFromList(event) {
   if (!openTarget) return;
   const run = state.runs[Number(openTarget.dataset.runOpenIndex)];
   if (!run?.archive) return;
-  await restoreProjectArchive(run.archive);
+  await restoreProjectArchive(run.archive, savedRunPath(run));
 }
 
 async function renameRun(index) {
@@ -2241,6 +2240,7 @@ function persistCurrentProjectDraft() {
 
 function loadRuns() {
   state.runs = loadStoredRuns();
+  state.appliedCurves = loadAppliedCurves();
 }
 
 async function restoreLastProjectDraft() {
@@ -2295,7 +2295,7 @@ function runIdentity(run, index) {
   ].join("|");
 }
 
-async function restoreProjectArchive(archive) {
+async function restoreProjectArchive(archive, runPath = archive.storagePlan?.suggestedPath || "") {
   let archiveStandardWarning = "";
   if (archive.targetSnapshot && archive.settings?.target && !targetOptions().some((item) => item.id === archive.settings.target)) {
     upsertTarget(archive.settings.target, archive.targetSnapshot);
@@ -2392,6 +2392,10 @@ async function restoreProjectArchive(archive) {
   state.manualDirty = false;
   state.ratioAuto = false;
   state.curveOverrides = archive.curveOverrides || {};
+  // Reopen with the baseline recorded for this measurement; never look it up again.
+  state.activeRunPath = runPath;
+  state.baselineJob = currentJobFields();
+  state.baseline = { ...normalizeBaseline(archive.baseline), auto: false };
   calculate({ preserveRatio: true });
   state.lastSavedRunSignature = currentRunSignature();
   switchView("job");

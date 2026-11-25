@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import test from "node:test";
 
 import { renderAnalyze, renderCurve, statusText } from "../src/views/analysis.js";
@@ -446,7 +445,6 @@ test("renderShell keeps workflow context in the bottom status bar", () => {
     exportG7CsvButton: { disabled: false },
     exportG7JsonButton: { disabled: false },
     exportJsonButton: { disabled: false },
-    calculateButton: { disabled: false },
     applyManualButton: { disabled: false },
     clearManualButton: { disabled: false },
   });
@@ -733,6 +731,7 @@ test("renderReport summarizes field report sections", () => {
     ],
     g7: {
       status: "Fail",
+      qualityNotes: ["K 实地与纸白 L* 只差 5.0，反差偏低，请复核测量"],
       weightedAverage: 2.8,
       maxDeltaE: 6.3,
       maxNpdcDelta: 1.9,
@@ -768,6 +767,10 @@ test("renderReport summarizes field report sections", () => {
   assert.match(localEls.reportAuditComparison.innerHTML, /TVI \/ CTV 关键网点判定/);
   assert.match(localEls.reportAuditComparison.innerHTML, /Lab \/ ΔE 关键色块判定/);
   assert.match(localEls.reportG7Conclusion.innerHTML, /G7 未通过，需修正后复测/);
+  // re-review M7: the printed report carries the same fixed reference / non-certification notice.
+  assert.match(localEls.reportG7Conclusion.innerHTML, /非 Idealliance 认证结果/);
+  assert.match(localEls.reportG7Conclusion.innerHTML, /TR 015-2022/);
+  assert.match(localEls.reportG7Conclusion.innerHTML, /反差偏低，请复核测量/);
   assert.match(localEls.reportLabSummary.innerHTML, /最大 ΔE/);
   assert.match(localEls.reportCurveSummary.innerHTML, /曲线质量|平均 \|TVI\/CTV 偏差\|/);
   assert.match(localEls.reportRunCompare.innerHTML, /已解决/);
@@ -794,78 +797,6 @@ test("renderReport hides imported sample ids in production Lab table", () => {
   assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /DEMO_/);
   assert.match(localEls.reportAuditComparison.innerHTML, /纸白/);
   assert.match(localEls.reportAuditComparison.innerHTML, /C 实地/);
-});
-
-test("renderReport adds source-audit comparison when audit report data is attached", () => {
-  const auditReport = JSON.parse(fs.readFileSync("samples/audit-report-demo.json", "utf8"));
-  const localEls = els({
-    modeSelect: { value: "tvi" },
-    targetSelect: { value: "isoA" },
-    jobCustomerInput: { value: "Demo Customer" },
-    jobPressInput: { value: "Press 6C" },
-    jobPaperInput: { value: "FSC 300LX3143B" },
-    jobDeviceInput: { value: "External audit tool" },
-  });
-  const localState = state({
-    auditReport,
-    standard: { name: "ISO 12647-2:2007 Offset", deltaE: { warning: 3.5, fail: 4.2 } },
-    measurements: [{ channel: "C", tone: 50, measuredTone: 67.2 }],
-    results: [{ channel: "C", tone: 50, measuredTone: 67.2, targetTone: 64.3, tviDelta: 2.9 }],
-  });
-
-  renderReport(localState, localEls);
-
-  assert.equal(localEls.reportAuditComparison.hidden, false);
-  assert.match(localEls.reportAuditComparison.innerHTML, /现场验厂报告输出/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /来源验厂报告复核/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /Demo Customer/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /External audit tool/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /三灰 ΔH|Lab ΔE|密度/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /网点扩张曲线/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /实地密度目标 \/ 实测/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /50% 密度目标 \/ 实测/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /<th>输入网点<\/th>[\s\S]*<th>C<\/th>[\s\S]*<th>M<\/th>[\s\S]*<th>Y<\/th>[\s\S]*<th>K<\/th>/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /25%[\s\S]*目标[\s\S]*9\.30%[\s\S]*实测[\s\S]*11\.30%/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /50% 四色密度[\s\S]*0\.49[\s\S]*0\.50/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /MY 叠印[\s\S]*46\.00, 67\.00, 47\.00[\s\S]*49\.39, 63\.46, 38\.72/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /≤ 5/);
-  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /W 5 \/ F 5/);
-  const toleranceBands = [...localEls.reportAuditComparison.innerHTML.matchAll(/<path d="([^"]+)" fill="#64748b" fill-opacity="0\.12"/g)];
-  assert.equal(toleranceBands.length, 1, "expected one shared neutral target tolerance band instead of overlapping channel bands");
-  assert.doesNotMatch(toleranceBands[0][1], /\sC\s/, "target tolerance band should use straight tolerance envelope segments");
-  assert.match(toleranceBands[0][1], /\sL\s/, "target tolerance band should contain straight line segments");
-  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /DEMO_/);
-  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /参考 DEMO/);
-});
-
-test("renderReport uses ISO 12647-2 audit demo density targets when only measurement Run data is loaded", () => {
-  const localEls = els({
-    modeSelect: { value: "tvi" },
-    targetSelect: { value: "isoA" },
-    jobCustomerInput: { value: "Demo Customer" },
-    jobPressInput: { value: "Press 6C" },
-  });
-  const measurements = ["C", "M", "Y", "K"].flatMap((channel, index) => [
-    { channel, tone: 50, density: [0.5, 0.5, 0.44, 0.53][index] },
-    { channel, tone: 100, density: [1.26, 1.27, 0.99, 1.6][index] },
-  ]);
-  const results = ["C", "M", "Y", "K"].flatMap((channel) => [25, 50, 75].map((tone) => ({
-    channel,
-    tone,
-    measuredTvi: tone === 50 ? 17 : 11,
-    targetTvi: tone === 50 ? 16 : 11.5,
-    tviDelta: tone === 50 ? 1 : -0.5,
-  })));
-
-  renderReport(state({
-    standard: { name: "ISO 12647-2:2007 Offset", deltaE: { warning: 5, fail: 5 } },
-    measurements,
-    results,
-  }), localEls);
-
-  assert.match(localEls.reportAuditComparison.innerHTML, /四色实地密度[\s\S]*1\.40[\s\S]*1\.45[\s\S]*1\.05[\s\S]*1\.70/);
-  assert.match(localEls.reportAuditComparison.innerHTML, /50% 四色密度[\s\S]*0\.49[\s\S]*0\.50[\s\S]*0\.43[\s\S]*0\.54/);
-  assert.doesNotMatch(localEls.reportAuditComparison.innerHTML, /四色实地密度[\s\S]*N\/A[\s\S]*1\.26/);
 });
 
 test("renderReport shows solid density ranges for standards without exact density targets", () => {

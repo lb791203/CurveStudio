@@ -104,6 +104,8 @@ run("npm", ["run", "verify:release"]);
 removeIfExists(appPath);
 removeIfExists(dmgPath);
 run("npm", ["run", "tauri:build"], { env: tauriBuildEnv() });
+// Final package must only embed whitelisted resources (release-resources.json).
+run("node", ["scripts/verify-bundle.mjs", "--binary", path.join(appPath, "Contents")]);
 
 run("xattr", ["-cr", appPath]);
 run("codesign", [
@@ -128,7 +130,25 @@ run("xcrun", ["stapler", "staple", dmgPath]);
 run("xcrun", ["stapler", "validate", dmgPath]);
 run("hdiutil", ["verify", dmgPath]);
 run("spctl", ["--assess", "--type", "open", "--context", "context:primary-signature", "--verbose=4", dmgPath]);
+verifyFinalDmg(dmgPath);
 
 const checksum = output("shasum", ["-a", "256", dmgPath]).trim();
 fs.writeFileSync(sumsPath, `${checksum}\n`);
 console.log(`\nNotarized DMG ready:\n${dmgPath}\n${checksum}`);
+
+// The shipped artefact itself: mount the stapled DMG read-only, check the app's signature
+// and Gatekeeper verdict, and verify the bundled assets and loose files again.
+function verifyFinalDmg(dmg) {
+  const mountPoint = fs.mkdtempSync(path.join(os.tmpdir(), "curvestudio-dmg-"));
+  run("hdiutil", ["attach", dmg, "-readonly", "-nobrowse", "-mountpoint", mountPoint]);
+  try {
+    const app = fs.readdirSync(mountPoint).find((name) => name.endsWith(".app"));
+    if (!app) throw new Error("no .app inside the final DMG");
+    const mountedApp = path.join(mountPoint, app);
+    run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", mountedApp]);
+    run("spctl", ["--assess", "--type", "execute", "--verbose=4", mountedApp]);
+    run("node", ["scripts/verify-bundle.mjs", "--binary", path.join(mountedApp, "Contents")]);
+  } finally {
+    run("hdiutil", ["detach", mountPoint]);
+  }
+}

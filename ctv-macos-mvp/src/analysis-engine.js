@@ -1,4 +1,5 @@
 import { cmykFromManualRow, cmykKey, labFromRow } from "./standards.js";
+import { LIMITS } from "./measurement-validation.js";
 import { average, groupByChannel, number, rawCmyk, isLikelyG7GrayCandidate, isG7GrayCmyk, metadataLooksReference } from "./shared.js";
 import { labFromSpectralRow } from "./spectral-color.js";
 import { buildNpdcVerification, summarizeNpdc, buildGrayVerification, summarizeGrayBalance, summarizeWeightedDeltaL, buildColorspaceVerification, classifyColorspacePatches } from "./g7-targets.js?v=20260522-g7-verify";
@@ -243,6 +244,12 @@ function sccaReferenceLab(reference, paperReference, paperMeasured) {
 }
 
 // Diagnosis texts are written for TVI; in CTV mode the same deviations are CTV values.
+// Release decision for UI and report: judged on the measured points. The output grid is only
+// used when there are no measured diagnostic rows (it would drop off-grid patches).
+export function releaseDiagnosis(measuredRows = [], gridRows = [], options = {}) {
+  return diagnosePress(measuredRows.length ? measuredRows : gridRows, options);
+}
+
 export function diagnosePress(results, options = {}) {
   const diagnosis = diagnosePressCore(results, options);
   if (options.metric !== "ctv") return diagnosis;
@@ -329,6 +336,20 @@ function diagnosePressCore(results, options = {}) {
     };
   }
 
+  const lowChannels = channelStats.filter((item) => item.midAverage <= -8);
+  if (lowChannels.length) {
+    return {
+      level: "warning",
+      title: "TVI 偏小 / 网点扩大不足",
+      ratio: 50,
+      messages: [
+        ...lowChannels.map((item) => `${item.channel} 中间调偏差 ${item.midAverage.toFixed(1)}%，网点扩大明显不足；先确认实地密度和测量，再加网补偿。`),
+        "建议补偿后重新印刷并复测。",
+      ],
+      channelStats,
+    };
+  }
+
   if (kSevere || cModerate || highChannels.length) {
     return {
       level: "warning",
@@ -342,7 +363,7 @@ function diagnosePressCore(results, options = {}) {
     };
   }
 
-  const toleranceIssues = controlPointToleranceIssues(results, options.toneTolerances, options.metric);
+  const toleranceIssues = measuredToleranceIssues(results, options.toneTolerances, options.metric);
   if (toleranceIssues.length) {
     const metricLabel = (options.metric || "tvi").toUpperCase();
     return {
@@ -359,6 +380,20 @@ function diagnosePressCore(results, options = {}) {
     };
   }
 
+  const missingControl = missingControlPoints(results);
+  if (missingControl.length) {
+    return {
+      level: "incomplete",
+      title: "控制点缺测 / 待复测",
+      ratio: 30,
+      messages: [
+        `缺少实测控制点：${missingControl.map((item) => `${item.channel} ${item.tones.join("/")}%`).join("，")}。`,
+        "补测这些点后才能判断是否在容差内。",
+      ],
+      channelStats,
+    };
+  }
+
   return {
     level: "pass",
     title: "接近标准",
@@ -369,19 +404,36 @@ function diagnosePressCore(results, options = {}) {
 }
 
 const TOLERANCE_CONTROL_TONES = [25, 50, 75];
+const DEFAULT_TONE_TOLERANCE = 5;
+const CONTROL_POINT_WINDOW = 5;
 
-function controlPointToleranceIssues(results, toneTolerances, metric) {
-  if (!toneTolerances || !metric) return [];
+// Both directions, on every measured point (interpolated grid points excluded). The
+// tolerance of the nearest control tone (25/50/75) applies; outside 15-85 % only the
+// standard's explicit tolerances are used.
+function measuredToleranceIssues(results, toneTolerances, metric) {
   const issues = [];
   for (const row of results) {
-    const tone = Math.round(Number(row.tone));
-    if (!TOLERANCE_CONTROL_TONES.includes(tone) || Math.abs(Number(row.tone) - tone) > 0.01) continue;
-    const tolerance = Number(toneTolerances?.[row.channel]?.[metric]?.[tone]);
+    if (row.interpolated) continue;
+    const tone = Number(row.tone);
     const delta = Number(row.tviDelta);
-    if (!Number.isFinite(tolerance) || tolerance <= 0 || !Number.isFinite(delta)) continue;
-    if (Math.abs(delta) > tolerance + 1e-9) issues.push({ channel: row.channel, tone, delta, tolerance });
+    if (!Number.isFinite(tone) || !Number.isFinite(delta) || tone <= 0 || tone >= 100) continue;
+    const control = TOLERANCE_CONTROL_TONES.reduce((best, item) => (Math.abs(item - tone) < Math.abs(best - tone) ? item : best));
+    const explicit = Number(toneTolerances?.[row.channel]?.[metric]?.[control]);
+    if (!Number.isFinite(explicit) && (tone < 15 || tone > 85)) continue;
+    const tolerance = Number.isFinite(explicit) && explicit > 0 ? explicit : DEFAULT_TONE_TOLERANCE;
+    if (Math.abs(delta) > tolerance + 1e-9) issues.push({ channel: row.channel, tone: Number(tone.toFixed(2)), delta, tolerance });
   }
   return issues.sort((a, b) => (Math.abs(b.delta) - b.tolerance) - (Math.abs(a.delta) - a.tolerance));
+}
+
+// A channel is only judged "in tolerance" when it was actually measured near 25/50/75 %.
+function missingControlPoints(results) {
+  return Object.entries(groupByChannel(results.filter((row) => !row.interpolated && Number.isFinite(Number(row.tviDelta)))))
+    .map(([channel, rows]) => ({
+      channel,
+      tones: TOLERANCE_CONTROL_TONES.filter((control) => !rows.some((row) => Math.abs(Number(row.tone) - control) <= CONTROL_POINT_WINDOW)),
+    }))
+    .filter((item) => item.tones.length);
 }
 
 export function analyzeCurveSafety(results) {
@@ -455,6 +507,17 @@ function curveIssue(level, channel, tone, type, message, relatedTones = [tone]) 
   };
 }
 
+// Below this L* gap between paper and solid the sheet is still valid, but the contrast is
+// unusually low and worth re-checking. It is a quality note, never a validity error.
+const LOW_CONTRAST_L_GAP = 10;
+
+function isPlausibleLab(lab) {
+  const [lMin, lMax] = LIMITS.labL;
+  const [abMin, abMax] = LIMITS.labAB;
+  return [lab?.l, lab?.a, lab?.b].every(Number.isFinite)
+    && lab.l >= lMin && lab.l <= lMax && lab.a >= abMin && lab.a <= abMax && lab.b >= abMin && lab.b <= abMax;
+}
+
 export function g7Preview(options = {}) {
   const { measurements = [], results = [], labRows = [], rawRows = [], importKind, metadata } = options;
   const deltaEFn = options.deltaEFn || deltaEFunction(options.deltaEFormula);
@@ -483,9 +546,18 @@ export function g7Preview(options = {}) {
     standardPatchMap: options.standardPatchMap,
     deltaEFn,
   });
-  const g7LabRows = [...labRows, ...rawLabPatches];
+  // Only patches whose Lab passes the same plausibility limits as the importer may enter the
+  // G7 judgement (an L* of 123 that the importer rejected must not come back through raw rows).
+  const allG7LabRows = [...labRows, ...rawLabPatches];
+  const g7LabRows = allG7LabRows.filter((row) => !row.lab || isPlausibleLab(row.lab));
+  const rejectedLabCount = new Set(allG7LabRows
+    .filter((row) => row.lab && !isPlausibleLab(row.lab))
+    .map((row) => (row.cmyk ? cmykKey(row.cmyk) : row.label))).size;
   const labReady = g7LabRows.filter((row) => Number.isFinite(row.deltaE));
-  const grayRows = g7LabRows.filter((row) => isGrayLabRow(row));
+  // G7 patches are matched strictly by CMYK value (never by name) and de-duplicated, so
+  // a label containing "Gray" cannot stand in for a real CMY gray patch.
+  const grayRows = uniqueRowsByCmyk(g7LabRows.filter((row) => isLikelyG7GrayCmyk(row.cmyk)));
+  const kLabRows = measuredKOnlyLabRows(g7LabRows, actualKOnly);
   const grayCandidateCount = p2pRows.filter(isLikelyG7GrayCandidate).length;
   const rawPatchClasses = classifyG7Patches(p2pRows);
   const labPatchClasses = classifyLabG7Patches(g7LabRows);
@@ -520,31 +592,40 @@ export function g7Preview(options = {}) {
   const paperL = paperLab?.l;
   // G7 Grayscale is substrate-relative unless the caller explicitly asks for absolute.
   const relative = options.g7Evaluation !== "absolute";
-  const npdcVerification = buildNpdcVerification(actualKOnly, {
+  // TR015 aims scale the shadows to the measured K solid and CMY overprint.
+  const kSolidLab = g7LabRows.find((row) => row.lab && isSolidCmyk(row.cmyk, "K"))?.lab;
+  const cmySolidLab = g7LabRows.find((row) => row.lab && isCmySolidCmyk(row.cmyk))?.lab;
+  const npdcVerification = buildNpdcVerification(kLabRows, {
     paperL,
     relative,
-    standardPatchMap: options.standardPatchMap,
+    kSolidL: kSolidLab?.l,
   });
   const grayVerification = buildGrayVerification(grayRows, {
     paperL,
     paperLab,
+    cmySolidLab,
     relative,
-    standardPatchMap: options.standardPatchMap,
   });
   const npdcSummary = summarizeNpdc(npdcVerification, tolerances);
   const graySummary = summarizeGrayBalance(grayVerification, tolerances);
+  // K NPDC, CMY NPDC and CMY gray balance are judged separately: a good CMY gray must
+  // not average away a failing K ramp.
+  const kNpdcSummary = summarizeWeightedDeltaL(npdcVerification, tolerances);
   const grayNpdcSummary = summarizeWeightedDeltaL(grayVerification, tolerances);
-  const weightedDeltaLSummary = summarizeWeightedDeltaL([...npdcVerification, ...grayVerification], tolerances);
+  const weightedDeltaLSummary = worstWeightedDeltaL(kNpdcSummary, grayNpdcSummary);
   const weightedDeltaE = weightedAverageDelta(labReady);
   const weightedAverage = weightedDeltaLSummary.weightedAverage;
   const maxGrayCh = maxFinite(grayBalanceRows.map((row) => row.chroma));
   const avgNpdcDelta = average(npdcRows.map((row) => Math.abs(row.deltaTone)));
   const maxNpdcDelta = maxFinite(npdcRows.map((row) => Math.abs(row.deltaTone)));
-  const kOnlyCount = Math.max(actualKOnly.length, kOnly.length, patchClasses.kOnly);
-  const grayCount = Math.max(grayRows.length, patchClasses.cmyNeutralGray);
+  // Only measured patches with a usable L* count; interpolated curve grid points and
+  // CMYK-only patches do not.
+  const kOnlyCount = npdcVerification.filter((row) => Number.isFinite(row.deltaL)).length;
+  const grayCount = grayVerification.filter((row) => Number.isFinite(row.deltaL) && Number.isFinite(row.chroma)).length;
   const hasManualEquivalent = patchClasses.paper >= 1 && patchClasses.cmykSolids >= 4 && kOnlyCount >= 5 && grayCount >= 3;
   const completenessRows = g7CompletenessRows({
     kOnlyCount,
+    grayCount,
     labReadyCount: labReady.length,
     patchClasses,
     hasManualEquivalent,
@@ -552,16 +633,36 @@ export function g7Preview(options = {}) {
   const missing = [];
 
   if (patchClasses.p2pTotal < 25 && !hasManualEquivalent) missing.push("P2P/CGATS 色块不足，或手动等效数据不完整");
-  if (kOnlyCount < 5) missing.push("K-only NPDC 阶调不足");
+  if (kOnlyCount < 5) {
+    missing.push(patchClasses.kOnly || kOnly.length
+      ? `K-only 阶调缺少有效 Lab（有效 ${kOnlyCount} 个，至少 5 个）`
+      : "K-only NPDC 阶调不足");
+  }
   if (!patchClasses.paper) missing.push("缺少纸白色块");
+  // TR 015 aims are scaled to the measured substrate and solids: without their Lab the
+  // result would silently fall back to reference aims, so it cannot pass.
+  else if (!paperLab) missing.push("纸白缺少有效 Lab");
+  if (!kSolidLab) missing.push("K 实地缺少有效 Lab");
+  if (!cmySolidLab) missing.push("CMY 三色实地缺少有效 Lab");
+  // TR 015 needs Y(solid) < Y(paper): a solid as light as (or lighter than) the paper is a
+  // measurement error, and would otherwise make the aims fall back to the reference curve.
+  const qualityNotes = [];
+  for (const [name, solid] of [["K", kSolidLab], ["CMY 三色", cmySolidLab]]) {
+    if (!paperLab || !solid) continue;
+    if (!(solid.l < paperLab.l)) missing.push(`${name} 实地不比纸白暗，Lab 关系异常`);
+    else if (paperLab.l - solid.l < LOW_CONTRAST_L_GAP) qualityNotes.push(`${name} 实地与纸白 L* 只差 ${(paperLab.l - solid.l).toFixed(1)}，反差偏低，请复核测量`);
+  }
+  if (rejectedLabCount) missing.push(`${rejectedLabCount} 个色块 Lab 超出合理范围，已排除`);
   if (patchClasses.cmykSolids < 4) missing.push("CMYK 实地色块不足");
-  if (!grayCount) {
-    missing.push(grayCandidateCount ? "检测到 P2P/CMY 灰候选，但缺少可计算 Lab 的灰平衡数据" : "缺少 CMY neutral gray / 灰平衡 Lab");
+  if (grayCount < 3) {
+    missing.push(grayCandidateCount ? `CMY 灰平衡色块缺少有效 Lab（有效 ${grayCount} 个，至少 3 个）` : "缺少 CMY neutral gray / 灰平衡 Lab");
   }
   if (!labReady.length) missing.push(p2pPatchCount ? "文件含 P2P/CGATS 色块，但当前缺少 Lab，不能计算 ΔE/G7 灰平衡" : "缺少可与标准比对的 Lab");
 
   const verificationRows = buildG7VerificationRows({
     missing,
+    kNpdcSummary,
+    grayNpdcSummary,
     avgNpdcDelta,
     maxNpdcDelta,
     weightedDeltaLSummary,
@@ -577,6 +678,7 @@ export function g7Preview(options = {}) {
     status,
     conclusion,
     missing,
+    qualityNotes,
     kOnlyCount,
     labPatchCount: labReady.length,
     grayPatchCount: grayCount,
@@ -592,6 +694,7 @@ export function g7Preview(options = {}) {
     weightedAverage,
     weightedDeltaE,
     weightedDeltaLSummary,
+    kNpdcSummary,
     grayNpdcSummary,
     weightedGrayAverage: graySummary.weightedAverage,
     weightedGrayMax: graySummary.weightedMax,
@@ -682,7 +785,7 @@ function disabledG7Preview(tolerances = {}) {
   };
 }
 
-function buildG7VerificationRows({ missing, weightedDeltaLSummary, graySummary, weightedDeltaE, maxDeltaE, tolerances }) {
+function buildG7VerificationRows({ missing, kNpdcSummary, grayNpdcSummary, graySummary, weightedDeltaE, maxDeltaE, tolerances }) {
   if (missing.length) {
     return [
       verificationRow("数据完整性", NaN, "必须完整", "Missing", missing.join(" / ")),
@@ -690,8 +793,10 @@ function buildG7VerificationRows({ missing, weightedDeltaLSummary, graySummary, 
   }
   return [
     // G7 Grayscale (NPDC + gray balance) is strictly Pass/Fail per the G7 spec; no Warning band.
-    passFailRow("NPDC wΔL* 平均", weightedDeltaLSummary.weightedAverage, tolerances.npdcAverage),
-    passFailRow("NPDC wΔL* 最大", weightedDeltaLSummary.weightedMax, tolerances.npdcMax),
+    passFailRow("K NPDC wΔL* 平均", kNpdcSummary.weightedAverage, tolerances.npdcAverage),
+    passFailRow("K NPDC wΔL* 最大", kNpdcSummary.weightedMax, tolerances.npdcMax),
+    passFailRow("CMY NPDC wΔL* 平均", grayNpdcSummary.weightedAverage, tolerances.npdcAverage),
+    passFailRow("CMY NPDC wΔL* 最大", grayNpdcSummary.weightedMax, tolerances.npdcMax),
     passFailRow("灰平衡 wΔCh 平均", graySummary.weightedAverage, tolerances.grayAverage),
     passFailRow("灰平衡 wΔCh 最大", graySummary.weightedMax, tolerances.grayMax),
     toleranceRow("Lab 加权 ΔE", weightedDeltaE, tolerances.deltaEWeighted, tolerances.deltaEWeighted * 1.5, ""),
@@ -956,7 +1061,7 @@ function classifyLabG7Patches(rows = []) {
   const paper = uniqueRows.filter((row) => isPaperCmyk(row.cmyk)).length;
   const cmykSolids = ["C", "M", "Y", "K"].filter((channel) => uniqueRows.some((row) => isSolidCmyk(row.cmyk, channel))).length;
   const kOnly = uniqueRows.filter((row) => isKOnlyCmyk(row.cmyk)).length;
-  const cmyNeutralGray = uniqueRows.filter((row) => row.label?.includes("Gray") || isLikelyG7GrayCmyk(row.cmyk)).length;
+  const cmyNeutralGray = uniqueRows.filter((row) => isLikelyG7GrayCmyk(row.cmyk)).length;
   return {
     total: uniqueRows.length,
     paper,
@@ -975,12 +1080,33 @@ function uniqueRowsByCmyk(rows = []) {
   return [...map.values()];
 }
 
-function isGrayLabRow(row) {
-  const label = String(row.label || "");
-  return label.includes("Gray")
-    || label.toLowerCase().includes("neutral")
-    || /^CMY\b/i.test(label)
-    || isLikelyG7GrayCmyk(row.cmyk);
+// Measured K-only ramp with Lab: CMYK-matched Lab patches first, then K measurements that
+// carry their own Lab; one row per K tone.
+function measuredKOnlyLabRows(labRows = [], kMeasurements = []) {
+  const byTone = new Map();
+  for (const row of labRows) {
+    if (!isKOnlyCmyk(row.cmyk) || !Number.isFinite(number(row.lab?.l))) continue;
+    const key = Number(row.cmyk.k).toFixed(2);
+    if (!byTone.has(key)) byTone.set(key, { tone: number(row.cmyk.k), lab: row.lab });
+  }
+  for (const row of kMeasurements) {
+    if (!Number.isFinite(number(row.lab?.l)) || !Number.isFinite(number(row.tone))) continue;
+    const key = Number(row.tone).toFixed(2);
+    if (!byTone.has(key)) byTone.set(key, { tone: number(row.tone), lab: row.lab });
+  }
+  return [...byTone.values()];
+}
+
+function worstWeightedDeltaL(...summaries) {
+  const usable = summaries.filter((item) => item.count > 0);
+  if (!usable.length) return { count: 0, weightedAverage: NaN, weightedMax: NaN, status: "Missing" };
+  const worst = (key) => Math.max(...usable.map((item) => item[key]));
+  return {
+    count: usable.reduce((sum, item) => sum + item.count, 0),
+    weightedAverage: worst("weightedAverage"),
+    weightedMax: worst("weightedMax"),
+    status: usable.some((item) => item.status === "Fail") ? "Fail" : summaries.some((item) => item.status === "Missing") ? "Missing" : "Pass",
+  };
 }
 
 function rawLabPatchRows(rows = [], options = {}) {
@@ -1016,13 +1142,13 @@ function formatCmykTone(value) {
   return Number(value).toFixed(Number.isInteger(value) ? 0 : 1);
 }
 
-function g7CompletenessRows({ kOnlyCount, labReadyCount, patchClasses, hasManualEquivalent }) {
+function g7CompletenessRows({ kOnlyCount, grayCount, labReadyCount, patchClasses, hasManualEquivalent }) {
   return [
     completenessRow("P2P/CGATS 或手动等效", patchClasses.p2pTotal, ">=25 或纸白/实地/K/灰完整", patchClasses.p2pTotal >= 25 || hasManualEquivalent),
     completenessRow("纸白", patchClasses.paper, ">=1", patchClasses.paper >= 1),
     completenessRow("CMYK 实地", patchClasses.cmykSolids, "4", patchClasses.cmykSolids >= 4),
     completenessRow("K-only NPDC", kOnlyCount, ">=5", kOnlyCount >= 5),
-    completenessRow("CMY neutral gray", patchClasses.cmyNeutralGray, ">=3", patchClasses.cmyNeutralGray >= 3),
+    completenessRow("CMY neutral gray", grayCount, ">=3", grayCount >= 3),
     completenessRow("可比 Lab/ΔE", labReadyCount, ">=1", labReadyCount >= 1),
   ];
 }
@@ -1060,6 +1186,10 @@ function isSolidCmyk(cmyk, channel) {
   const values = { C: cmyk.c, M: cmyk.m, Y: cmyk.y, K: cmyk.k };
   return Math.abs(values[channel] - 100) < 0.01
     && Object.entries(values).every(([candidate, value]) => candidate === channel || Math.abs(value) < 0.01);
+}
+
+function isCmySolidCmyk(cmyk) {
+  return Boolean(cmyk) && [cmyk.c, cmyk.m, cmyk.y].every((value) => Math.abs(value - 100) < 0.01) && Math.abs(cmyk.k) < 0.01;
 }
 
 function isKOnlyCmyk(cmyk) {

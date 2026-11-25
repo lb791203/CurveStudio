@@ -48,13 +48,33 @@ export async function openTextFileDesktop() {
     multiple: false,
     directory: false,
     filters: [
-      { name: "测量/项目文件", extensions: ["csv", "txt", "cgats", "it8", "json", "rwxf", "cxf"] },
+      { name: "测量/项目文件", extensions: ["csv", "txt", "cgats", "it8", "json"] },
       { name: "所有文件", extensions: ["*"] },
     ],
   });
   if (!path || Array.isArray(path)) return { handled: true, path: "", contents: "", canceled: true };
-  const contents = await invokeTauriCommand("read_text_file", { path });
+  let contents;
+  try {
+    const bytes = await invokeTauriCommand("read_file_bytes", { path });
+    if (Array.isArray(bytes) || bytes instanceof Uint8Array || bytes instanceof ArrayBuffer) contents = decodeTextBytes(bytes);
+  } catch {
+    contents = undefined;
+  }
+  // Older desktop shells only have the UTF-8 read command.
+  if (contents === undefined) contents = await invokeTauriCommand("read_text_file", { path });
   return { handled: true, path, contents };
+}
+
+// Measurement software exports UTF-8, UTF-16 (with BOM) or, on Chinese Windows, GB18030.
+export function decodeTextBytes(input) {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder("utf-16le").decode(bytes.subarray(2));
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder("utf-16be").decode(bytes.subarray(2));
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes).replace(/^\uFEFF/, "");
+  } catch {
+    return new TextDecoder("gb18030").decode(bytes);
+  }
 }
 
 function tauriApi() {

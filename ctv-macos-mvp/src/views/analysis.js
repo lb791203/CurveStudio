@@ -58,12 +58,12 @@ function renderVerdictBanner(diagnosis, state) {
   const ratio = diagnosis.ratio;
   const verdicts = {
     pass: {
-      answer: t("verdict_pass", "可以上机"),
+      answer: t("verdict_pass", "实测点都在容差内"),
       next: t("verdict_pass_next", "偏差已在标准附近：用 {ratio}% 补偿强度轻补偿，或保持当前曲线。"),
       action: "curve",
     },
     warning: {
-      answer: t("verdict_warning", "可以上机，需补偿后复测"),
+      answer: t("verdict_warning", "需补偿后复测"),
       next: t("verdict_warning_next", "用 {ratio}% 补偿强度按通道生成曲线，印刷后重新测量，逐轮收敛。"),
       action: "curve",
     },
@@ -71,6 +71,11 @@ function renderVerdictBanner(diagnosis, state) {
       answer: t("verdict_danger", "先检查机器，再做正式曲线"),
       next: t("verdict_danger_next", "按下面提示排查印刷机；必须马上生产时，只用 {ratio}% 低强度补偿救急，并尽快复测。"),
       action: "curve",
+    },
+    incomplete: {
+      answer: t("verdict_incomplete", "控制点缺测，待复测"),
+      next: t("verdict_incomplete_next", "补测缺少的 25/50/75% 控制点后再判断。"),
+      action: "measurement",
     },
     mode: {
       answer: t("verdict_mode", "当前曲线模式算不出阶调"),
@@ -447,9 +452,10 @@ export function renderG7(state, els) {
     const g7Banner = `
       <section class="verdict-banner ${escapeAttr(g7Level === "neutral" ? "empty" : g7Level)}">
         <div class="verdict-main">
-          <span class="verdict-eyebrow">${escapeHtml(t("g7_conclusion_label", "G7 结论"))} · ${escapeHtml(t("g7_reference_only", "按 G7 方法做的参考检查，非 Idealliance 认证结果"))}</span>
+          <span class="verdict-eyebrow">${escapeHtml(t("g7_conclusion_label", "G7 结论"))} · ${escapeHtml(t("g7_reference_only", "基于 G7® 方法的参考检查，非 Idealliance 认证结果"))}</span>
           <strong class="verdict-answer">${escapeHtml(translateDynamicText(g7.conclusion?.title || g7.status))}</strong>
           ${g7.conclusion?.summary ? `<p class="verdict-next">${g7Level === "danger" ? `${escapeHtml(t("g7_failed_items_label", "未达标项目"))}：` : ""}${escapeHtml(translateDynamicText(g7.conclusion.summary))}</p>` : ""}
+          ${(g7.qualityNotes || []).map((item) => `<p class="verdict-next">${escapeHtml(translateDynamicText(item))}</p>`).join("")}
           ${(g7.conclusion?.recommendations || []).length ? `<ul class="verdict-reasons">${g7.conclusion.recommendations.map((item) => `<li>${escapeHtml(translateDynamicText(item))}</li>`).join("")}</ul>` : ""}
         </div>
       </section>
@@ -463,8 +469,10 @@ export function renderG7(state, els) {
       kpiCard(t("paper_solids_label", "Paper / Solids"), `${g7.patchClasses?.paper || 0}/${g7.patchClasses?.cmykSolids || 0}`, (g7.patchClasses?.paper && g7.patchClasses?.cmykSolids >= 4) ? "pass" : "warning"),
       kpiCard(`${t("avg_label", "Average")} ${deltaFormulaLabel(els.deltaFormulaSelect.value)}`, num(g7.avgDeltaE), "neutral"),
       kpiCard(`${t("max_label", "Max")} ${deltaFormulaLabel(els.deltaFormulaSelect.value)}`, num(g7.maxDeltaE), "neutral"),
-      kpiCard(translateDynamicText("NPDC 平均 wΔL*"), num(g7.weightedAverage), g7RowLevel("NPDC wΔL* 平均")),
-      kpiCard(translateDynamicText("NPDC 最大 wΔL*"), num(g7.maxNpdcDelta), g7RowLevel("NPDC wΔL* 最大")),
+      kpiCard(translateDynamicText("K NPDC 平均 wΔL*"), num(g7.kNpdcSummary?.weightedAverage), g7RowLevel("K NPDC wΔL* 平均")),
+      kpiCard(translateDynamicText("K NPDC 最大 wΔL*"), num(g7.kNpdcSummary?.weightedMax), g7RowLevel("K NPDC wΔL* 最大")),
+      kpiCard(translateDynamicText("CMY NPDC 平均 wΔL*"), num(g7.grayNpdcSummary?.weightedAverage), g7RowLevel("CMY NPDC wΔL* 平均")),
+      kpiCard(translateDynamicText("CMY NPDC 最大 wΔL*"), num(g7.grayNpdcSummary?.weightedMax), g7RowLevel("CMY NPDC wΔL* 最大")),
       kpiCard(translateDynamicText("灰平衡平均 wΔCh"), num(g7.weightedGrayAverage), g7RowLevel("灰平衡 wΔCh 平均")),
       kpiCard(translateDynamicText("灰平衡最大 wΔCh"), num(g7.weightedGrayMax), g7RowLevel("灰平衡 wΔCh 最大")),
       `<div class="kpi-card span-card"><p><strong>${escapeHtml(t("g7_verification_items_label", "G7 Verification Items"))}</strong></p>${(g7.verificationRows || []).map((row) => `<p><span class="status ${statusClass(row.status)}">${escapeHtml(row.status)}</span> ${escapeHtml(translateDynamicText(row.item))}: ${num(row.value)} / ${escapeHtml(translateDynamicText(row.tolerance))}${row.message ? ` / ${escapeHtml(translateDynamicText(row.message))}` : ""}</p>`).join("")}</div>`,

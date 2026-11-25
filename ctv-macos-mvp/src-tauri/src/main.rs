@@ -1,4 +1,5 @@
-use std::path::Path;
+use std::{collections::BTreeMap, fs::OpenOptions, path::Path};
+use tauri::utils::assets::AssetKey;
 
 #[derive(serde::Serialize)]
 struct SdkDeviceInfo {
@@ -22,6 +23,13 @@ fn write_binary_file(path: String, contents: Vec<u8>) -> Result<String, String> 
     validate_file_command_path(Path::new(&path))?;
     std::fs::write(&path, contents).map_err(|error| error.to_string())?;
     Ok(path)
+}
+
+// Raw bytes so the frontend can decode UTF-16 / GB18030 files, not only UTF-8.
+#[tauri::command]
+fn read_file_bytes(path: String) -> Result<Vec<u8>, String> {
+    validate_file_command_path(Path::new(&path))?;
+    std::fs::read(path).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -71,18 +79,49 @@ fn sdk_read_patch(_vendor_id: u16, _product_id: u16) -> Result<serde_json::Value
     }))
 }
 
+fn write_embedded_asset_manifest(
+    context: &tauri::Context<tauri::Wry>,
+    output: &Path,
+    data_paths: impl Iterator<Item = String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let assets = context.assets();
+    let paths: Vec<_> = assets.iter().map(|(key, _)| key).collect();
+    let data: BTreeMap<_, _> = data_paths
+        .filter_map(|path| {
+            let key = AssetKey::from(&path);
+            assets.get(&key).map(|bytes| (path, bytes))
+        })
+        .collect();
+    let file = OpenOptions::new().write(true).create_new(true).open(output)?;
+    serde_json::to_writer(file, &serde_json::json!({ "paths": paths, "data": data }))?;
+    Ok(())
+}
+
 fn main() {
+    let context = tauri::generate_context!();
+    let mut args = std::env::args_os().skip(1);
+    if args.next().as_deref() == Some(std::ffi::OsStr::new("--verify-embedded-assets")) {
+        let output = args.next().expect("missing asset manifest output path");
+        write_embedded_asset_manifest(
+            &context,
+            Path::new(&output),
+            args.map(|arg| arg.into_string().expect("asset path must be UTF-8")),
+        )
+        .expect("failed to write the embedded asset manifest");
+        return;
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             write_text_file,
             read_text_file,
+            read_file_bytes,
             write_binary_file,
             sdk_scan_devices,
             sdk_calibrate,
             sdk_read_patch
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("failed to run CurveStudio desktop app");
 }
 

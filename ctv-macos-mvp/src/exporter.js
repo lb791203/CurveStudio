@@ -1,3 +1,4 @@
+import { G7_NPDC_METHOD } from "./g7-targets.js";
 import { toExportRows } from "./curve-engine.js";
 
 export function withExportHeader(body, context) {
@@ -60,9 +61,21 @@ export function toPrinergyCsv(rows, context) {
   return withExportHeader([header, ...body].map((row) => row.join(",")).join("\n"), context);
 }
 
+// Same wording everywhere a G7 result leaves the app (UI, report, CSV, JSON).
+export const G7_REFERENCE_NOTICE = {
+  zh: "基于 G7® 方法的参考检查，非 Idealliance 认证结果。G7® 是 Idealliance 的注册商标。",
+  en: "Reference check based on the G7® method; not an Idealliance certification result. G7® is a registered trademark of Idealliance.",
+};
+
 export function toG7VerificationCsv(context) {
   const g7 = context.g7 || {};
   const sections = [
+    csvSection("NOTICE", [
+      ["notice_zh", G7_REFERENCE_NOTICE.zh],
+      ["notice_en", G7_REFERENCE_NOTICE.en],
+      ["certified", "false"],
+      ["npdc_method", G7_NPDC_METHOD],
+    ]),
     csvSection("G7_SUMMARY", [
       ["metric", "value"],
       ["status", g7.status || ""],
@@ -74,8 +87,10 @@ export function toG7VerificationCsv(context) {
       ["p2p_patches", g7.p2pPatchCount],
       ["avg_delta_e", g7.avgDeltaE],
       ["max_delta_e", g7.maxDeltaE],
-      ["npdc_avg_w_delta_l", g7.weightedAverage],
-      ["npdc_max_w_delta_l", g7.maxNpdcDelta],
+      ["k_npdc_avg_w_delta_l", g7.kNpdcSummary?.weightedAverage],
+      ["k_npdc_max_w_delta_l", g7.kNpdcSummary?.weightedMax],
+      ["cmy_npdc_avg_w_delta_l", g7.grayNpdcSummary?.weightedAverage],
+      ["cmy_npdc_max_w_delta_l", g7.grayNpdcSummary?.weightedMax],
       ["gray_avg_w_delta_ch", g7.avgGrayCh],
       ["gray_max_w_delta_ch", g7.maxGrayCh],
       ["lab_weighted_delta_e", g7.weightedDeltaE],
@@ -89,6 +104,7 @@ export function toG7VerificationCsv(context) {
       ["type", "message"],
       ["title", g7.conclusion?.title || ""],
       ["summary", g7.conclusion?.summary || ""],
+      ...(g7.qualityNotes || []).map((item) => ["measurement_warning", item]),
       ...((g7.conclusion?.priorityItems || []).map((item) => ["priority", item])),
       ...((g7.conclusion?.recommendations || []).map((item) => ["recommendation", item])),
     ]),
@@ -100,13 +116,12 @@ export function toG7VerificationCsv(context) {
       ["item", "count", "required", "status"],
       ...(g7.completenessRows || []).map((row) => [row.item, row.count, row.required, row.status]),
     ]),
-    csvSection("G7_NPDC", [
-      ["tone", "measured", "target", "delta_tone", "delta_l"],
-      ...(g7.npdcRows || []).map((row) => [row.tone, row.measured, row.target, row.deltaTone, row.deltaL]),
-    ]),
+    // The values actually used for the verdict: L* (substrate-relative unless noted), ΔL*, weight, wΔL*.
+    csvSection("G7_K_NPDC", npdcCsvRows(g7.npdcVerification)),
+    csvSection("G7_CMY_NPDC", npdcCsvRows(g7.grayVerification)),
     csvSection("G7_GRAY_BALANCE", [
-      ["label", "a", "b", "chroma", "delta_e"],
-      ...(g7.grayBalanceRows || []).map((row) => [row.label, row.a, row.b, row.chroma, row.deltaE]),
+      ["label", "tone", "a", "b", "target_a", "target_b", "delta_ch", "weight", "w_delta_ch"],
+      ...(g7.grayVerification || []).map((row) => [row.label, row.tone, row.a, row.b, row.targetA, row.targetB, row.chroma, row.weight, row.weightedChroma]),
     ]),
     csvSection("LAB_DELTA_E", [
       ["label", "source", "cmyk", "measured_lab", "reference_lab", "delta_l", "delta_a", "delta_b", "delta_e76", "delta_e94", "delta_e2000", "delta_e_cmc", "selected_delta_e", "status"],
@@ -131,10 +146,20 @@ export function toG7VerificationCsv(context) {
   return withExportHeader(sections.join("\n\n"), context);
 }
 
+function npdcCsvRows(rows = []) {
+  return [
+    ["tone", "evaluation", "measured_l", "target_l", "delta_l", "weight", "w_delta_l", "target_source"],
+    ...rows.map((row) => [row.tone, row.evaluation, row.measuredL, row.targetL, row.deltaL, row.weight, row.weightedDeltaL, row.targetSource]),
+  ];
+}
+
 export function g7ReportArchive(context) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     type: "g7-verification-report",
+    notice: G7_REFERENCE_NOTICE,
+    certified: false,
+    npdcMethod: G7_NPDC_METHOD,
     generatedAt: context.generatedAt,
     job: context.job,
     standard: context.standard,
@@ -187,6 +212,7 @@ export function projectArchive(context) {
     curveQuality,
     curveSafety: context.curveSafety || [],
     curveOverrides: context.curveOverrides || {},
+    baseline: context.baseline || { kind: "linear" },
     labVerification: context.labRows,
     g7: context.g7,
     generatedAt: context.generatedAt,
