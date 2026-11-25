@@ -1,4 +1,5 @@
 import { cmykFromManualRow, cmykKey, labFromRow } from "./standards.js";
+import { LIMITS } from "./measurement-validation.js";
 import { average, groupByChannel, number, rawCmyk, isLikelyG7GrayCandidate, isG7GrayCmyk, metadataLooksReference } from "./shared.js";
 import { labFromSpectralRow } from "./spectral-color.js";
 import { buildNpdcVerification, summarizeNpdc, buildGrayVerification, summarizeGrayBalance, summarizeWeightedDeltaL, buildColorspaceVerification, classifyColorspacePatches } from "./g7-targets.js?v=20260522-g7-verify";
@@ -506,6 +507,15 @@ function curveIssue(level, channel, tone, type, message, relatedTones = [tone]) 
   };
 }
 
+const MIN_SOLID_PAPER_L_GAP = 10;
+
+function isPlausibleLab(lab) {
+  const [lMin, lMax] = LIMITS.labL;
+  const [abMin, abMax] = LIMITS.labAB;
+  return [lab?.l, lab?.a, lab?.b].every(Number.isFinite)
+    && lab.l >= lMin && lab.l <= lMax && lab.a >= abMin && lab.a <= abMax && lab.b >= abMin && lab.b <= abMax;
+}
+
 export function g7Preview(options = {}) {
   const { measurements = [], results = [], labRows = [], rawRows = [], importKind, metadata } = options;
   const deltaEFn = options.deltaEFn || deltaEFunction(options.deltaEFormula);
@@ -534,7 +544,13 @@ export function g7Preview(options = {}) {
     standardPatchMap: options.standardPatchMap,
     deltaEFn,
   });
-  const g7LabRows = [...labRows, ...rawLabPatches];
+  // Only patches whose Lab passes the same plausibility limits as the importer may enter the
+  // G7 judgement (an L* of 123 that the importer rejected must not come back through raw rows).
+  const allG7LabRows = [...labRows, ...rawLabPatches];
+  const g7LabRows = allG7LabRows.filter((row) => !row.lab || isPlausibleLab(row.lab));
+  const rejectedLabCount = new Set(allG7LabRows
+    .filter((row) => row.lab && !isPlausibleLab(row.lab))
+    .map((row) => (row.cmyk ? cmykKey(row.cmyk) : row.label))).size;
   const labReady = g7LabRows.filter((row) => Number.isFinite(row.deltaE));
   // G7 patches are matched strictly by CMYK value (never by name) and de-duplicated, so
   // a label containing "Gray" cannot stand in for a real CMY gray patch.
@@ -626,6 +642,11 @@ export function g7Preview(options = {}) {
   else if (!paperLab) missing.push("纸白缺少有效 Lab");
   if (!kSolidLab) missing.push("K 实地缺少有效 Lab");
   if (!cmySolidLab) missing.push("CMY 三色实地缺少有效 Lab");
+  // TR 015 needs Y(solid) < Y(paper): a solid as light as (or lighter than) the paper is a
+  // measurement error, and would otherwise make the aims fall back to the reference curve.
+  if (paperLab && kSolidLab && !(kSolidLab.l < paperLab.l - MIN_SOLID_PAPER_L_GAP)) missing.push("K 实地不比纸白暗，Lab 关系异常");
+  if (paperLab && cmySolidLab && !(cmySolidLab.l < paperLab.l - MIN_SOLID_PAPER_L_GAP)) missing.push("CMY 三色实地不比纸白暗，Lab 关系异常");
+  if (rejectedLabCount) missing.push(`${rejectedLabCount} 个色块 Lab 超出合理范围，已排除`);
   if (patchClasses.cmykSolids < 4) missing.push("CMYK 实地色块不足");
   if (grayCount < 3) {
     missing.push(grayCandidateCount ? `CMY 灰平衡色块缺少有效 Lab（有效 ${grayCount} 个，至少 3 个）` : "缺少 CMY neutral gray / 灰平衡 Lab");

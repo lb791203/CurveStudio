@@ -503,3 +503,21 @@ test("re-review M3: an off-grid measured patch (C 35 % at −30) is not lost to 
   const decision = releaseDiagnosis(diagnosticRows, grid, {});
   assert.notEqual(decision.level, "pass");
 });
+
+test("round-3 S4: a K solid Lab the importer rejects (L* 123) cannot come back through raw rows and pass G7", () => {
+  const labRows = g7BaseLabRows().filter((row) => row.label !== "K 100%");
+  const rawRows = [{ sample_id: "K100", cmyk_c: "0", cmyk_m: "0", cmyk_y: "0", cmyk_k: "100", lab_l: "123", lab_a: "0", lab_b: "0" }];
+  const g7 = g7Preview({ labRows, rawRows });
+  assert.equal(g7.status, "Data Incomplete");
+  assert.ok(g7.missing.some((item) => /K 实地缺少有效 Lab/.test(item)));
+  assert.ok(g7.missing.some((item) => /超出合理范围/.test(item)));
+});
+
+test("round-3 S4: a solid that is not darker than paper white is Data Incomplete, not a reference-curve pass", () => {
+  const lighterK = g7BaseLabRows().map((row) => row.label === "K 100%" ? { ...row, lab: { l: 97, a: 0, b: 0 } } : row);
+  const g7 = g7Preview({ labRows: lighterK });
+  assert.equal(g7.status, "Data Incomplete");
+  assert.ok(g7.missing.some((item) => /K 实地不比纸白暗/.test(item)));
+  const lighterCmy = g7BaseLabRows().map((row) => row.label === "CMY 100%" ? { ...row, lab: { l: 94, a: 0, b: 0 } } : row);
+  assert.equal(g7Preview({ labRows: lighterCmy }).status, "Data Incomplete");
+});
