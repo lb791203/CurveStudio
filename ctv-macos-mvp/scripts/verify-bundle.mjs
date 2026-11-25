@@ -28,7 +28,10 @@ const allowed = new Set(allowedFiles(root, whitelist));
 // and the next "/src/…" starts a new key.
 // A key may also follow another key or a non-path byte directly ("…index.htmlsrc/app.js"), so
 // no separator is required in front of it.
-const RESOURCE_PATH_SOURCE = String.raw`((?:samples|reference-data|src)\/[A-Za-z0-9._\/-]+?\.(?:json|txt|csv|js|css|it8|cgats))(?![A-Za-z0-9])`;
+// The key can also run straight into the next symbol ("…/src/exporter.jsIllegalEventName"), so
+// only a lowercase letter or digit continues an extension, and a match that merely extends a
+// whitelisted path is read as that path.
+const RESOURCE_PATH_SOURCE = String.raw`((?:samples|reference-data|src)\/[A-Za-z0-9._\/-]+?\.(?:json|txt|csv|js|css|it8|cgats))(?![a-z0-9])`;
 const RESOURCE_PATH = new RegExp(RESOURCE_PATH_SOURCE);
 const RESOURCE_PATH_GLOBAL = new RegExp(RESOURCE_PATH_SOURCE, "g");
 
@@ -41,12 +44,18 @@ if (args[0] === "--binary") {
     const targets = fs.existsSync(binary) && fs.statSync(binary).isDirectory() ? walk(binary) : [binary];
     if (!targets.length) failures.push(`no files in ${binary}`);
     const found = new Set();
-    for (const target of targets) for (const file of checkBinary(target)) found.add(file);
+    const present = new Set();
+    for (const target of targets) {
+      const result = checkBinary(target);
+      for (const file of result.found) found.add(file);
+      for (const file of result.present) present.add(file);
+    }
     // The embedded resource list must be exactly the whitelist: a file with no resource paths
     // at all (wrong file, compressed or stripped assets) is a failure, not a pass.
     const expected = [...allowed].filter((file) => RESOURCE_PATH.test(`/${file}`));
-    const missing = expected.filter((file) => !found.has(file));
-    if (!found.size) failures.push(`${binary}: no embedded resource paths found (not the app binary, or assets not inspectable)`);
+    // Presence is a plain substring test, so how neighbouring keys are packed cannot hide a file.
+    const missing = expected.filter((file) => !present.has(file));
+    if (!found.size && !present.size) failures.push(`${binary}: no embedded resource paths found (not the app binary, or assets not inspectable)`);
     else if (missing.length) {
       failures.push(`${binary}: embedded resources do not match the whitelist, missing ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ` (+${missing.length - 5})` : ""}`);
       for (const file of missing.slice(0, 3)) showContext(targets, file);
@@ -82,11 +91,12 @@ function checkDist(dist) {
 function checkBinary(binary) {
   if (!fs.existsSync(binary)) {
     failures.push(`binary not found: ${binary}`);
-    return new Set();
+    return { found: new Set(), present: new Set() };
   }
   const text = fs.readFileSync(binary).toString("latin1");
   const found = new Set();
-  for (const match of text.matchAll(RESOURCE_PATH_GLOBAL)) found.add(match[1]);
+  for (const match of text.matchAll(RESOURCE_PATH_GLOBAL)) found.add(whitelistedPrefix(match[1]));
+  const present = new Set([...allowed].filter((file) => text.includes(file)));
   for (const file of found) {
     if (!allowed.has(file)) failures.push(`${path.basename(binary)} embeds non-whitelisted resource: ${file}`);
   }
@@ -95,7 +105,14 @@ function checkBinary(binary) {
   }
   const embeddedData = Object.keys(whitelist.data).filter((file) => found.has(file)).length;
   console.log(`${path.basename(binary)}: ${found.size} embedded resource paths, ${embeddedData} whitelisted data files`);
-  return found;
+  return { found, present };
+}
+
+// "src/exporter.js" + "x…" (lowercase symbol that happens to follow) still names src/exporter.js.
+function whitelistedPrefix(match) {
+  if (allowed.has(match)) return match;
+  const prefix = [...allowed].filter((file) => match.startsWith(file) && !/^on\b|^on$/.test(match.slice(file.length))).sort((a, b) => b.length - a.length)[0];
+  return prefix || match;
 }
 
 function forbiddenName(file) {

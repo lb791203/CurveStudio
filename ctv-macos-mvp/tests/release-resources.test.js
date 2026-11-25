@@ -82,3 +82,18 @@ test("round-3 M8: asset keys packed back to back (Mach-O) are split, not read as
   assert.notEqual(bad.status, 0);
   assert.match(bad.stderr, /kba-presets\.json/);
 });
+
+test("round-3 M8: keys followed directly by a symbol name (real macOS build) are still found", () => {
+  // Bytes seen in the macOS CI build: "…Tauri-Invoke-Keyapplication/json/src/features.js/src/exporter.jsIllegalEventName…"
+  const files = allowedFiles(root, loadWhitelist(root));
+  const packed = files.map((file, index) => `${index % 2 ? "IllegalEventName" : "Tauri-Invoke-Keyapplication/json"}/${file}`).join("") + "IllegalEventNameTokioOneshotRecv";
+  const result = verifyBinary(packed);
+  assert.equal(result.status, 0, result.stderr);
+  // A lowercase symbol right after a key is not read as a different file either.
+  const lower = verifyBinary(files.map((file) => `/${file}xyzsymbol`).join(""));
+  assert.equal(lower.status, 0, lower.stderr);
+  // …but a .json next to a whitelisted .js of the same name is still caught.
+  const js = files.find((file) => file.endsWith(".js"));
+  const extra = verifyBinary(`${files.map((file) => `/${file}`).join("")}/${js}on`);
+  assert.notEqual(extra.status, 0);
+});
