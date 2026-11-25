@@ -679,7 +679,12 @@ function persistCustomStandards(items) {
   }
 }
 
+// Each selection gets a sequence number; a slower, older request never overwrites the Lab
+// reference of a standard chosen later.
+let standardRequestSeq = 0;
+
 async function loadStandard(id) {
+  const request = ++standardRequestSeq;
   state.standard = cloneData(standardById(id));
   state.standardId = state.standard.id;
   state.standardImport = null;
@@ -701,9 +706,11 @@ async function loadStandard(id) {
   } else if (state.standard.referencePath) {
     try {
       const text = await fetchTextResource(state.standard.referencePath, { label: "standard reference file" });
+      if (request !== standardRequestSeq) return;
       state.standardImport = parseImportText(text);
       state.standardPatchMap = buildPatchMap(state.standardImport.rawRows);
     } catch (error) {
+      if (request !== standardRequestSeq) return;
       state.standardImport = { warnings: [`标准文件加载失败: ${error.message}`], rawRows: [] };
       state.standardPatchMap = new Map();
     }

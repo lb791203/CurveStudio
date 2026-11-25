@@ -441,3 +441,15 @@ test("re-measure stacks the new correction on the previous round's curve", () =>
   assert.equal(at(stacked, 0).outputTone, 0);
   assert.equal(at(stacked, 100).outputTone, 100);
 });
+
+test("review M6: inverting 10,000 measured points stays fast", async () => {
+  const { calculateCompensation } = await import("../src/curve-engine.js");
+  const measurements = Array.from({ length: 10000 }, (_, index) => {
+    const tone = index / 100;
+    return { channel: "C", tone, measuredTone: Math.min(100, tone + 14 * Math.sin(Math.PI * tone / 100)) };
+  });
+  const start = Date.now();
+  const rows = calculateCompensation(measurements, { mode: "tvi", target: "isoA", compensationRatio: 100, limit: 18 });
+  assert.ok(rows.length > 0);
+  assert.ok(Date.now() - start < 1000, `took ${Date.now() - start} ms`);
+});

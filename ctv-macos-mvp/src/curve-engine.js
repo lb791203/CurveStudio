@@ -744,6 +744,9 @@ function buildResponseCurves(resolved) {
     if (!points.some(([tone]) => tone === 0)) points.push([0, 0]);
     if (!points.some(([tone]) => tone === 100)) points.push([100, 100]);
     points.sort((a, b) => a[0] - b[0]);
+    // A monotone response (the normal case) is inverted by binary search; noisy data falls
+    // back to the full crossing scan.
+    points.monotone = points.every((point, index) => index === 0 || point[1] >= points[index - 1][1]);
     // Need at least one real measurement between the anchors to say anything.
     curves.set(channel, points.length >= 3 ? points : null);
   }
@@ -756,6 +759,7 @@ function buildResponseCurves(resolved) {
 // neighbourhood instead of the whole curve.
 function invertResponse(points, printedTone, nominalTone) {
   if (!points || !Number.isFinite(printedTone)) return NaN;
+  if (points.monotone) return invertMonotone(points, printedTone, nominalTone);
   const candidates = [];
   for (let i = 1; i < points.length; i += 1) {
     const [x1, y1] = points[i - 1];
@@ -769,6 +773,31 @@ function invertResponse(points, printedTone, nominalTone) {
   return candidates.reduce((best, value) => (
     Math.abs(value - nominalTone) < Math.abs(best - nominalTone) ? value : best
   ), candidates[0]);
+}
+
+function invertMonotone(points, printedTone, nominalTone) {
+  if (printedTone < points[0][1] || printedTone > points.at(-1)[1]) return NaN;
+  // First and last segment that contain printedTone (flat runs can span several segments).
+  const lowerBound = (predicate) => {
+    let lo = 1; let hi = points.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (predicate(points[mid][1])) hi = mid; else lo = mid + 1;
+    }
+    return lo;
+  };
+  const first = lowerBound((y) => y >= printedTone);
+  const last = lowerBound((y) => y > printedTone);
+  const solve = (i) => {
+    const [x1, y1] = points[i - 1];
+    const [x2, y2] = points[i];
+    return Math.abs(y2 - y1) < 1e-6 ? x1 : x1 + (printedTone - y1) * (x2 - x1) / (y2 - y1);
+  };
+  if (first === last) return solve(first);
+  // Flat region: every input inside it prints the same tone; stay closest to nominal.
+  const from = solve(first);
+  const to = solve(last);
+  return Math.min(Math.max(nominalTone, Math.min(from, to)), Math.max(from, to));
 }
 
 function interpolate(points, tone) {

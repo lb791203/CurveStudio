@@ -24,3 +24,9 @@ test("review #5: importing a measurement file never loads demo audit data", () =
 test("review #1/#5: no demo audit report or press presets are bundled or referenced", () => {
   assert.doesNotMatch(app, /audit-report-demo\.json|kba-presets\.json/);
 });
+
+test("review M6: a slow standard request cannot overwrite a later selection", () => {
+  const body = functionBody("loadStandard");
+  assert.match(body, /const request = \+\+standardRequestSeq/);
+  assert.match(body, /if \(request !== standardRequestSeq\) return;/);
+});
