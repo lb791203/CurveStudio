@@ -1,0 +1,58 @@
+name: macOS bundle gate
+
+# Builds the real (unsigned) macOS app and runs the resource gate on its Mach-O binary,
+# so the check that the notarize script runs before signing is proven on a real build.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  macos-bundle-gate:
+    name: Build macOS app and verify bundled resources
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ctv-macos-mvp
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Cache Cargo registry and build
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ctv-macos-mvp/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('ctv-macos-mvp/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build unsigned .app
+        run: npx tauri build --bundles app
+
+      - name: Verify resources in the Mach-O binary
+        run: |
+          APP=$(ls -d src-tauri/target/release/bundle/macos/*.app | head -1)
+          test -n "$APP"
+          node scripts/verify-bundle.mjs --binary "$APP/Contents/MacOS"

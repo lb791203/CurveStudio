@@ -58,6 +58,8 @@ test("release build runs the bundle resource gate", () => {
   // re-review M8: the final artefacts are checked too (unpacked NSIS/MSI, mounted stapled DMG).
   assert.match(fs.readFileSync("../.github/workflows/windows-installer.yml", "utf8"), /verify-bundle\.mjs --binary \$nsisDir[\s\S]*verify-bundle\.mjs --binary \$msiDir/);
   assert.match(fs.readFileSync("scripts/notarize-macos.mjs", "utf8"), /verifyFinalDmg\(dmgPath\)/);
+  // round-3 M8: a macOS CI job runs the gate on a real Mach-O build.
+  assert.match(fs.readFileSync("../.github/workflows/macos-bundle-gate.yml", "utf8"), /verify-bundle\.mjs --binary "\$APP\/Contents\/MacOS"/);
 });
 
 test("sample hashes ignore CRLF line endings from a Windows checkout", () => {
@@ -67,4 +69,16 @@ test("sample hashes ignore CRLF line endings from a Windows checkout", () => {
   fs.writeFileSync(lf, "a,b\n1,2\n");
   fs.writeFileSync(crlf, "a,b\r\n1,2\r\n");
   assert.equal(sha256(crlf), sha256(lf));
+});
+
+test("round-3 M8: asset keys packed back to back (Mach-O) are split, not read as one path", () => {
+  // Tauri's asset table in a macOS binary: keys with no separator between them.
+  const packed = allowedFiles(root, loadWhitelist(root)).map((file) => `/${file}`).join("");
+  const result = verifyBinary(packed);
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout + result.stderr, /src\/features\.js\/src/);
+  // ".json" is not cut at ".js".
+  const bad = verifyBinary(`${packed}/samples/kba-presets.json`);
+  assert.notEqual(bad.status, 0);
+  assert.match(bad.stderr, /kba-presets\.json/);
 });

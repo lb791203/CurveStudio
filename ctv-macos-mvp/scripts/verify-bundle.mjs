@@ -22,7 +22,11 @@ if (args[0] === "--update-hashes") {
 }
 
 const allowed = new Set(allowedFiles(root, whitelist));
-const RESOURCE_PATH_SOURCE = String.raw`(?:^|[\/\\])((?:samples|reference-data|src)\/[A-Za-z0-9._\/-]+\.(?:json|txt|csv|js|css|it8|cgats))`;
+// Tauri embeds the frontend as an asset table keyed by "/<path>". In a Mach-O binary those
+// keys are packed back to back ("/src/features.js/src/exporter.js"), so a key ends at the
+// first known extension that is not followed by another letter or digit (".js" vs ".json"),
+// and the next "/src/…" starts a new key.
+const RESOURCE_PATH_SOURCE = String.raw`(?:^|[\/\\])((?:samples|reference-data|src)\/[A-Za-z0-9._\/-]+?\.(?:json|txt|csv|js|css|it8|cgats))(?![A-Za-z0-9])`;
 const RESOURCE_PATH = new RegExp(RESOURCE_PATH_SOURCE);
 const RESOURCE_PATH_GLOBAL = new RegExp(RESOURCE_PATH_SOURCE, "g");
 
