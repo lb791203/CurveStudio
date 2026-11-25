@@ -77,8 +77,8 @@ export function validateMeasurements(measurements = []) {
   });
   for (const row of valid) {
     for (const flag of row.colorimetricFlags || []) {
-      if (flag === "out_of_range") warnings.push(`${row.channel} ${formatValue(row.tone)}%：CTV 原始值 ${formatValue(row.colorimetricToneRaw)} 超出 0–100，请检查纸白/实地色块`);
-      if (flag === "low_contrast") warnings.push(`${row.channel} ${formatValue(row.tone)}%：纸白与实地颜色太接近，CTV 不可靠`);
+      if (flag === "out_of_range") warnings.push(`${row.channel} ${formatValue(row.tone)}%：CTV 原始值 ${formatValue(row.colorimetricToneRaw)} 超出 0–100，已排除出曲线计算，请检查纸白/实地色块`);
+      if (flag === "low_contrast") warnings.push(`${row.channel} ${formatValue(row.tone)}%：纸白与实地颜色太接近，CTV 不可靠，已排除出曲线计算`);
     }
   }
   return { valid, warnings };

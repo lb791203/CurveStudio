@@ -1216,8 +1216,9 @@ function clearManualRows() {
 }
 
 function applyManualRows() {
-  const { acceptedRows, curveRows, measurements, rejected } = buildManualMeasurementSet(state.manualRows);
-  if (rejected.length) window.alert(`${t("manual_rows_rejected", "以下手输数据不合理，已忽略：")}\n${rejected.slice(0, 10).join("\n")}`);
+  const { acceptedRows, curveRows, measurements, rejected, warnings } = buildManualMeasurementSet(state.manualRows);
+  const notices = [...rejected, ...warnings];
+  if (notices.length) window.alert(`${t("manual_rows_rejected", "以下手输数据不合理，已忽略：")}\n${notices.slice(0, 10).join("\n")}`);
 
   state.importInfo = {
     sourceFormat: "Manual Table",
@@ -1225,7 +1226,7 @@ function applyManualRows() {
     fields: ["patch_type", "channel", "tone", "measured_tone", "density", "lab_l", "lab_a", "lab_b", "source", "note"],
     rawRows: curveRows,
     measurements,
-    warnings: [],
+    warnings,
   };
   state.measurements = state.importInfo.measurements;
   state.manualDirty = false;

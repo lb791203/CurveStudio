@@ -1,4 +1,4 @@
-import { murrayDaviesToneFromDensity, spotColorToneValueFromLab } from "./curve-engine.js";
+import { murrayDaviesToneFromDensity, spotColorToneDetailsFromLab } from "./curve-engine.js";
 import { escapeAttr } from "./shared.js";
 
 const PATCH_TYPES = ["tone", "paper", "solid", "overprint", "gray"];
@@ -205,9 +205,11 @@ export function enrichManualColorimetricRow(row, refs) {
   const solid = refs.solids[row.channel] ? labFromManual(refs.solids[row.channel]) : null;
   const sample = labFromManual(row);
   if (!solid || !sample) return row;
-  const colorimetricTone = spotColorToneValueFromLab(sample, refs.paper, solid);
-  if (!Number.isFinite(colorimetricTone)) return row;
-  return { ...row, colorimetricTone, colorimetricMethod: "iso_20654_lab" };
+  // Same rule as file import: flagged patches keep their raw value and reason but give no tone.
+  const details = spotColorToneDetailsFromLab(sample, refs.paper, solid);
+  if (details.flags.length) return { ...row, colorimetricToneRaw: details.raw, colorimetricFlags: details.flags };
+  if (!Number.isFinite(details.raw)) return row;
+  return { ...row, colorimetricTone: details.raw, colorimetricMethod: "iso_20654_lab" };
 }
 
 export function solidDensityByChannel(rows) {

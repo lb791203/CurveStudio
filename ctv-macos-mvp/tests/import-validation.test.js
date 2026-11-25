@@ -20,7 +20,7 @@ test("review M1: XYZ scale is decided from the paper, not per patch", () => {
   assert.ok(Math.abs(spotColorToneValueFromXyz(scaled(dark), scaled(paper), scaled(solid)) - ctv) < 1e-6);
 });
 
-test("review M1: CTV above 100 is flagged instead of silently clipped", () => {
+test("review M1: CTV above 100 is flagged and excluded instead of silently clipped", () => {
   const csv = [
     "sample_id,cmyk_c,cmyk_m,cmyk_y,cmyk_k,lab_l,lab_a,lab_b,source",
     "Paper,0,0,0,0,95,0,-2,Measurement",
@@ -30,8 +30,21 @@ test("review M1: CTV above 100 is flagged instead of silently clipped", () => {
   const parsed = parseImportText(csv);
   const c90 = parsed.measurements.find((row) => row.channel === "C" && row.tone === 90);
   assert.ok(c90.colorimetricToneRaw > 100);
-  assert.equal(c90.colorimetricTone, 100);
-  assert.ok(parsed.warnings.some((item) => /CTV 原始值/.test(item)));
+  assert.ok(!Number.isFinite(c90.colorimetricTone));
+  assert.ok(parsed.warnings.some((item) => /CTV 原始值/.test(item) && /已排除/.test(item)));
+});
+
+test("re-review M1: paper and solid that coincide are flagged, not silently dropped", () => {
+  const csv = [
+    "sample_id,cmyk_c,cmyk_m,cmyk_y,cmyk_k,lab_l,lab_a,lab_b,source",
+    "Paper,0,0,0,0,95,0,-2,Measurement",
+    "C100,100,0,0,0,95,0,-2,Measurement",
+    "C50,50,0,0,0,94,0,-2,Measurement",
+  ].join("\n");
+  const parsed = parseImportText(csv);
+  const c50 = parsed.measurements.find((row) => row.channel === "C" && row.tone === 50);
+  assert.ok(!Number.isFinite(c50.colorimetricTone));
+  assert.ok(parsed.warnings.some((item) => /太接近/.test(item)));
 });
 
 test("review M5: impossible tone values are rejected with a per-row warning", () => {

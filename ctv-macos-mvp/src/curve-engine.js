@@ -335,6 +335,11 @@ export function murrayDaviesToneFromDensity(tintDensity, solidDensity, paperDens
   return clamp(100 * (1 - 10 ** (-tintRelative)) / (1 - 10 ** (-solidRelative)), 0, 100);
 }
 
+export function spotColorToneDetailsFromLab(toneLab, paperLab, solidLab) {
+  if (!toneLab || !paperLab || !solidLab) return { raw: NaN, flags: [] };
+  return spotColorToneDetails(vectorFromLab(toneLab), vectorFromLab(paperLab), vectorFromLab(solidLab));
+}
+
 export function spotColorToneValueFromLab(toneLab, paperLab, solidLab) {
   if (!toneLab || !paperLab || !solidLab) return NaN;
   return spotColorToneValue(vectorFromLab(toneLab), vectorFromLab(paperLab), vectorFromLab(solidLab));
@@ -948,7 +953,7 @@ function colorimetricToneFromColor(row, paperRow, solidRow) {
   const solidLab = labFromRow(solidRow || {});
   if (sampleLab && paperLab && solidLab) {
     const details = spotColorToneDetails(vectorFromLab(sampleLab), vectorFromLab(paperLab), vectorFromLab(solidLab));
-    if (Number.isFinite(details.raw)) return { tone: clamp(details.raw, 0, 100), raw: details.raw, flags: details.flags, method: "iso_20654_lab" };
+    if (Number.isFinite(details.raw) || details.flags.length) return colorimetricResult(details, "iso_20654_lab");
   }
 
   const sampleXyz = xyzFromRow(row);
@@ -957,10 +962,17 @@ function colorimetricToneFromColor(row, paperRow, solidRow) {
   if (sampleXyz && paperXyz && solidXyz) {
     const scale = xyzScaleFromPaper(paperXyz);
     const details = spotColorToneDetails(vectorFromXyz(sampleXyz, scale), vectorFromXyz(paperXyz, scale), vectorFromXyz(solidXyz, scale));
-    if (Number.isFinite(details.raw)) return { tone: clamp(details.raw, 0, 100), raw: details.raw, flags: details.flags, method: "iso_20654_xyz_d50" };
+    if (Number.isFinite(details.raw) || details.flags.length) return colorimetricResult(details, "iso_20654_xyz_d50");
   }
 
   return { tone: NaN, method: undefined };
+}
+
+// A flagged patch (CTV outside 0–100, or paper and solid too close) is excluded from the curve
+// inversion: its raw value and the reason are kept for display, but it gives no tone.
+function colorimetricResult(details, method) {
+  const excluded = details.flags.length > 0;
+  return { tone: excluded ? NaN : details.raw, raw: details.raw, flags: details.flags, method: excluded ? undefined : method };
 }
 
 function isColorimetricMeasurementCandidate(row, context) {
@@ -985,7 +997,8 @@ function spotColorToneValue(toneVector, paperVector, solidVector) {
 const MIN_PAPER_SOLID_DISTANCE = 10;
 function spotColorToneDetails(toneVector, paperVector, solidVector) {
   const full = vectorDistance(solidVector, paperVector);
-  if (!Number.isFinite(full) || full <= 0.001) return { raw: NaN, flags: [] };
+  if (!Number.isFinite(full)) return { raw: NaN, flags: [] };
+  if (full <= 0.001) return { raw: NaN, flags: ["low_contrast"] };
   const raw = (vectorDistance(toneVector, paperVector) / full) * 100;
   const flags = [];
   if (raw < -0.5 || raw > 100.5) flags.push("out_of_range");

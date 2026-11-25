@@ -11,7 +11,7 @@ import {
   paperDensityFromRows,
   solidDensityByChannel,
 } from "./manual-table.js";
-import { manualInputProblems, measurementProblems } from "./measurement-validation.js";
+import { manualInputProblems, measurementProblems, validateMeasurements } from "./measurement-validation.js";
 
 export function buildManualMeasurementSet(manualRows = []) {
   const rejected = [];
@@ -35,10 +35,12 @@ export function buildManualMeasurementSet(manualRows = []) {
   const solidDensities = solidDensityByChannel(accepted);
   const paperDensity = paperDensityFromRows(accepted);
   const labReferences = labReferenceByChannel(accepted);
-  const curveRows = accepted
+  const enriched = accepted
     .map((row) => enrichManualDensityRow(row, solidDensities, paperDensity))
-    .map((row) => enrichManualColorimetricRow(row, labReferences))
-    .filter((row) => canCalculateCurve(row));
+    .map((row) => enrichManualColorimetricRow(row, labReferences));
+  // Flagged CTV patches: same wording as file import (raw value, reason, excluded).
+  const warnings = validateMeasurements(enriched.filter((row) => row.colorimetricFlags)).warnings;
+  const curveRows = enriched.filter((row) => canCalculateCurve(row));
 
   const measurements = curveRows.map((row) => ({
     patchType: row.patchType,
@@ -58,5 +60,5 @@ export function buildManualMeasurementSet(manualRows = []) {
     note: row.note,
     sourceFormat: "Manual Table",
   }));
-  return { acceptedRows: accepted, curveRows, measurements, rejected, solidDensities, paperDensity };
+  return { acceptedRows: accepted, curveRows, measurements, rejected, warnings, solidDensities, paperDensity };
 }

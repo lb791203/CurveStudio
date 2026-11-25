@@ -42,3 +42,13 @@ test("re-review M5: an imported 130 % patch with a valid density is rejected, no
   assert.ok(!info.measurements.some((item) => item.tone === 100));
   assert.ok(info.warnings.some((item) => /130/.test(item)));
 });
+
+test("re-review M1: the manual path shows the raw CTV and excludes an out-of-range patch, like file import", () => {
+  const set = buildManualMeasurementSet([
+    row({ patchType: "paper", channel: "Paper", labL: "95", labA: "0", labB: "-2" }),
+    row({ patchType: "solid", channel: "C", tone: "100", labL: "56", labA: "-37", labB: "-50" }),
+    row({ channel: "C", tone: "90", labL: "50", labA: "-40", labB: "-55" }),
+  ]);
+  assert.equal(set.curveRows.find((item) => item.tone === 90), undefined);
+  assert.ok(set.warnings.some((item) => /CTV 原始值/.test(item) && /已排除/.test(item)));
+});
