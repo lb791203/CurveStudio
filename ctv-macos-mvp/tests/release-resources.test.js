@@ -98,7 +98,7 @@ test("round-3 M8: keys followed directly by a symbol name (real macOS build) are
 test("round-4 M8: an extra .icc and an extra file sharing a whitelisted prefix are rejected", () => {
   const files = allowedFiles(root, loadWhitelist(root));
   const packed = files.map((file) => `/${file}`).join("");
-  for (const extra of ["/samples/press-profile.icc", "/profiles/CRPC6.icc", "/src/app.js.bak", "/src/app.js-old.js", "/samples/sample-measurements.csv.orig", "/src/app.jsx"]) {
+  for (const extra of ["/data/press.csv", "/samples/SAMPLE-MEASUREMENTS.CSV", "/samples/sample-measurements.CSV", "/other/targets.txt", "/samples/press-profile.icc", "/profiles/CRPC6.icc", "/src/app.js.bak", "/src/app.js-old.js", "/samples/sample-measurements.csv.orig", "/src/app.jsx"]) {
     const result = verifyBinary(`${packed}${extra}IllegalEventName`);
     assert.notEqual(result.status, 0, extra);
     assert.match(result.stderr, /non-whitelisted/, extra);

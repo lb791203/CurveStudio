@@ -48,7 +48,7 @@ import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
 import { STANDARD_LIBRARY, addOrUpdateCustomStandard, archivedStandardAsCustom, buildPatchMap, cmykKey, hasStandard, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260604-density-targets-1";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 import { fetchTextResource } from "./network.js";
-import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCurvePoints, baselineFromApplied, confirmApplied, defaultBaseline, isConfirmedApplied, normalizeBaseline, savedRunBaseline, withRunBaseline, baselineFitsJob, unconfirmedCurvesForJob, withBaselineChannels } from "./rip-baseline.js";
+import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCurvePoints, baselineFromApplied, confirmApplied, defaultBaseline, isConfirmedApplied, normalizeBaseline, savedRunBaseline, withRunBaseline, baselineFitsJob, curvesNeedingPaperConfirmation, unconfirmedCurvesForJob, withBaselineChannels } from "./rip-baseline.js";
 import { exportBlockedMessage, validateExportCurve } from "./curve-validation.js";
 import { validateMeasurements } from "./measurement-validation.js";
 import { buildManualMeasurementSet } from "./manual-apply.js";
@@ -1325,12 +1325,23 @@ function resetBaselineForNewMeasurement() {
 // manual save.
 function recordBaselineOnCurrentRun() {
   if (!state.measurements.length || !state.results.length || state.manualDirty) return;
-  const nextRuns = withRunBaseline(state.runs, currentJobFields(), measurementFingerprint(state.measurements), runMeasurementFingerprint, state.baseline);
-  if (!nextRuns) return;
-  const saved = saveRunsAndLastProject(nextRuns, projectArchive(exportContext()));
+  const matched = withRunBaseline(state.runs, currentJobFields(), measurementFingerprint(state.measurements), runMeasurementFingerprint, state.baseline);
+  if (!matched) return;
+  // Rebuild the whole record from the recalculated state, so the stored curve, metrics,
+  // warnings and gate match the new baseline (not only the baseline field).
+  const index = matched.findIndex((item, i) => item !== state.runs[i]);
+  const previous = state.runs[index];
+  const { run, archive } = buildRunRecord({});
+  const rebuilt = { ...run, name: previous.name, createdAt: previous.createdAt, runId: previous.runId, jobId: previous.jobId, jobKey: previous.jobKey };
+  const nextRuns = state.runs.map((item, i) => (i === index ? rebuilt : item));
+  const gate = storableIccGenerationGate(currentIccGenerationGate(nextRuns));
+  rebuilt.iccGenerationGate = gate;
+  rebuilt.archive = { ...rebuilt.archive, iccGenerationGate: gate };
+  const saved = saveRunsAndLastProject(nextRuns, { ...archive, iccGenerationGate: gate });
   if (!saved.ok) return;
   state.runs = nextRuns;
   state.lastSavedRunSignature = currentRunSignature();
+  _renderRuns(state, els);
 }
 
 function currentJobFields() {
@@ -1419,10 +1430,14 @@ function renderBaseCurveNotice() {
   }
   els.baselineSelect.innerHTML = optionHtml.join("");
   els.baselineSelect.value = options.some((item) => item.id === selectedId) || selectedId === "linear" ? selectedId : "keep";
-  const pending = unconfirmedCurvesForJob(state.appliedCurves, currentJobFields(), { fingerprint: measurementFingerprint(state.measurements) });
+  const fingerprint = { fingerprint: measurementFingerprint(state.measurements) };
+  const pending = unconfirmedCurvesForJob(state.appliedCurves, currentJobFields(), fingerprint);
+  const paperUnknown = curvesNeedingPaperConfirmation(state.appliedCurves, currentJobFields(), fingerprint);
   els.baseCurveText.textContent = baseline.kind === "curve"
     ? t("base_curve_on", "结果已叠加这条曲线，可直接替换 RIP 里的旧曲线。")
-    : pending.length
+    : paperUnknown.length
+      ? t("base_curve_paper_unknown", "纸张未填写或与曲线记录不同，未自动套用旧曲线。请确认 RIP 里装的是哪条曲线。")
+      : pending.length
       ? t("base_curve_pending", "按印版线性计算。若这张纸是用已导出的曲线印的，请在上面选择它。")
       : t("base_curve_off", "按印版线性计算。");
 }
@@ -1900,6 +1915,33 @@ function saveCurrentRun(options = {}) {
   }
   const signature = currentRunSignature();
   if (options.skipIfUnchanged && signature && signature === state.lastSavedRunSignature) return null;
+  const { run, archive } = buildRunRecord(options);
+  const nextRuns = [run, ...state.runs].slice(0, 24);
+  const gate = currentIccGenerationGate(nextRuns);
+  const storableGate = storableIccGenerationGate(gate);
+  run.iccGenerationGate = storableGate;
+  run.archive = { ...run.archive, iccGenerationGate: storableGate };
+  const saved = saveRunsAndLastProject(nextRuns, { ...archive, iccGenerationGate: storableGate });
+  if (!saved.ok) {
+    state.storageWarning = saved.warning;
+    if (typeof window !== "undefined" && typeof window.alert === "function") window.alert(saved.warning);
+    _renderRuns(state, els);
+    _renderReport(state, els);
+    return null;
+  }
+  state.storageWarning = "";
+  state.runs = nextRuns;
+  state.lastSavedRunSignature = signature;
+  state.selectedJobKey = run.jobKey;
+  _renderRuns(state, els);
+  _renderReport(state, els);
+  if (options.switchToJob !== false) switchView("job");
+  return run;
+}
+
+// One saved Run: the measurement, the baseline it was computed on, and the curve, metrics and
+// warnings that follow from them. They are always written together.
+function buildRunRecord(options = {}) {
   const context = exportContext();
   const archive = projectArchive(context);
   const metrics = buildRunMetrics({
@@ -1944,27 +1986,7 @@ function saveCurrentRun(options = {}) {
     baseline: normalizeBaseline(state.baseline),
     archive: historyArchive,
   };
-  const nextRuns = [run, ...state.runs].slice(0, 24);
-  const gate = currentIccGenerationGate(nextRuns);
-  const storableGate = storableIccGenerationGate(gate);
-  run.iccGenerationGate = storableGate;
-  run.archive = { ...run.archive, iccGenerationGate: storableGate };
-  const saved = saveRunsAndLastProject(nextRuns, { ...archive, iccGenerationGate: storableGate });
-  if (!saved.ok) {
-    state.storageWarning = saved.warning;
-    if (typeof window !== "undefined" && typeof window.alert === "function") window.alert(saved.warning);
-    _renderRuns(state, els);
-    _renderReport(state, els);
-    return null;
-  }
-  state.storageWarning = "";
-  state.runs = nextRuns;
-  state.lastSavedRunSignature = signature;
-  state.selectedJobKey = run.jobKey;
-  _renderRuns(state, els);
-  _renderReport(state, els);
-  if (options.switchToJob !== false) switchView("job");
-  return run;
+  return { run, archive };
 }
 
 function storableIccGenerationGate(gate) {

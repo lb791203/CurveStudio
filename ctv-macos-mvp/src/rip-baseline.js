@@ -77,10 +77,26 @@ export function appliedCurvesForJob(list = [], job = {}) {
 // Default for a new measurement: the newest curve the operator confirmed as loaded in the RIP
 // for the same customer, press and paper, excluding curves computed from this same measurement;
 // otherwise linear. Exported-but-unconfirmed curves are offered in the selector, never defaulted.
+// The paper must be known and identical on both sides: a curve recorded without a paper (or for
+// a job whose paper is still blank) is only offered, and the operator has to confirm it.
 export function defaultBaseline(list = [], job = {}, { fingerprint = "" } = {}) {
   const latest = appliedCurvesForJob(list, job)
-    .find((item) => isConfirmedApplied(item) && !(fingerprint && item.sourceFingerprint === fingerprint));
+    .find((item) => isConfirmedApplied(item) && samePaperKnown(item.job || {}, job)
+      && !(fingerprint && item.sourceFingerprint === fingerprint));
   return latest ? { ...baselineFromApplied(latest), auto: true } : { ...LINEAR_BASELINE, auto: true };
+}
+
+// Confirmed curves for this customer and press that were not defaulted only because the paper
+// is blank on one side: the operator must say whether the sheet was printed with one of them.
+export function curvesNeedingPaperConfirmation(list = [], job = {}, { fingerprint = "" } = {}) {
+  return appliedCurvesForJob(list, job)
+    .filter((item) => isConfirmedApplied(item) && !samePaperKnown(item.job || {}, job)
+      && !(fingerprint && item.sourceFingerprint === fingerprint));
+}
+
+function samePaperKnown(a, b) {
+  const paperA = String(a.paper || "").trim();
+  return Boolean(paperA) && paperA === String(b.paper || "").trim();
 }
 
 // Curves exported for this job that nobody has confirmed as loaded in the RIP yet.

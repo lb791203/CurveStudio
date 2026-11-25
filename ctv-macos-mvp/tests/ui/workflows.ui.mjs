@@ -223,3 +223,48 @@ test("UI round-4 S2: a confirmed baseline survives re-importing the same file wi
   assert.deepEqual(errors, []);
   await close();
 });
+
+const storedRuns = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("ctv-run-state") || "{}").runs || []);
+const pointAt = (points, tone) => points.find(([input]) => Math.abs(input - tone) < 1e-6)?.[1];
+
+test("UI round-5: confirming a baseline rewrites the saved Run's curve, metrics and warnings, not only its baseline", async () => {
+  const { page, errors, close } = await openApp();
+  await setJob(page, { customer: "客户A", press: "印机1", paper: "铜版纸" });
+  await importSheet(page, "k1.csv", kSheet(20));
+  await exportRip(page, "/tmp/a1.csv");
+  await importSheet(page, "k2.csv", kSheet(4));
+  const linearRun = (await storedRuns(page))[0];
+  await chooseBaseline(page, "option.value !== 'linear' && option.value !== 'keep'");
+  const exportedK50 = toneAt(await exportRip(page, "/tmp/a2.csv"), "K", 50);
+  const runs = await storedRuns(page);
+  const updated = runs[0];
+  assert.equal(updated.runId, linearRun.runId, "the same Run is updated in place");
+  assert.equal(updated.archive.baseline.kind, "curve");
+  assert.ok(Math.abs(pointAt(updated.curvePoints.K, 50) - exportedK50) < 0.01, `stored ${pointAt(updated.curvePoints.K, 50)} vs exported ${exportedK50}`);
+  assert.notEqual(pointAt(updated.curvePoints.K, 50), pointAt(linearRun.curvePoints.K, 50));
+  // Metrics and warnings equal what a manual save of the same state stores.
+  await page.evaluate(() => document.querySelector("#saveRunButton").click());
+  await page.waitForTimeout(300);
+  const manual = (await storedRuns(page))[0];
+  assert.equal(updated.curveWarnings, manual.curveWarnings);
+  assert.equal(updated.curveDangers, manual.curveDangers);
+  assert.equal(updated.curveQualityStatus, manual.curveQualityStatus);
+  assert.deepEqual(updated.curvePoints, manual.curvePoints);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test("UI round-5: a curve recorded with a blank paper is not applied after the paper is filled in", async () => {
+  const { page, errors, close } = await openApp();
+  await setJob(page, { customer: "客户A", press: "印机1", paper: "" });
+  await importSheet(page, "k1.csv", kSheet(20));
+  await exportRip(page, "/tmp/a1.csv");
+  await importSheet(page, "k2.csv", kSheet(4));
+  await chooseBaseline(page, "option.value !== 'linear' && option.value !== 'keep'");
+  await setJob(page, { customer: "客户A", press: "印机1", paper: "铜版纸" });
+  await importSheet(page, "k3.csv", kSheet(8));
+  assert.equal(await page.$eval("#baselineSelect", (select) => select.value), "linear");
+  assert.match(await page.$eval("#baseCurveText", (node) => node.textContent), /纸张未填写或与曲线记录不同/);
+  assert.deepEqual(errors, []);
+  await close();
+});

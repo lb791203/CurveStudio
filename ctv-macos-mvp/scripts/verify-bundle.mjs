@@ -37,7 +37,10 @@ const EXTENSIONS = String.raw`(?:json|txt|csv|js|jsx|mjs|ts|map|css|html|svg|png
 const RESOURCE_PATH_SOURCE = String.raw`(${ROOTS}\/[A-Za-z0-9._\/-]+?\.${EXTENSIONS})(?![a-z0-9])`;
 const RESOURCE_PATH = new RegExp(RESOURCE_PATH_SOURCE);
 const RESOURCE_PATH_GLOBAL = new RegExp(RESOURCE_PATH_SOURCE, "g");
-const DATA_FILE_GLOBAL = /([A-Za-z0-9_-][A-Za-z0-9._-]*\.(?:icc|icm|cxf|it8|cgats))(?![a-z0-9])/gi;
+// Data files are found by extension anywhere in the binary, in any letter case and in any folder.
+const ci = (word) => [...word].map((ch) => `[${ch}${ch.toUpperCase()}]`).join("");
+const DATA_EXTENSIONS = ["csv", "txt", "tsv", "it8", "cgats", "cxf", "icc", "icm"].map(ci).join("|");
+const DATA_FILE_GLOBAL = new RegExp(String.raw`([A-Za-z0-9._\/-]+?\.(?:${DATA_EXTENSIONS}))(?![a-z0-9])`, "g");
 const PATH_TAIL = /^[._-][A-Za-z0-9._-]*/;
 
 if (args[0] === "--binary") {
@@ -105,9 +108,13 @@ function checkBinary(binary) {
     // "src/app.js" followed by ".bak" is the key "src/app.js.bak", not src/app.js.
     found.add(match[1] + tail);
   }
-  const allowedNames = new Set([...allowed].map((file) => path.posix.basename(file)));
+  // Each data key must be exactly a whitelisted path (same folder, same case). Whatever runs into
+  // it from the left is only accepted when it ends in "/" (the previous key or symbol).
   for (const match of text.matchAll(DATA_FILE_GLOBAL)) {
-    if (!allowedNames.has(match[1])) failures.push(`${path.basename(binary)} embeds non-whitelisted data file: ${match[1]}`);
+    const tail = text.slice(match.index + match[0].length).match(PATH_TAIL)?.[0] || "";
+    const key = match[1] + tail;
+    const ok = !tail && [...allowed].some((file) => key === file || key.endsWith(`/${file}`));
+    if (!ok) failures.push(`${path.basename(binary)} embeds non-whitelisted data file: ${key}`);
   }
   const present = new Set([...allowed].filter((file) => text.includes(file)));
   for (const file of found) {

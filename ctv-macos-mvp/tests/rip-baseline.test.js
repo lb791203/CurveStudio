@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { calculateCompensation } from "../src/curve-engine.js";
 import { validateExportCurve } from "../src/curve-validation.js";
-import { addAppliedCurve, appliedCurveSnapshot, baselineCurvePoints, baselineFitsJob, baselineFromApplied, savedRunBaseline, withRunBaseline, confirmApplied, defaultBaseline, normalizeBaseline, unconfirmedCurvesForJob, withBaselineChannels } from "../src/rip-baseline.js";
+import { addAppliedCurve, appliedCurveSnapshot, baselineCurvePoints, baselineFitsJob, baselineFromApplied, curvesNeedingPaperConfirmation, savedRunBaseline, withRunBaseline, confirmApplied, defaultBaseline, normalizeBaseline, unconfirmedCurvesForJob, withBaselineChannels } from "../src/rip-baseline.js";
 
 const job = { customer: "示例客户", press: "示例印机", paper: "铜版纸" };
 const gain = (tone, peak) => Math.min(100, tone + peak * Math.sin(Math.PI * tone / 100));
@@ -121,4 +121,17 @@ test("round-4 S2: a confirmed baseline is written into the matching saved run at
   assert.equal(next[0].archive.baseline.id, "c");
   assert.equal(savedRunBaseline(next, job, "m1", fingerprintOf).id, "c");
   assert.equal(withRunBaseline(runs, job, "other", fingerprintOf, curve), null);
+});
+
+test("round-5 S2: a curve recorded with a blank paper is not auto-applied once the paper is filled in", () => {
+  const blankPaper = { customer: "A", press: "P1", paper: "" };
+  const filled = { ...blankPaper, paper: "铜版纸" };
+  const list = confirmApplied(addAppliedCurve([], appliedCurveSnapshot({ rows: compute(measure(["K"], 20)), job: blankPaper, id: "old", sourceFingerprint: "m1" })), "old");
+  assert.equal(defaultBaseline(list, filled, { fingerprint: "m2" }).kind, "linear");
+  assert.deepEqual(curvesNeedingPaperConfirmation(list, filled, { fingerprint: "m2" }).map((item) => item.id), ["old"]);
+  // Nor the other way round: a job whose paper is still blank.
+  const known = confirmApplied(addAppliedCurve([], appliedCurveSnapshot({ rows: compute(measure(["K"], 20)), job: filled, id: "k", sourceFingerprint: "m1" })), "k");
+  assert.equal(defaultBaseline(known, blankPaper, { fingerprint: "m2" }).kind, "linear");
+  // Same known paper: still the default.
+  assert.equal(defaultBaseline(known, filled, { fingerprint: "m2" }).id, "k");
 });
