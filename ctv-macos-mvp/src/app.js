@@ -863,9 +863,7 @@ function standardNameFromImportedReference(imported, fileName) {
     imported?.metadata?.descriptor,
     imported?.metadata?.originator,
   ].filter(Boolean).join(" ");
-  if (/audit demo|ISO 12647-2/i.test(`${descriptor} ${fileName}`)) {
-    return "ISO 12647-2:2007 Offset";
-  }
+  if (descriptor.trim()) return descriptor.trim().slice(0, 80);
   return fileName.replace(/\.(txt|it8|cgats|csv)$/i, "").replace(/[-_]+/g, " ").trim() || "Imported Standard";
 }
 
@@ -990,34 +988,20 @@ function parseAndCalculate(options = {}) {
   calculate();
 }
 
+// A real measurement file never pulls in demo data: demo audit data is only loaded from the
+// explicit "load sample" entry. The file is parsed and validated before any state changes.
 async function importMeasurementText(text, options = {}) {
-  state.auditReport = await detectAuditReportForImport(text, options.sourceName);
-  if (state.auditReport) {
-    await loadAuditReportStandard(state.auditReport);
-    applyAuditReportJobFields(state.auditReport);
-  }
   const incoming = parseImportText(text, { densityFilter: state.settings.densityFilter });
   if (!incoming.measurements.length) {
     window.alert(t("import_no_usable_measurements", "导入文件没有可计算测点，请检查文件格式或测量字段。"));
     return false;
   }
-  if (state.auditReport) applyAuditReportImportMetadata(incoming, state.auditReport);
   saveCurrentRun({ switchToJob: false, namePrefix: t("run_name_previous_import", "上一份测量"), skipIfUnchanged: true });
+  state.auditReport = null;
   loadImportedMeasurement(incoming, text);
   saveCurrentRun({ switchToJob: false, namePrefix: t("run_name_imported_measurement", "导入测量") });
   render();
   return true;
-}
-
-async function detectAuditReportForImport(text, sourceName = "") {
-  const marker = `${sourceName || ""}\n${text || ""}`;
-  if (!/audit demo|ISO 12647-2:2007/i.test(marker)) return null;
-  try {
-    return await responseJson("./samples/audit-report-demo.json");
-  } catch (error) {
-    console.warn("Audit report metadata could not be attached", error);
-    return null;
-  }
 }
 
 async function loadAuditReportStandard(report) {
