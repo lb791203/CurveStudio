@@ -26,7 +26,9 @@ const allowed = new Set(allowedFiles(root, whitelist));
 // keys are packed back to back ("/src/features.js/src/exporter.js"), so a key ends at the
 // first known extension that is not followed by another letter or digit (".js" vs ".json"),
 // and the next "/src/…" starts a new key.
-const RESOURCE_PATH_SOURCE = String.raw`(?:^|[\/\\])((?:samples|reference-data|src)\/[A-Za-z0-9._\/-]+?\.(?:json|txt|csv|js|css|it8|cgats))(?![A-Za-z0-9])`;
+// A key may also follow another key or a non-path byte directly ("…index.htmlsrc/app.js"), so
+// no separator is required in front of it.
+const RESOURCE_PATH_SOURCE = String.raw`((?:samples|reference-data|src)\/[A-Za-z0-9._\/-]+?\.(?:json|txt|csv|js|css|it8|cgats))(?![A-Za-z0-9])`;
 const RESOURCE_PATH = new RegExp(RESOURCE_PATH_SOURCE);
 const RESOURCE_PATH_GLOBAL = new RegExp(RESOURCE_PATH_SOURCE, "g");
 
@@ -45,7 +47,10 @@ if (args[0] === "--binary") {
     const expected = [...allowed].filter((file) => RESOURCE_PATH.test(`/${file}`));
     const missing = expected.filter((file) => !found.has(file));
     if (!found.size) failures.push(`${binary}: no embedded resource paths found (not the app binary, or assets not inspectable)`);
-    else if (missing.length) failures.push(`${binary}: embedded resources do not match the whitelist, missing ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ` (+${missing.length - 5})` : ""}`);
+    else if (missing.length) {
+      failures.push(`${binary}: embedded resources do not match the whitelist, missing ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ` (+${missing.length - 5})` : ""}`);
+      for (const file of missing.slice(0, 3)) showContext(targets, file);
+    }
   }
 } else {
   checkDist(path.resolve(root, args[0] || "dist"));
@@ -95,4 +100,20 @@ function checkBinary(binary) {
 
 function forbiddenName(file) {
   return whitelist.forbidden.some((name) => file.includes(name));
+}
+
+// Diagnostics for a mismatch: print the bytes around where the missing name appears.
+function showContext(targets, file) {
+  const name = path.posix.basename(file);
+  for (const target of targets) {
+    const text = fs.readFileSync(target).toString("latin1");
+    let index = text.indexOf(name);
+    let shown = 0;
+    while (index !== -1 && shown < 3) {
+      const snippet = text.slice(Math.max(0, index - 60), index + name.length + 60).replace(/[^\x20-\x7e]/g, "·");
+      console.error(`  context ${path.basename(target)}@${index}: ${snippet}`);
+      index = text.indexOf(name, index + 1);
+      shown += 1;
+    }
+  }
 }
