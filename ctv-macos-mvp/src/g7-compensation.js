@@ -21,6 +21,16 @@ export function buildG7Compensation({ g7, baseRows = [], ratio = 0.5, limit = 12
     };
   }
 
+  if (g7.status === "Data Incomplete") {
+    return {
+      status: "Blocked",
+      message: "G7 数据不完整，不能生成补偿建议；请先补齐缺测色块。",
+      rows: [],
+      warnings: [...(g7.missing || [])],
+      grayDiagnostics: [],
+    };
+  }
+
   const warnings = [];
   const baseCurveRows = normalizeBaseCurveRows(baseRows);
   const kReferenceRows = buildNpdcRows(g7.npdcVerification || [], {
@@ -45,12 +55,12 @@ export function buildG7Compensation({ g7, baseRows = [], ratio = 0.5, limit = 12
     };
   }
 
-  const rows = baseCurveRows.map((row) => buildProductionRow(row, {
+  const rows = keepCurvesMonotonic(baseCurveRows.map((row) => buildProductionRow(row, {
     kReferenceRows,
     grayDiagnostics,
     ratio: normalizedRatio,
     limit: normalizedLimit,
-  }));
+  })));
 
   const limitedCount = kReferenceRows.filter((row) => row.limited).length;
   const increaseCount = rows.filter((row) => row.action === "增加").length;
@@ -136,7 +146,9 @@ function buildProductionRow(row, { kReferenceRows, grayDiagnostics, ratio, limit
     ? kNpdcDelta(row, reference, maxG7Delta)
     : graySplitDelta(row.channel, gray, maxG7Delta);
   const directionConflict = hasDirectionConflict(baseAdjustment, requestedG7Delta);
-  const g7Delta = directionConflict ? 0 : requestedG7Delta;
+  // 0 % and 100 % stay where the base curve put them.
+  const endPoint = row.tone <= MIN_TONE + 1e-9 || row.tone >= MAX_TONE - 1e-9;
+  const g7Delta = directionConflict || endPoint ? 0 : requestedG7Delta;
   const outputTone = clamp(row.outputTone + g7Delta, MIN_TONE, MAX_TONE);
   const adjustment = outputTone - row.tone;
 
@@ -239,7 +251,23 @@ function hasDirectionConflict(baseAdjustment, requestedG7Delta) {
 function g7DeltaLimit(ratio, limit) {
   const numericRatio = Number.isFinite(ratio) ? ratio : 0.5;
   const numericLimit = Number.isFinite(limit) ? limit : 12;
+  // Strength 0 or limit 0 means no G7 correction at all.
+  if (numericRatio <= 0 || numericLimit <= 0) return 0;
   return clamp(numericLimit * numericRatio * 0.25, 0.5, 3);
+}
+
+function keepCurvesMonotonic(rows) {
+  const previous = {};
+  return rows.map((row) => {
+    const floor = previous[row.channel] ?? -Infinity;
+    if (row.outputTone >= floor) {
+      previous[row.channel] = row.outputTone;
+      return row;
+    }
+    const outputTone = floor;
+    const adjustment = outputTone - row.tone;
+    return { ...row, outputTone, adjustment, action: adjustmentAction(adjustment), g7Delta: outputTone - row.baseOutputTone };
+  });
 }
 
 export function invertMeasuredToneForTargetL(rows, targetL, preferredTone = NaN) {
