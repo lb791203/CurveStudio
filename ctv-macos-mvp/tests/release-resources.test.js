@@ -40,3 +40,12 @@ test("release build runs the bundle resource gate", () => {
   assert.match(fs.readFileSync("scripts/notarize-macos.mjs", "utf8"), /verify-bundle\.mjs", "--binary"/);
   assert.match(fs.readFileSync("../.github/workflows/windows-installer.yml", "utf8"), /verify-bundle\.mjs --binary/);
 });
+
+test("sample hashes ignore CRLF line endings from a Windows checkout", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "crlf-"));
+  const lf = path.join(dir, "lf.csv");
+  const crlf = path.join(dir, "crlf.csv");
+  fs.writeFileSync(lf, "a,b\n1,2\n");
+  fs.writeFileSync(crlf, "a,b\r\n1,2\r\n");
+  assert.equal(sha256(crlf), sha256(lf));
+});

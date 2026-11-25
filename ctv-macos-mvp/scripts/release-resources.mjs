@@ -7,8 +7,13 @@ export function loadWhitelist(root) {
   return JSON.parse(fs.readFileSync(path.join(root, "release-resources.json"), "utf8"));
 }
 
+const TEXT_EXTENSIONS = new Set([".csv", ".txt", ".json", ".cgats", ".it8"]);
+
+// Text data is hashed with LF line endings, so a Windows checkout (core.autocrlf) pins the same content.
 export function sha256(file) {
-  return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+  let bytes = fs.readFileSync(file);
+  if (TEXT_EXTENSIONS.has(path.extname(file).toLowerCase())) bytes = Buffer.from(bytes.toString("latin1").replace(/\r\n/g, "\n"), "latin1");
+  return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
 // Every file the release may contain, relative to the app root (forward slashes).
