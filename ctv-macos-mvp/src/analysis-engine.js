@@ -485,7 +485,10 @@ export function g7Preview(options = {}) {
   });
   const g7LabRows = [...labRows, ...rawLabPatches];
   const labReady = g7LabRows.filter((row) => Number.isFinite(row.deltaE));
-  const grayRows = g7LabRows.filter((row) => isGrayLabRow(row));
+  // G7 patches are matched strictly by CMYK value (never by name) and de-duplicated, so
+  // a label containing "Gray" cannot stand in for a real CMY gray patch.
+  const grayRows = uniqueRowsByCmyk(g7LabRows.filter((row) => isLikelyG7GrayCmyk(row.cmyk)));
+  const kLabRows = measuredKOnlyLabRows(g7LabRows, actualKOnly);
   const grayCandidateCount = p2pRows.filter(isLikelyG7GrayCandidate).length;
   const rawPatchClasses = classifyG7Patches(p2pRows);
   const labPatchClasses = classifyLabG7Patches(g7LabRows);
@@ -520,7 +523,7 @@ export function g7Preview(options = {}) {
   const paperL = paperLab?.l;
   // G7 Grayscale is substrate-relative unless the caller explicitly asks for absolute.
   const relative = options.g7Evaluation !== "absolute";
-  const npdcVerification = buildNpdcVerification(actualKOnly, {
+  const npdcVerification = buildNpdcVerification(kLabRows, {
     paperL,
     relative,
     standardPatchMap: options.standardPatchMap,
@@ -533,18 +536,24 @@ export function g7Preview(options = {}) {
   });
   const npdcSummary = summarizeNpdc(npdcVerification, tolerances);
   const graySummary = summarizeGrayBalance(grayVerification, tolerances);
+  // K NPDC, CMY NPDC and CMY gray balance are judged separately: a good CMY gray must
+  // not average away a failing K ramp.
+  const kNpdcSummary = summarizeWeightedDeltaL(npdcVerification, tolerances);
   const grayNpdcSummary = summarizeWeightedDeltaL(grayVerification, tolerances);
-  const weightedDeltaLSummary = summarizeWeightedDeltaL([...npdcVerification, ...grayVerification], tolerances);
+  const weightedDeltaLSummary = worstWeightedDeltaL(kNpdcSummary, grayNpdcSummary);
   const weightedDeltaE = weightedAverageDelta(labReady);
   const weightedAverage = weightedDeltaLSummary.weightedAverage;
   const maxGrayCh = maxFinite(grayBalanceRows.map((row) => row.chroma));
   const avgNpdcDelta = average(npdcRows.map((row) => Math.abs(row.deltaTone)));
   const maxNpdcDelta = maxFinite(npdcRows.map((row) => Math.abs(row.deltaTone)));
-  const kOnlyCount = Math.max(actualKOnly.length, kOnly.length, patchClasses.kOnly);
-  const grayCount = Math.max(grayRows.length, patchClasses.cmyNeutralGray);
+  // Only measured patches with a usable L* count; interpolated curve grid points and
+  // CMYK-only patches do not.
+  const kOnlyCount = npdcVerification.filter((row) => Number.isFinite(row.deltaL)).length;
+  const grayCount = grayVerification.filter((row) => Number.isFinite(row.deltaL) && Number.isFinite(row.chroma)).length;
   const hasManualEquivalent = patchClasses.paper >= 1 && patchClasses.cmykSolids >= 4 && kOnlyCount >= 5 && grayCount >= 3;
   const completenessRows = g7CompletenessRows({
     kOnlyCount,
+    grayCount,
     labReadyCount: labReady.length,
     patchClasses,
     hasManualEquivalent,
@@ -552,16 +561,22 @@ export function g7Preview(options = {}) {
   const missing = [];
 
   if (patchClasses.p2pTotal < 25 && !hasManualEquivalent) missing.push("P2P/CGATS 色块不足，或手动等效数据不完整");
-  if (kOnlyCount < 5) missing.push("K-only NPDC 阶调不足");
+  if (kOnlyCount < 5) {
+    missing.push(patchClasses.kOnly || kOnly.length
+      ? `K-only 阶调缺少有效 Lab（有效 ${kOnlyCount} 个，至少 5 个）`
+      : "K-only NPDC 阶调不足");
+  }
   if (!patchClasses.paper) missing.push("缺少纸白色块");
   if (patchClasses.cmykSolids < 4) missing.push("CMYK 实地色块不足");
-  if (!grayCount) {
-    missing.push(grayCandidateCount ? "检测到 P2P/CMY 灰候选，但缺少可计算 Lab 的灰平衡数据" : "缺少 CMY neutral gray / 灰平衡 Lab");
+  if (grayCount < 3) {
+    missing.push(grayCandidateCount ? `CMY 灰平衡色块缺少有效 Lab（有效 ${grayCount} 个，至少 3 个）` : "缺少 CMY neutral gray / 灰平衡 Lab");
   }
   if (!labReady.length) missing.push(p2pPatchCount ? "文件含 P2P/CGATS 色块，但当前缺少 Lab，不能计算 ΔE/G7 灰平衡" : "缺少可与标准比对的 Lab");
 
   const verificationRows = buildG7VerificationRows({
     missing,
+    kNpdcSummary,
+    grayNpdcSummary,
     avgNpdcDelta,
     maxNpdcDelta,
     weightedDeltaLSummary,
@@ -592,6 +607,7 @@ export function g7Preview(options = {}) {
     weightedAverage,
     weightedDeltaE,
     weightedDeltaLSummary,
+    kNpdcSummary,
     grayNpdcSummary,
     weightedGrayAverage: graySummary.weightedAverage,
     weightedGrayMax: graySummary.weightedMax,
@@ -682,7 +698,7 @@ function disabledG7Preview(tolerances = {}) {
   };
 }
 
-function buildG7VerificationRows({ missing, weightedDeltaLSummary, graySummary, weightedDeltaE, maxDeltaE, tolerances }) {
+function buildG7VerificationRows({ missing, kNpdcSummary, grayNpdcSummary, graySummary, weightedDeltaE, maxDeltaE, tolerances }) {
   if (missing.length) {
     return [
       verificationRow("数据完整性", NaN, "必须完整", "Missing", missing.join(" / ")),
@@ -690,8 +706,10 @@ function buildG7VerificationRows({ missing, weightedDeltaLSummary, graySummary, 
   }
   return [
     // G7 Grayscale (NPDC + gray balance) is strictly Pass/Fail per the G7 spec; no Warning band.
-    passFailRow("NPDC wΔL* 平均", weightedDeltaLSummary.weightedAverage, tolerances.npdcAverage),
-    passFailRow("NPDC wΔL* 最大", weightedDeltaLSummary.weightedMax, tolerances.npdcMax),
+    passFailRow("K NPDC wΔL* 平均", kNpdcSummary.weightedAverage, tolerances.npdcAverage),
+    passFailRow("K NPDC wΔL* 最大", kNpdcSummary.weightedMax, tolerances.npdcMax),
+    passFailRow("CMY NPDC wΔL* 平均", grayNpdcSummary.weightedAverage, tolerances.npdcAverage),
+    passFailRow("CMY NPDC wΔL* 最大", grayNpdcSummary.weightedMax, tolerances.npdcMax),
     passFailRow("灰平衡 wΔCh 平均", graySummary.weightedAverage, tolerances.grayAverage),
     passFailRow("灰平衡 wΔCh 最大", graySummary.weightedMax, tolerances.grayMax),
     toleranceRow("Lab 加权 ΔE", weightedDeltaE, tolerances.deltaEWeighted, tolerances.deltaEWeighted * 1.5, ""),
@@ -956,7 +974,7 @@ function classifyLabG7Patches(rows = []) {
   const paper = uniqueRows.filter((row) => isPaperCmyk(row.cmyk)).length;
   const cmykSolids = ["C", "M", "Y", "K"].filter((channel) => uniqueRows.some((row) => isSolidCmyk(row.cmyk, channel))).length;
   const kOnly = uniqueRows.filter((row) => isKOnlyCmyk(row.cmyk)).length;
-  const cmyNeutralGray = uniqueRows.filter((row) => row.label?.includes("Gray") || isLikelyG7GrayCmyk(row.cmyk)).length;
+  const cmyNeutralGray = uniqueRows.filter((row) => isLikelyG7GrayCmyk(row.cmyk)).length;
   return {
     total: uniqueRows.length,
     paper,
@@ -975,12 +993,33 @@ function uniqueRowsByCmyk(rows = []) {
   return [...map.values()];
 }
 
-function isGrayLabRow(row) {
-  const label = String(row.label || "");
-  return label.includes("Gray")
-    || label.toLowerCase().includes("neutral")
-    || /^CMY\b/i.test(label)
-    || isLikelyG7GrayCmyk(row.cmyk);
+// Measured K-only ramp with Lab: CMYK-matched Lab patches first, then K measurements that
+// carry their own Lab; one row per K tone.
+function measuredKOnlyLabRows(labRows = [], kMeasurements = []) {
+  const byTone = new Map();
+  for (const row of labRows) {
+    if (!isKOnlyCmyk(row.cmyk) || !Number.isFinite(number(row.lab?.l))) continue;
+    const key = Number(row.cmyk.k).toFixed(2);
+    if (!byTone.has(key)) byTone.set(key, { tone: number(row.cmyk.k), lab: row.lab });
+  }
+  for (const row of kMeasurements) {
+    if (!Number.isFinite(number(row.lab?.l)) || !Number.isFinite(number(row.tone))) continue;
+    const key = Number(row.tone).toFixed(2);
+    if (!byTone.has(key)) byTone.set(key, { tone: number(row.tone), lab: row.lab });
+  }
+  return [...byTone.values()];
+}
+
+function worstWeightedDeltaL(...summaries) {
+  const usable = summaries.filter((item) => item.count > 0);
+  if (!usable.length) return { count: 0, weightedAverage: NaN, weightedMax: NaN, status: "Missing" };
+  const worst = (key) => Math.max(...usable.map((item) => item[key]));
+  return {
+    count: usable.reduce((sum, item) => sum + item.count, 0),
+    weightedAverage: worst("weightedAverage"),
+    weightedMax: worst("weightedMax"),
+    status: usable.some((item) => item.status === "Fail") ? "Fail" : summaries.some((item) => item.status === "Missing") ? "Missing" : "Pass",
+  };
 }
 
 function rawLabPatchRows(rows = [], options = {}) {
@@ -1016,13 +1055,13 @@ function formatCmykTone(value) {
   return Number(value).toFixed(Number.isInteger(value) ? 0 : 1);
 }
 
-function g7CompletenessRows({ kOnlyCount, labReadyCount, patchClasses, hasManualEquivalent }) {
+function g7CompletenessRows({ kOnlyCount, grayCount, labReadyCount, patchClasses, hasManualEquivalent }) {
   return [
     completenessRow("P2P/CGATS 或手动等效", patchClasses.p2pTotal, ">=25 或纸白/实地/K/灰完整", patchClasses.p2pTotal >= 25 || hasManualEquivalent),
     completenessRow("纸白", patchClasses.paper, ">=1", patchClasses.paper >= 1),
     completenessRow("CMYK 实地", patchClasses.cmykSolids, "4", patchClasses.cmykSolids >= 4),
     completenessRow("K-only NPDC", kOnlyCount, ">=5", kOnlyCount >= 5),
-    completenessRow("CMY neutral gray", patchClasses.cmyNeutralGray, ">=3", patchClasses.cmyNeutralGray >= 3),
+    completenessRow("CMY neutral gray", grayCount, ">=3", grayCount >= 3),
     completenessRow("可比 Lab/ΔE", labReadyCount, ">=1", labReadyCount >= 1),
   ];
 }

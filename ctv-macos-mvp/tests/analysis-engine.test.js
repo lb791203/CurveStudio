@@ -3,6 +3,15 @@ import test from "node:test";
 
 import { analyzeCurveSafety, buildLabVerificationRows, deltaE2000, deltaE76, deltaE94, deltaECMC, diagnosePress, g7Preview, summarizeLabVerification } from "../src/analysis-engine.js";
 import { g7NpdcLTarget } from "../src/g7-targets.js";
+import { g7GrayMagentaYellowFor } from "../src/shared.js";
+
+const g7Gray = (tone) => ({ c: tone, m: g7GrayMagentaYellowFor(tone), y: g7GrayMagentaYellowFor(tone), k: 0 });
+const kRamp = (lOffset = 0) => [10, 20, 30, 40, 50].map((tone) => ({
+  label: `K ${tone}%`,
+  cmyk: { c: 0, m: 0, y: 0, k: tone },
+  lab: { l: g7NpdcLTarget(tone) + lOffset, a: 0, b: 0 },
+  deltaE: 1,
+}));
 
 test("Delta E formulas return stable finite values", () => {
   const sample = { l: 50, a: 2.6772, b: -79.7751 };
@@ -145,6 +154,7 @@ test("g7Preview can validate complete manual-equivalent G7 data", () => {
   }));
   const labRows = [
     { label: "Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: -2 }, deltaE: 1 },
+    ...kRamp(),
     ...["C", "M", "Y", "K"].map((channel) => ({
       label: `${channel} 100%`,
       cmyk: {
@@ -158,7 +168,7 @@ test("g7Preview can validate complete manual-equivalent G7 data", () => {
     })),
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
-      cmyk: { c: tone, m: tone, y: tone, k: 0 },
+      cmyk: g7Gray(tone),
       lab: { l: g7NpdcLTarget(tone), a: 0.5, b: -0.5 },
       deltaE: 1,
     })),
@@ -183,6 +193,7 @@ test("g7Preview treats G7 grayscale overruns as Fail, not Warning", () => {
   }));
   const labRows = [
     { label: "Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: -2 }, deltaE: 1 },
+    ...kRamp(),
     ...["C", "M", "Y", "K"].map((channel) => ({
       label: `${channel} 100%`,
       cmyk: {
@@ -196,7 +207,7 @@ test("g7Preview treats G7 grayscale overruns as Fail, not Warning", () => {
     })),
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
-      cmyk: { c: tone, m: tone, y: tone, k: 0 },
+      cmyk: g7Gray(tone),
       lab: { l: g7NpdcLTarget(tone), a: 2, b: -0.5 },
       deltaE: 1,
     })),
@@ -232,6 +243,7 @@ test("g7Preview conclusion identifies failed G7 verification priorities", () => 
   }));
   const labRows = [
     { label: "Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: -2 }, deltaE: 1 },
+    ...kRamp(),
     ...["C", "M", "Y", "K"].map((channel) => ({
       label: `${channel} 100%`,
       cmyk: {
@@ -245,7 +257,7 @@ test("g7Preview conclusion identifies failed G7 verification priorities", () => 
     })),
     ...[25, 50, 75].map((tone) => ({
       label: `Gray ${tone}`,
-      cmyk: { c: tone, m: tone, y: tone, k: 0 },
+      cmyk: g7Gray(tone),
       lab: { l: 70, a: 8, b: -8 },
       deltaE: 9,
     })),
@@ -381,4 +393,69 @@ test("diagnosePress speaks CTV in CTV mode", () => {
   assert.ok(ctv.messages.every((text) => !/\bTVI\b/.test(text)));
   const tvi = diagnosePress(rows, { metric: "tvi" });
   assert.ok(tvi.messages.some((text) => /\bTVI\b/.test(text)));
+});
+
+function g7BaseLabRows({ kLOffset = 0, includeK = true } = {}) {
+  return [
+    { label: "Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: 95, a: 0, b: -2 }, deltaE: 1 },
+    ...(includeK ? kRamp(kLOffset) : []),
+    ...["C", "M", "Y", "K"].map((channel) => ({
+      label: `${channel} 100%`,
+      cmyk: { c: channel === "C" ? 100 : 0, m: channel === "M" ? 100 : 0, y: channel === "Y" ? 100 : 0, k: channel === "K" ? 100 : 0 },
+      lab: { l: 50, a: 0, b: 0 },
+      deltaE: 1,
+    })),
+    ...[25, 50, 75].map((tone) => ({
+      label: `Gray ${tone}`,
+      cmyk: g7Gray(tone),
+      lab: { l: g7NpdcLTarget(tone), a: 0.5 * (1 - tone / 100) * 0, b: -2 * (1 - tone / 100) },
+      deltaE: 1,
+    })),
+  ];
+}
+
+test("review #4: K tone records without Lab never let G7 pass", () => {
+  // 13 K grid points from the curve, no measured K Lab at all.
+  const results = [5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95].map((tone) => ({ channel: "K", tone, measuredTone: tone + 10, targetTone: tone + 10 }));
+  const measurements = [{ channel: "K", tone: 50, measuredTone: 64 }];
+  const g7 = g7Preview({ results, measurements, labRows: g7BaseLabRows({ includeK: false }) });
+
+  assert.equal(g7.kOnlyCount, 0);
+  assert.equal(g7.status, "Data Incomplete");
+  assert.ok(g7.missing.some((item) => /K-only/.test(item)));
+});
+
+test("review #4: a failing K ramp is not averaged away by good CMY gray", () => {
+  const g7 = g7Preview({ labRows: g7BaseLabRows({ kLOffset: -6 }) });
+
+  assert.equal(g7.kNpdcSummary.status, "Fail");
+  assert.equal(g7.grayNpdcSummary.status, "Pass");
+  assert.equal(g7.verificationRows.find((row) => row.item === "K NPDC wΔL* 平均").status, "Fail");
+  assert.equal(g7.status, "Fail");
+});
+
+test("review #4: complete K, CMY and gray data can pass", () => {
+  const g7 = g7Preview({ labRows: g7BaseLabRows() });
+  assert.equal(g7.kOnlyCount, 5);
+  assert.equal(g7.grayPatchCount, 3);
+  assert.equal(g7.status, "Pass");
+});
+
+test("review #4: a patch named Gray with non-G7 CMYK is not a gray-balance patch", () => {
+  const labRows = g7BaseLabRows().filter((row) => !row.label.startsWith("Gray"));
+  labRows.push(
+    { label: "Gray 25", cmyk: { c: 25, m: 25, y: 25, k: 0 }, lab: { l: 75, a: 0, b: 0 }, deltaE: 1 },
+    { label: "neutral 50", cmyk: { c: 50, m: 50, y: 50, k: 0 }, lab: { l: 60, a: 0, b: 0 }, deltaE: 1 },
+    { label: "CMY 75", cmyk: { c: 75, m: 75, y: 75, k: 0 }, lab: { l: 40, a: 0, b: 0 }, deltaE: 1 },
+  );
+  const g7 = g7Preview({ labRows });
+  assert.equal(g7.grayPatchCount, 0);
+  assert.equal(g7.status, "Data Incomplete");
+});
+
+test("review #4: duplicate K patches count once", () => {
+  const labRows = [...g7BaseLabRows({ includeK: false }), ...kRamp().slice(0, 2), ...kRamp().slice(0, 2), ...kRamp().slice(0, 2)];
+  const g7 = g7Preview({ labRows });
+  assert.equal(g7.kOnlyCount, 2);
+  assert.equal(g7.status, "Data Incomplete");
 });
