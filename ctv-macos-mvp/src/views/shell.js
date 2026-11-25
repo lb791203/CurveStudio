@@ -1,10 +1,11 @@
 import { channelsPresent } from "../curve-engine.js";
 import { summarizeLabVerification } from "../analysis-engine.js?v=20260522-g7-verify";
-import { buildSuggestedArchivePath, summarizeCurveSafety } from "../exporter.js?v=20260521-icc-p4";
+import { buildSuggestedArchivePath, G7_REFERENCE_NOTICE, summarizeCurveSafety } from "../exporter.js?v=20260521-icc-p4";
+import { G7_NPDC_METHOD } from "../g7-targets.js";
 import { buildIccGenerationGate } from "../icc-generation-gate.js?v=20260525-statusbar-pass-1";
 import { compareRuns, formatMetricChange } from "../run-compare.js?v=20260521-icc-p4";
 import { escapeAttr, escapeHtml } from "../shared.js";
-import { t, translateDynamicText } from "../translations.js";
+import { getLanguage, t, translateDynamicText } from "../translations.js";
 import { algorithmDescription, deltaFormulaLabel } from "../ui-labels.js";
 import { displayPatchLabel, num, statusClass } from "./helpers.js?v=20260604-patch-labels-1";
 import { targetName, visibleWarnings } from "./data.js?v=20260525-statusbar-pass-1";
@@ -320,7 +321,8 @@ export function renderReport(state, els) {
   els.reportG7Conclusion.innerHTML = `
     <p><span class="status ${statusClass(conclusion.level || g7.status)}">${escapeHtml(translateDynamicText(conclusion.title || t("g7_not_run_label", "G7 Not Run")))}</span></p>
     <p>${escapeHtml(translateDynamicText(conclusion.summary || t("g7_report_not_run_help", "After running G7 verification, NPDC, gray balance, and ΔE conclusions will appear here.")))}</p>
-    <p>NPDC wΔL*: ${num(g7.weightedAverage)} / Max ${num(g7.maxNpdcDelta)} / Gray wΔCh Max: ${num(g7.maxGrayCh)} / Max ΔE: ${num(g7.maxDeltaE)}</p>
+    <p>K NPDC wΔL*: ${num(g7.kNpdcSummary?.weightedAverage)} / Max ${num(g7.kNpdcSummary?.weightedMax)} · CMY NPDC wΔL*: ${num(g7.grayNpdcSummary?.weightedAverage)} / Max ${num(g7.grayNpdcSummary?.weightedMax)} · Gray wΔCh Max: ${num(g7.maxGrayCh)} · Max ΔE: ${num(g7.maxDeltaE)}</p>
+    <p class="report-notice">${escapeHtml(getLanguage() === "en" ? G7_REFERENCE_NOTICE.en : G7_REFERENCE_NOTICE.zh)} ${escapeHtml(G7_NPDC_METHOD)}</p>
     ${reportList(t("main_issues_label", "Main Issues"), conclusion.priorityItems)}
     ${reportList(t("recommended_actions_label", "Recommended Actions"), conclusion.recommendations)}
   `;

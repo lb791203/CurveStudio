@@ -766,6 +766,9 @@ test("renderReport summarizes field report sections", () => {
   assert.match(localEls.reportAuditComparison.innerHTML, /TVI \/ CTV 关键网点判定/);
   assert.match(localEls.reportAuditComparison.innerHTML, /Lab \/ ΔE 关键色块判定/);
   assert.match(localEls.reportG7Conclusion.innerHTML, /G7 未通过，需修正后复测/);
+  // re-review M7: the printed report carries the same fixed reference / non-certification notice.
+  assert.match(localEls.reportG7Conclusion.innerHTML, /非 Idealliance 认证结果/);
+  assert.match(localEls.reportG7Conclusion.innerHTML, /TR 015-2022/);
   assert.match(localEls.reportLabSummary.innerHTML, /最大 ΔE/);
   assert.match(localEls.reportCurveSummary.innerHTML, /曲线质量|平均 \|TVI\/CTV 偏差\|/);
   assert.match(localEls.reportRunCompare.innerHTML, /已解决/);
