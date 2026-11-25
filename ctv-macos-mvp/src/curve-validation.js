@@ -2,8 +2,15 @@
 // (smoothing, stacking on the previous curve, manual lock points), because a manual
 // lock point can still create a reversal or move an end point.
 
-const END_TOLERANCE = 0.05;
-const STEP_TOLERANCE = 1e-6;
+// Checked on the values as they are written to the file (2 decimals, see toExportRows),
+// so what passes here is exactly what the RIP receives.
+const EXPORT_DECIMALS = 2;
+
+function serialized(value) {
+  if (value === null || value === undefined || (typeof value === "string" && value.trim() === "")) return NaN;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Number(numeric.toFixed(EXPORT_DECIMALS)) : NaN;
+}
 
 export function validateExportCurve(rows = []) {
   const problems = [];
@@ -17,30 +24,37 @@ export function validateExportCurve(rows = []) {
 
   for (const [channel, channelRows] of byChannel) {
     const points = channelRows
-      .map((row) => ({ input: Number(row.tone), output: Number(row.outputTone) }))
+      .map((row) => ({ input: serialized(row.tone), output: serialized(row.outputTone) }))
       .sort((a, b) => a.input - b.input);
-    const bad = points.filter((point) => !Number.isFinite(point.input) || !Number.isFinite(point.output));
-    if (bad.length) {
-      problems.push({ channel, type: "not_finite", message: `${channel} 通道有无效数值` });
+    if (points.some((point) => !Number.isFinite(point.input) || !Number.isFinite(point.output))) {
+      problems.push({ channel, type: "not_finite", message: `${channel} 通道有缺值或无效数值` });
       continue;
     }
     for (const point of points) {
-      if (point.output < -END_TOLERANCE || point.output > 100 + END_TOLERANCE) {
+      if (point.input < 0 || point.input > 100) {
+        problems.push({ channel, type: "input_range", input: point.input, message: `${channel} 输入 ${fmt(point.input)}% 超出 0–100` });
+      }
+      if (point.output < 0 || point.output > 100) {
         problems.push({ channel, type: "range", input: point.input, message: `${channel} ${fmt(point.input)}% → ${fmt(point.output)}% 超出 0–100` });
       }
     }
-    const start = points.find((point) => Math.abs(point.input) < 1e-9);
-    const end = points.find((point) => Math.abs(point.input - 100) < 1e-9);
-    if (!start || Math.abs(start.output) > END_TOLERANCE) {
+    for (let i = 1; i < points.length; i += 1) {
+      if (points[i].input === points[i - 1].input) {
+        problems.push({ channel, type: "duplicate", input: points[i].input, message: `${channel} 输入 ${fmt(points[i].input)}% 重复` });
+      }
+    }
+    const start = points.find((point) => point.input === 0);
+    const end = points.find((point) => point.input === 100);
+    if (!start || start.output !== 0) {
       problems.push({ channel, type: "endpoint", input: 0, message: `${channel} 0% 必须输出 0%${start ? `（现在 ${fmt(start.output)}%）` : "（缺少 0% 点）"}` });
     }
-    if (!end || Math.abs(end.output - 100) > END_TOLERANCE) {
+    if (!end || end.output !== 100) {
       problems.push({ channel, type: "endpoint", input: 100, message: `${channel} 100% 必须输出 100%${end ? `（现在 ${fmt(end.output)}%）` : "（缺少 100% 点）"}` });
     }
     for (let i = 1; i < points.length; i += 1) {
       const previous = points[i - 1];
       const current = points[i];
-      if (current.output < previous.output - STEP_TOLERANCE) {
+      if (current.output < previous.output) {
         problems.push({
           channel,
           type: "reversal",
