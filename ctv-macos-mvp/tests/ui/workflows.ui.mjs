@@ -129,3 +129,20 @@ test("UI S5: importing a file named like the old audit standard keeps the select
   assert.deepEqual(errors, []);
   await close();
 });
+
+test("UI round-3 S2: exporting, then re-importing the same file, does not stack the curve again", async () => {
+  const { page, errors, close } = await openApp();
+  const c50 = (csv) => Number(csv.split("\n").find((line) => /^C,50(\.00)?,/.test(line)).split(",")[2]);
+  await loadSample(page);
+  await page.evaluate(() => { window.__saveAnswer = "/tmp/rip1.csv"; document.querySelector("#exportSimpleRipButton").click(); });
+  await page.waitForTimeout(300);
+  const first = c50(await page.evaluate(() => window.__writes.at(-1).contents));
+  await loadSample(page);
+  await page.evaluate(() => { window.__saveAnswer = "/tmp/rip2.csv"; document.querySelector("#exportSimpleRipButton").click(); });
+  await page.waitForTimeout(300);
+  const second = c50(await page.evaluate(() => window.__writes.at(-1).contents));
+  assert.equal(second, first);
+  assert.equal(await page.$eval("#baselineSelect", (select) => select.value), "linear");
+  assert.deepEqual(errors, []);
+  await close();
+});

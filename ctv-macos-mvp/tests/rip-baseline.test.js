@@ -3,32 +3,36 @@ import test from "node:test";
 
 import { calculateCompensation } from "../src/curve-engine.js";
 import { validateExportCurve } from "../src/curve-validation.js";
-import { addAppliedCurve, appliedCurveSnapshot, baselineCurvePoints, defaultBaseline, normalizeBaseline, withBaselineChannels } from "../src/rip-baseline.js";
+import { addAppliedCurve, appliedCurveSnapshot, baselineCurvePoints, confirmApplied, defaultBaseline, normalizeBaseline, unconfirmedCurvesForJob, withBaselineChannels } from "../src/rip-baseline.js";
 
 const job = { customer: "示例客户", press: "示例印机", paper: "铜版纸" };
 const gain = (tone, peak) => Math.min(100, tone + peak * Math.sin(Math.PI * tone / 100));
 const measure = (channels, peak) => channels.flatMap((channel) => [10, 25, 40, 50, 75, 90].map((tone) => ({ channel, tone, measuredTone: gain(tone, peak) })));
 const compute = (measurements, baseCurve) => calculateCompensation(measurements, { mode: "tvi", target: "isoA", smooth: "medium", limit: 18, compensationRatio: 1, baseCurve });
 
-test("review #2: only curves exported to the RIP become the default baseline", () => {
+test("review #2: only curves confirmed as loaded in the RIP become the default baseline", () => {
   // Nothing exported yet: an auto-saved candidate must not become the baseline.
   assert.equal(defaultBaseline([], job).kind, "linear");
   const round1 = compute(measure(["C", "M", "Y", "K"], 20));
-  const applied = addAppliedCurve([], appliedCurveSnapshot({ rows: round1, job, createdAt: "2026-11-25T01:00:00.000Z" }));
+  const exported = addAppliedCurve([], appliedCurveSnapshot({ rows: round1, job, createdAt: "2026-11-25T01:00:00.000Z", id: "r1" }));
+  // Exported but not confirmed: still linear.
+  assert.equal(defaultBaseline(exported, job).kind, "linear");
+  const applied = confirmApplied(exported, "r1");
   const baseline = defaultBaseline(applied, job);
   assert.equal(baseline.kind, "curve");
   assert.deepEqual(Object.keys(baseline.curvePoints).sort(), ["C", "K", "M", "Y"]);
 });
 
 test("review #2: a curve from another paper or press is not used as baseline", () => {
-  const applied = addAppliedCurve([], appliedCurveSnapshot({ rows: compute(measure(["C"], 20)), job }));
+  const applied = confirmApplied(addAppliedCurve([], appliedCurveSnapshot({ rows: compute(measure(["C"], 20)), job, id: "x" })), "x");
+  assert.equal(defaultBaseline(applied, job).kind, "curve");
   assert.equal(defaultBaseline(applied, { ...job, paper: "胶版纸" }).kind, "linear");
   assert.equal(defaultBaseline(applied, { ...job, press: "另一台" }).kind, "linear");
 });
 
 test("review #2: K-only retest keeps the previous C/M/Y curves in the full export", () => {
   const round1 = compute(measure(["C", "M", "Y", "K"], 20));
-  const baseline = defaultBaseline(addAppliedCurve([], appliedCurveSnapshot({ rows: round1, job })), job);
+  const baseline = defaultBaseline(confirmApplied(addAppliedCurve([], appliedCurveSnapshot({ rows: round1, job, id: "r1" })), "r1"), job);
   const round2 = compute(measure(["K"], 4), baselineCurvePoints(baseline));
   const exportRows = withBaselineChannels(round2, baseline);
   assert.deepEqual([...new Set(exportRows.map((row) => row.channel))].sort(), ["C", "K", "M", "Y"]);
@@ -40,7 +44,7 @@ test("review #2: K-only retest keeps the previous C/M/Y curves in the full expor
 
 test("review #2: the baseline snapshot survives save/reopen unchanged", () => {
   const round1 = compute(measure(["C", "K"], 20));
-  const baseline = defaultBaseline(addAppliedCurve([], appliedCurveSnapshot({ rows: round1, job })), job);
+  const baseline = defaultBaseline(confirmApplied(addAppliedCurve([], appliedCurveSnapshot({ rows: round1, job, id: "r1" })), "r1"), job);
   const reopened = normalizeBaseline(JSON.parse(JSON.stringify(baseline)));
   assert.deepEqual(reopened.curvePoints, baseline.curvePoints);
   // A newer exported curve does not change what the reopened run stacks on.
@@ -54,11 +58,40 @@ test("re-review S2: the same curve exported for another job does not drop the fi
   const rows = compute(measure(["C"], 20));
   const jobA = { customer: "A", press: "P1", paper: "Coated" };
   const jobB = { customer: "B", press: "P2", paper: "Coated" };
-  let list = addAppliedCurve([], appliedCurveSnapshot({ rows, job: jobA, id: "a" }));
-  list = addAppliedCurve(list, appliedCurveSnapshot({ rows, job: jobB, id: "b" }));
+  let list = confirmApplied(addAppliedCurve([], appliedCurveSnapshot({ rows, job: jobA, id: "a" })), "a");
+  list = confirmApplied(addAppliedCurve(list, appliedCurveSnapshot({ rows, job: jobB, id: "b" })), "b");
   assert.equal(list.length, 2);
   assert.equal(defaultBaseline(list, jobA).id, "a");
   // Re-exporting the same curve within one job still collapses to one record.
   list = addAppliedCurve(list, appliedCurveSnapshot({ rows, job: jobA, id: "a2" }));
   assert.deepEqual(list.map((item) => item.id), ["a2", "b"]);
+});
+
+test("round-3 S2: re-importing the same measurement never stacks on the curve computed from it", () => {
+  // Codex case: export a curve, do not load it in the RIP, import the same CSV again.
+  const measurements = measure(["C", "K"], 20);
+  const fingerprint = "same-file";
+  const round1 = compute(measurements);
+  let list = addAppliedCurve([], appliedCurveSnapshot({ rows: round1, job, id: "r1", sourceFingerprint: fingerprint }));
+  const reimport = defaultBaseline(list, job, { fingerprint });
+  assert.equal(reimport.kind, "linear");
+  const again = compute(measurements, baselineCurvePoints(reimport));
+  const c50 = (rows) => rows.find((row) => row.channel === "C" && row.tone === 50).outputTone;
+  assert.equal(c50(again), c50(round1));
+  // Even after the curve is confirmed as loaded, it is not the baseline of its own source data…
+  list = confirmApplied(list, "r1");
+  assert.equal(defaultBaseline(list, job, { fingerprint }).kind, "linear");
+  // …but it is for the next sheet (a different measurement).
+  assert.equal(defaultBaseline(list, job, { fingerprint: "next-sheet" }).id, "r1");
+});
+
+test("round-3 S2: an unconfirmed export is offered, not defaulted; re-exporting keeps a confirmation", () => {
+  const rows = compute(measure(["C"], 20));
+  let list = addAppliedCurve([], appliedCurveSnapshot({ rows, job, id: "e1", sourceFingerprint: "m1" }));
+  assert.deepEqual(unconfirmedCurvesForJob(list, job, { fingerprint: "m2" }).map((item) => item.id), ["e1"]);
+  assert.deepEqual(unconfirmedCurvesForJob(list, job, { fingerprint: "m1" }), []);
+  list = confirmApplied(list, "e1");
+  list = addAppliedCurve(list, appliedCurveSnapshot({ rows, job, id: "e2", sourceFingerprint: "m1" }));
+  assert.equal(list.length, 1);
+  assert.ok(list[0].appliedAt);
 });

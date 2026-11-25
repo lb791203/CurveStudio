@@ -48,7 +48,7 @@ import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
 import { STANDARD_LIBRARY, addOrUpdateCustomStandard, archivedStandardAsCustom, buildPatchMap, cmykKey, hasStandard, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260604-density-targets-1";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 import { fetchTextResource } from "./network.js";
-import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCurvePoints, baselineFromApplied, defaultBaseline, normalizeBaseline, withBaselineChannels } from "./rip-baseline.js";
+import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCurvePoints, baselineFromApplied, confirmApplied, defaultBaseline, isConfirmedApplied, normalizeBaseline, unconfirmedCurvesForJob, withBaselineChannels } from "./rip-baseline.js";
 import { exportBlockedMessage, validateExportCurve } from "./curve-validation.js";
 import { validateMeasurements } from "./measurement-validation.js";
 import { buildManualMeasurementSet } from "./manual-apply.js";
@@ -573,6 +573,11 @@ function attachEvents() {
   els.baselineSelect?.addEventListener("change", () => {
     const value = els.baselineSelect.value;
     if (value === "keep") return;
+    if (value !== "linear") {
+      // Choosing a curve here is the operator's confirmation that it was loaded in the RIP.
+      state.appliedCurves = confirmApplied(state.appliedCurves, value);
+      saveAppliedCurves(state.appliedCurves);
+    }
     state.baseline = value === "linear"
       ? { kind: "linear", auto: false }
       : { ...baselineFromApplied(state.appliedCurves.find((item) => item.id === value)), auto: false };
@@ -1305,7 +1310,12 @@ function calculate(options = {}) {
 // was printed (state.baseline). New measurements default to the newest curve exported for the
 // same customer / press / paper; the user can switch to "linear" or another exported curve.
 function resetBaselineForNewMeasurement() {
-  state.baseline = defaultBaseline(state.appliedCurves, currentJobFields());
+  const fingerprint = measurementFingerprint(state.measurements);
+  // The same measurement was saved before: it was printed with the baseline recorded then.
+  const earlier = (state.runs || []).find((run) => run.archive?.baseline && runMeasurementFingerprint(run) === fingerprint);
+  state.baseline = earlier
+    ? { ...normalizeBaseline(earlier.archive.baseline), auto: true }
+    : defaultBaseline(state.appliedCurves, currentJobFields(), { fingerprint });
 }
 
 function currentJobFields() {
@@ -1338,7 +1348,9 @@ async function exportRipCurve(filename, build, type) {
   if (!saved) return;
   // An exported curve is what goes into the RIP: remember it so the next measurement of this
   // job can be stacked on exactly this curve.
-  const snapshot = appliedCurveSnapshot({ rows, job: currentJobFields() });
+  // Recorded as exported only; it becomes a default baseline once the operator confirms the
+  // next sheet was printed with it.
+  const snapshot = appliedCurveSnapshot({ rows, job: currentJobFields(), sourceFingerprint: measurementFingerprint(state.measurements) });
   state.appliedCurves = addAppliedCurve(state.appliedCurves, snapshot);
   saveAppliedCurves(state.appliedCurves);
   renderBaseCurveNotice();
@@ -1383,16 +1395,21 @@ function renderBaseCurveNotice() {
   const selectedId = baseline.kind === "curve" ? baseline.id : "linear";
   const optionHtml = [
     `<option value="linear">${escapeHtml(t("baseline_linear", "线性（RIP 未加曲线）"))}</option>`,
-    ...options.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(t("baseline_exported", "已导出曲线 {time}").replace("{time}", formatLocalTime(item.createdAt)))}</option>`),
+    ...options.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml((isConfirmedApplied(item)
+      ? t("baseline_applied", "已装入 RIP 的曲线 {time}")
+      : t("baseline_exported", "已导出曲线 {time}（未确认装入 RIP）")).replace("{time}", formatLocalTime(item.createdAt)))}</option>`),
   ];
   if (baseline.kind === "curve" && !options.some((item) => item.id === baseline.id)) {
     optionHtml.push(`<option value="keep">${escapeHtml(t("baseline_saved", "本次记录的曲线 {time}").replace("{time}", formatLocalTime(baseline.createdAt)))}</option>`);
   }
   els.baselineSelect.innerHTML = optionHtml.join("");
   els.baselineSelect.value = options.some((item) => item.id === selectedId) || selectedId === "linear" ? selectedId : "keep";
+  const pending = unconfirmedCurvesForJob(state.appliedCurves, currentJobFields(), { fingerprint: measurementFingerprint(state.measurements) });
   els.baseCurveText.textContent = baseline.kind === "curve"
     ? t("base_curve_on", "结果已叠加这条曲线，可直接替换 RIP 里的旧曲线。")
-    : t("base_curve_off", "按印版线性计算。");
+    : pending.length
+      ? t("base_curve_pending", "按印版线性计算。若这张纸是用已导出的曲线印的，请在上面选择它。")
+      : t("base_curve_off", "按印版线性计算。");
 }
 
 function formatLocalTime(value) {
