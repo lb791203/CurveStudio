@@ -765,19 +765,46 @@ function buildResponseCurves(resolved) {
 function invertResponse(points, printedTone, nominalTone) {
   if (!points || !Number.isFinite(printedTone)) return NaN;
   if (points.monotone) return invertMonotone(points, printedTone, nominalTone);
-  const candidates = [];
-  for (let i = 1; i < points.length; i += 1) {
+  return invertNearestCrossing(points, printedTone, nominalTone);
+}
+
+// Non-monotonic data: walk outward from the nominal tone and stop as soon as no remaining
+// segment can hold a crossing closer than the best one found. Noisy but nearly monotonic
+// data (the usual case) touches only a few segments instead of all of them.
+function invertNearestCrossing(points, printedTone, nominalTone) {
+  const n = points.length;
+  if (n < 2) return NaN;
+  let lo = 0; let hi = n - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (points[mid][0] < nominalTone) lo = mid + 1; else hi = mid;
+  }
+  // Segment i joins points[i-1] and points[i].
+  let left = Math.max(1, Math.min(lo, n - 1));
+  let right = left + 1;
+  const segmentDistance = (i) => Math.max(0, points[i - 1][0] - nominalTone, nominalTone - points[i][0]);
+  const crossing = (i) => {
     const [x1, y1] = points[i - 1];
     const [x2, y2] = points[i];
-    const low = Math.min(y1, y2);
-    const high = Math.max(y1, y2);
-    if (printedTone < low || printedTone > high) continue;
-    candidates.push(Math.abs(y2 - y1) < 1e-6 ? x1 : x1 + (printedTone - y1) * (x2 - x1) / (y2 - y1));
+    if (printedTone < Math.min(y1, y2) || printedTone > Math.max(y1, y2)) return NaN;
+    return Math.abs(y2 - y1) < 1e-6 ? x1 : x1 + (printedTone - y1) * (x2 - x1) / (y2 - y1);
+  };
+  let best = NaN;
+  let bestDistance = Infinity;
+  while (left >= 1 || right <= n - 1) {
+    const leftDistance = left >= 1 ? segmentDistance(left) : Infinity;
+    const rightDistance = right <= n - 1 ? segmentDistance(right) : Infinity;
+    const useLeft = leftDistance <= rightDistance;
+    const distance = useLeft ? leftDistance : rightDistance;
+    if (distance > bestDistance) break;
+    const value = crossing(useLeft ? left : right);
+    if (useLeft) left -= 1; else right += 1;
+    if (Number.isFinite(value) && Math.abs(value - nominalTone) < bestDistance) {
+      best = value;
+      bestDistance = Math.abs(value - nominalTone);
+    }
   }
-  if (!candidates.length) return NaN;
-  return candidates.reduce((best, value) => (
-    Math.abs(value - nominalTone) < Math.abs(best - nominalTone) ? value : best
-  ), candidates[0]);
+  return best;
 }
 
 function invertMonotone(points, printedTone, nominalTone) {

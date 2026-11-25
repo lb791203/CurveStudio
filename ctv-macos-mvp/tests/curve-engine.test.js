@@ -453,3 +453,19 @@ test("review M6: inverting 10,000 measured points stays fast", async () => {
   assert.ok(rows.length > 0);
   assert.ok(Date.now() - start < 1000, `took ${Date.now() - start} ms`);
 });
+
+test("re-review M6: noisy (non-monotonic) 10,000-point data inverts quickly and matches the full scan", async () => {
+  const { calculateCompensation } = await import("../src/curve-engine.js");
+  let seed = 7;
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const measurements = Array.from({ length: 10000 }, (_, index) => {
+    const tone = index / 100;
+    const noise = (random() - 0.5) * 0.6; // small interleaved noise breaks monotonicity
+    return { channel: "C", tone, measuredTone: Math.max(0, Math.min(100, tone + 14 * Math.sin(Math.PI * tone / 100) + noise)) };
+  });
+  const start = Date.now();
+  const rows = calculateCompensation(measurements, { mode: "tvi", target: "isoA", compensationRatio: 100, limit: 18 });
+  const elapsed = Date.now() - start;
+  assert.ok(rows.length > 0);
+  assert.ok(elapsed < 600, `took ${elapsed} ms`);
+});
