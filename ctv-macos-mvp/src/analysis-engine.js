@@ -329,6 +329,20 @@ function diagnosePressCore(results, options = {}) {
     };
   }
 
+  const lowChannels = channelStats.filter((item) => item.midAverage <= -8);
+  if (lowChannels.length) {
+    return {
+      level: "warning",
+      title: "TVI 偏小 / 网点扩大不足",
+      ratio: 50,
+      messages: [
+        ...lowChannels.map((item) => `${item.channel} 中间调偏差 ${item.midAverage.toFixed(1)}%，网点扩大明显不足；先确认实地密度和测量，再加网补偿。`),
+        "建议补偿后重新印刷并复测。",
+      ],
+      channelStats,
+    };
+  }
+
   if (kSevere || cModerate || highChannels.length) {
     return {
       level: "warning",
@@ -342,7 +356,7 @@ function diagnosePressCore(results, options = {}) {
     };
   }
 
-  const toleranceIssues = controlPointToleranceIssues(results, options.toneTolerances, options.metric);
+  const toleranceIssues = measuredToleranceIssues(results, options.toneTolerances, options.metric);
   if (toleranceIssues.length) {
     const metricLabel = (options.metric || "tvi").toUpperCase();
     return {
@@ -359,6 +373,20 @@ function diagnosePressCore(results, options = {}) {
     };
   }
 
+  const missingControl = missingControlPoints(results);
+  if (missingControl.length) {
+    return {
+      level: "incomplete",
+      title: "控制点缺测 / 待复测",
+      ratio: 30,
+      messages: [
+        `缺少实测控制点：${missingControl.map((item) => `${item.channel} ${item.tones.join("/")}%`).join("，")}。`,
+        "补测这些点后才能判断是否在容差内。",
+      ],
+      channelStats,
+    };
+  }
+
   return {
     level: "pass",
     title: "接近标准",
@@ -369,19 +397,36 @@ function diagnosePressCore(results, options = {}) {
 }
 
 const TOLERANCE_CONTROL_TONES = [25, 50, 75];
+const DEFAULT_TONE_TOLERANCE = 5;
+const CONTROL_POINT_WINDOW = 5;
 
-function controlPointToleranceIssues(results, toneTolerances, metric) {
-  if (!toneTolerances || !metric) return [];
+// Both directions, on every measured point (interpolated grid points excluded). The
+// tolerance of the nearest control tone (25/50/75) applies; outside 15-85 % only the
+// standard's explicit tolerances are used.
+function measuredToleranceIssues(results, toneTolerances, metric) {
   const issues = [];
   for (const row of results) {
-    const tone = Math.round(Number(row.tone));
-    if (!TOLERANCE_CONTROL_TONES.includes(tone) || Math.abs(Number(row.tone) - tone) > 0.01) continue;
-    const tolerance = Number(toneTolerances?.[row.channel]?.[metric]?.[tone]);
+    if (row.interpolated) continue;
+    const tone = Number(row.tone);
     const delta = Number(row.tviDelta);
-    if (!Number.isFinite(tolerance) || tolerance <= 0 || !Number.isFinite(delta)) continue;
-    if (Math.abs(delta) > tolerance + 1e-9) issues.push({ channel: row.channel, tone, delta, tolerance });
+    if (!Number.isFinite(tone) || !Number.isFinite(delta) || tone <= 0 || tone >= 100) continue;
+    const control = TOLERANCE_CONTROL_TONES.reduce((best, item) => (Math.abs(item - tone) < Math.abs(best - tone) ? item : best));
+    const explicit = Number(toneTolerances?.[row.channel]?.[metric]?.[control]);
+    if (!Number.isFinite(explicit) && (tone < 15 || tone > 85)) continue;
+    const tolerance = Number.isFinite(explicit) && explicit > 0 ? explicit : DEFAULT_TONE_TOLERANCE;
+    if (Math.abs(delta) > tolerance + 1e-9) issues.push({ channel: row.channel, tone: Number(tone.toFixed(2)), delta, tolerance });
   }
   return issues.sort((a, b) => (Math.abs(b.delta) - b.tolerance) - (Math.abs(a.delta) - a.tolerance));
+}
+
+// A channel is only judged "in tolerance" when it was actually measured near 25/50/75 %.
+function missingControlPoints(results) {
+  return Object.entries(groupByChannel(results.filter((row) => !row.interpolated && Number.isFinite(Number(row.tviDelta)))))
+    .map(([channel, rows]) => ({
+      channel,
+      tones: TOLERANCE_CONTROL_TONES.filter((control) => !rows.some((row) => Math.abs(Number(row.tone) - control) <= CONTROL_POINT_WINDOW)),
+    }))
+    .filter((item) => item.tones.length);
 }
 
 export function analyzeCurveSafety(results) {

@@ -58,12 +58,12 @@ function renderVerdictBanner(diagnosis, state) {
   const ratio = diagnosis.ratio;
   const verdicts = {
     pass: {
-      answer: t("verdict_pass", "可以上机"),
+      answer: t("verdict_pass", "实测点都在容差内"),
       next: t("verdict_pass_next", "偏差已在标准附近：用 {ratio}% 补偿强度轻补偿，或保持当前曲线。"),
       action: "curve",
     },
     warning: {
-      answer: t("verdict_warning", "可以上机，需补偿后复测"),
+      answer: t("verdict_warning", "需补偿后复测"),
       next: t("verdict_warning_next", "用 {ratio}% 补偿强度按通道生成曲线，印刷后重新测量，逐轮收敛。"),
       action: "curve",
     },
@@ -71,6 +71,11 @@ function renderVerdictBanner(diagnosis, state) {
       answer: t("verdict_danger", "先检查机器，再做正式曲线"),
       next: t("verdict_danger_next", "按下面提示排查印刷机；必须马上生产时，只用 {ratio}% 低强度补偿救急，并尽快复测。"),
       action: "curve",
+    },
+    incomplete: {
+      answer: t("verdict_incomplete", "控制点缺测，待复测"),
+      next: t("verdict_incomplete_next", "补测缺少的 25/50/75% 控制点后再判断。"),
+      action: "measurement",
     },
     mode: {
       answer: t("verdict_mode", "当前曲线模式算不出阶调"),

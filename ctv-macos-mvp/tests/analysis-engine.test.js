@@ -377,14 +377,29 @@ test("diagnosePress does not pass a press whose control points exceed the standa
     tviDelta: channel === "K" && tone === 25 ? 7 : channel === "K" && tone === 50 ? 5 : 1,
   })));
   const toneTolerances = Object.fromEntries(["C", "M", "Y", "K"].map((channel) => [channel, { tvi: { 25: 3, 50: 4, 75: 3 } }]));
-  const withoutTolerance = diagnosePress(rows);
-  assert.equal(withoutTolerance.level, "pass");
+  // Without standard tolerances the default ±5 still catches K 25% +7.
+  assert.equal(diagnosePress(rows).level, "warning");
   const diagnosis = diagnosePress(rows, { toneTolerances, metric: "tvi" });
   assert.equal(diagnosis.level, "warning");
   assert.match(diagnosis.title, /超出容差/);
   assert.equal(diagnosis.toleranceIssues.length, 2);
   assert.match(diagnosis.messages[0], /K 25% TVI 偏差 \+7\.0%，超出容差 ±3%/);
-  assert.equal(diagnosePress(rows, { toneTolerances, metric: null }).level, "pass");
+});
+
+test("review M3: a large under-gain at a measured point is never a pass", () => {
+  const rows = ["C", "M", "Y", "K"].flatMap((channel) => [25, 40, 50, 75].map((tone) => ({
+    channel, tone, tviDelta: channel === "C" && tone === 40 ? -30 : 0.5,
+  })));
+  const diagnosis = diagnosePress(rows);
+  assert.notEqual(diagnosis.level, "pass");
+  assert.ok(diagnosis.messages.some((text) => /^C /.test(text)));
+});
+
+test("review M3: missing control points give 'to be re-measured', not a pass", () => {
+  const rows = ["C", "M", "Y", "K"].flatMap((channel) => [25, 50].map((tone) => ({ channel, tone, tviDelta: 0.5 })));
+  const diagnosis = diagnosePress(rows);
+  assert.equal(diagnosis.level, "incomplete");
+  assert.match(diagnosis.messages[0], /75/);
 });
 
 test("diagnosePress speaks CTV in CTV mode", () => {
