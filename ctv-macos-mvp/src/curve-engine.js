@@ -728,6 +728,23 @@ function smoothChannel(items, strength) {
   return sorted;
 }
 
+// Work cap: a real test chart has well under a hundred tones per channel. Very dense data
+// (thousands of points) is averaged into 0.1 % tone bins, at most 1001 points, so the
+// inversion stays fast on the UI thread whatever the data looks like.
+const MAX_RESPONSE_POINTS = 1001;
+function capResponseResolution(tones) {
+  if (tones.size <= MAX_RESPONSE_POINTS) return tones;
+  const binned = new Map();
+  for (const [tone, bucket] of tones) {
+    const key = Math.round(tone * 10) / 10;
+    const target = binned.get(key) || { sum: 0, count: 0 };
+    target.sum += bucket.sum;
+    target.count += bucket.count;
+    binned.set(key, target);
+  }
+  return binned;
+}
+
 // Measured press response per channel: nominal tone -> measured printed tone.
 // Repeated tones are averaged and 0 -> 0 / 100 -> 100 anchors are added when missing
 // (tone value is paper/solid-relative by definition).
@@ -744,7 +761,8 @@ function buildResponseCurves(resolved) {
     tones.set(key, bucket);
   }
   const curves = new Map();
-  for (const [channel, tones] of byChannel) {
+  for (const [channel, rawTones] of byChannel) {
+    const tones = capResponseResolution(rawTones);
     const points = [...tones].map(([tone, bucket]) => [tone, bucket.sum / bucket.count]);
     if (!points.some(([tone]) => tone === 0)) points.push([0, 0]);
     if (!points.some(([tone]) => tone === 100)) points.push([100, 100]);

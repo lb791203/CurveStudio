@@ -469,3 +469,21 @@ test("re-review M6: noisy (non-monotonic) 10,000-point data inverts quickly and 
   assert.ok(rows.length > 0);
   assert.ok(elapsed < 600, `took ${elapsed} ms`);
 });
+
+test("round-3 M6: 10,000 points whose crossings lie far from the nominal tone stay fast (work cap)", async () => {
+  const { calculateCompensation } = await import("../src/curve-engine.js");
+  // Noisy, nearly flat response: for most tones the only crossing of the target is in the
+  // last segment (towards the 100 % anchor), so an unbounded search walks the whole curve
+  // for every one of the 10,000 points.
+  let seed = 11;
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const measurements = Array.from({ length: 10000 }, (_, index) => {
+    const tone = index / 100;
+    return { channel: "C", tone, measuredTone: 5 + random() };
+  });
+  const start = Date.now();
+  const rows = calculateCompensation(measurements, { mode: "tvi", target: "isoA", compensationRatio: 100, limit: 18 });
+  const elapsed = Date.now() - start;
+  assert.ok(rows.length > 0);
+  assert.ok(elapsed < 1000, `took ${elapsed} ms`);
+});
