@@ -1,17 +1,48 @@
 import { labFromSpectralRow, spectralSamples } from "./spectral-color.js";
 
 const LOCAL_STORAGE_WARN_BYTES = 4 * 1024 * 1024;
+// Run history and last project live in ONE key, so a save is a single setItem: it either
+// fully replaces both or leaves both untouched (no rollback step that could itself fail).
+// The two legacy keys are still read, and removed after the first successful combined write.
+const STATE_KEY = "ctv-run-state";
 const RUNS_KEY = "ctv-runs";
 const LAST_PROJECT_KEY = "ctv-last-project";
+
+function readJson(key) {
+  try {
+    const text = localStorage.getItem(key);
+    return text === null ? undefined : JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+function readState() {
+  const combined = readJson(STATE_KEY);
+  if (combined && typeof combined === "object" && !Array.isArray(combined)) {
+    return { runs: Array.isArray(combined.runs) ? combined.runs : [], lastProject: combined.lastProject ?? null };
+  }
+  const runs = readJson(RUNS_KEY);
+  const lastProject = readJson(LAST_PROJECT_KEY);
+  return { runs: Array.isArray(runs) ? runs : [], lastProject: lastProject ?? null };
+}
+
+function writeState(next, label) {
+  const result = saveStorageJson(STATE_KEY, { schemaVersion: 1, runs: next.runs, lastProject: next.lastProject }, label);
+  if (result.ok) {
+    try {
+      localStorage.removeItem(RUNS_KEY);
+      localStorage.removeItem(LAST_PROJECT_KEY);
+    } catch {
+      // Legacy keys are only a fallback; the combined key is already authoritative.
+    }
+  }
+  return result;
+}
 const APPLIED_CURVES_KEY = "ctv-applied-curves";
 
 export function loadStoredRuns() {
-  try {
-    const runs = JSON.parse(localStorage.getItem(RUNS_KEY) || "[]");
-    return Array.isArray(runs) ? runs : [];
-  } catch {
-    return [];
-  }
+  return readState().runs;
 }
 
 // Curves that were exported to the RIP (see rip-baseline.js).
@@ -29,34 +60,11 @@ export function saveAppliedCurves(items) {
 }
 
 export function loadLastProject() {
-  try {
-    return JSON.parse(localStorage.getItem(LAST_PROJECT_KEY) || "null");
-  } catch {
-    return null;
-  }
+  return readState().lastProject;
 }
 
-// Both writes succeed or neither is kept: if the project write fails, the previous run
-// history is put back so history and last project never disagree.
 export function saveRunsAndLastProject(runs, archive) {
-  let previousRuns = null;
-  try {
-    previousRuns = localStorage.getItem(RUNS_KEY);
-  } catch {
-    previousRuns = null;
-  }
-  const runResult = saveStorageJson(RUNS_KEY, runs, "Run 历史");
-  if (!runResult.ok) return runResult;
-  const projectResult = saveStorageJson(LAST_PROJECT_KEY, archive, "最近项目");
-  if (!projectResult.ok) {
-    try {
-      if (previousRuns === null) localStorage.removeItem(RUNS_KEY);
-      else localStorage.setItem(RUNS_KEY, previousRuns);
-    } catch {
-      // Nothing more can be done; the warning below still reaches the user.
-    }
-  }
-  return projectResult;
+  return writeState({ runs, lastProject: archive }, "Run 历史和最近项目");
 }
 
 // Run history must reopen to the same result, so every patch row is kept. Only the bulky
@@ -82,9 +90,13 @@ export function compactProjectArchiveForRun(archive = {}) {
 function compactSpectralRow(row) {
   if (!row || typeof row !== "object" || Array.isArray(row)) return row;
   if (!spectralSamples(row).length) return row;
-  const lab = labFromSpectralRow(row);
+  // Spectral data is only dropped when a complete Lab remains (measured, or computed here);
+  // otherwise the row is kept as it is. A blank LAB_L cell is "missing", not 0.
+  const hasLab = ["lab_l", "lab_a", "lab_b"].every((key) => isFilled(row[key]));
+  const lab = hasLab ? null : labFromSpectralRow(row);
+  if (!hasLab && !lab) return row;
   const kept = Object.fromEntries(Object.entries(row).filter(([key]) => !SPECTRAL_KEY.test(String(key).toLowerCase())));
-  if (lab && !Number.isFinite(Number(kept.lab_l))) {
+  if (!hasLab) {
     kept.lab_l = Number(lab.l.toFixed(3));
     kept.lab_a = Number(lab.a.toFixed(3));
     kept.lab_b = Number(lab.b.toFixed(3));
@@ -92,21 +104,27 @@ function compactSpectralRow(row) {
   return kept;
 }
 
+function isFilled(value) {
+  return value !== null && value !== undefined && String(value).trim() !== "" && Number.isFinite(Number(value));
+}
+
 const SPECTRAL_KEY = /(?:spectral_nm|nm_?|spectrum_?)\d{3}$/;
 
 export function saveLastProject(archive) {
-  return saveStorageJson(LAST_PROJECT_KEY, archive, "最近项目");
+  return writeState({ ...readState(), lastProject: archive }, "最近项目");
 }
 
 export function saveStoredRuns(runs) {
-  return saveStorageJson(RUNS_KEY, runs, "Run 历史");
+  return writeState({ ...readState(), runs }, "Run 历史");
 }
 
 export function clearStoredRuns() {
+  writeState({ ...readState(), runs: [] }, "Run 历史");
   localStorage.removeItem(RUNS_KEY);
 }
 
 export function clearStoredProject() {
+  writeState({ ...readState(), lastProject: null }, "最近项目");
   localStorage.removeItem(LAST_PROJECT_KEY);
 }
 

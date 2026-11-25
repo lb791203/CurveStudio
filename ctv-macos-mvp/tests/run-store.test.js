@@ -103,24 +103,43 @@ test("run storage recovers safely from malformed or wrong-shaped JSON", () => {
   });
 });
 
-test("run storage reports quota failures and does not continue a combined save", () => {
-  const storage = memoryStorage({ throwOnSet: "ctv-runs" });
+test("run storage reports quota failures and leaves the previous history and project untouched", () => {
+  const before = JSON.stringify({ schemaVersion: 1, runs: [{ runId: "old" }], lastProject: { job: { customer: "Old" } } });
+  const storage = memoryStorage({ initial: { "ctv-run-state": before }, throwOnSet: "ctv-run-state" });
   withLocalStorage(storage, () => {
-    const result = saveRunsAndLastProject([{ runId: "run-1" }], { job: { customer: "Demo" } });
+    const result = saveRunsAndLastProject([{ runId: "run-1" }, { runId: "old" }], { job: { customer: "Demo" } });
 
     assert.equal(result.ok, false);
-    assert.match(result.warning, /Run 历史 写入失败：quota exceeded/);
-    assert.deepEqual(storage.calls.filter(([operation]) => operation === "set").map(([, key]) => key), ["ctv-runs"]);
+    assert.match(result.warning, /写入失败：quota exceeded/);
+    assert.equal(storage.calls.filter(([operation]) => operation === "set").length, 1);
+    assert.deepEqual(loadStoredRuns(), [{ runId: "old" }]);
+    assert.deepEqual(loadLastProject(), { job: { customer: "Old" } });
   });
 });
 
-test("review M4: a failed project write rolls back the run history", () => {
-  const storage = memoryStorage({ initial: { "ctv-runs": "[{\"runId\":\"old\"}]" }, throwOnSet: "ctv-last-project" });
+test("re-review M4: history and project are one write; legacy keys are read and then migrated", () => {
+  const storage = memoryStorage({ initial: { "ctv-runs": "[{\"runId\":\"legacy\"}]", "ctv-last-project": "{\"job\":{}}" } });
   withLocalStorage(storage, () => {
-    const result = saveRunsAndLastProject([{ runId: "new" }, { runId: "old" }], { job: {} });
-    assert.equal(result.ok, false);
-    assert.deepEqual(loadStoredRuns(), [{ runId: "old" }]);
+    assert.deepEqual(loadStoredRuns(), [{ runId: "legacy" }]);
+    assert.equal(saveRunsAndLastProject([{ runId: "new" }, { runId: "legacy" }], { job: { customer: "A" } }).ok, true);
+    assert.equal(storage.data.has("ctv-runs"), false);
+    assert.equal(storage.data.has("ctv-last-project"), false);
+    assert.deepEqual(loadStoredRuns().map((run) => run.runId), ["new", "legacy"]);
+    assert.deepEqual(loadLastProject(), { job: { customer: "A" } });
   });
+});
+
+test("re-review M4: a spectral row with a blank LAB_L keeps a usable Lab (computed) or its spectrum", () => {
+  const spectral = Object.fromEntries(Array.from({ length: 31 }, (_, i) => [`spectral_nm${380 + i * 10}`, 0.8]));
+  const archive = compactProjectArchiveForRun({ importInfo: { rawRows: [
+    { sample_id: "A", lab_l: "", lab_a: "", lab_b: "", ...spectral },
+    { sample_id: "B", lab_l: "", spectral_nm400: "n/a", spectral_nm410: "n/a" },
+  ] } });
+  const [a, b] = archive.importInfo.rawRows;
+  assert.ok(Number.isFinite(a.lab_l) && a.lab_l > 80);
+  assert.equal(Object.keys(a).some((key) => key.startsWith("spectral_nm")), false);
+  // No usable Lab can be computed: the spectral columns are kept instead of being thrown away.
+  assert.ok(Object.keys(b).some((key) => key.startsWith("spectral_nm")));
 });
 
 test("run storage rejects payloads over 4MB before touching localStorage", () => {
@@ -143,7 +162,7 @@ test("run storage supports independent save and clear operations", () => {
     clearStoredRuns();
     clearStoredProject();
 
-    assert.equal(storage.data.has("ctv-runs"), false);
-    assert.equal(storage.data.has("ctv-last-project"), false);
+    assert.deepEqual(loadStoredRuns(), []);
+    assert.equal(loadLastProject(), null);
   });
 });
