@@ -8,6 +8,7 @@
     "dev:node": "node scripts/serve-static.mjs",
     "build:dist": "node scripts/build-dist.mjs",
     "test": "node scripts/run-tests.mjs",
+    "test:ui": "node --test tests/ui/workflows.ui.mjs",
     "audit:release": "node scripts/audit-release.mjs",
     "verify:windows-artifacts": "node scripts/verify-windows-artifacts.mjs",
     "validate:fixtures": "node scripts/validate-importers.mjs",
