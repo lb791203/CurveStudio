@@ -455,6 +455,7 @@ export function renderG7(state, els) {
           <span class="verdict-eyebrow">${escapeHtml(t("g7_conclusion_label", "G7 结论"))} · ${escapeHtml(t("g7_reference_only", "基于 G7® 方法的参考检查，非 Idealliance 认证结果"))}</span>
           <strong class="verdict-answer">${escapeHtml(translateDynamicText(g7.conclusion?.title || g7.status))}</strong>
           ${g7.conclusion?.summary ? `<p class="verdict-next">${g7Level === "danger" ? `${escapeHtml(t("g7_failed_items_label", "未达标项目"))}：` : ""}${escapeHtml(translateDynamicText(g7.conclusion.summary))}</p>` : ""}
+          ${(g7.qualityNotes || []).map((item) => `<p class="verdict-next">${escapeHtml(translateDynamicText(item))}</p>`).join("")}
           ${(g7.conclusion?.recommendations || []).length ? `<ul class="verdict-reasons">${g7.conclusion.recommendations.map((item) => `<li>${escapeHtml(translateDynamicText(item))}</li>`).join("")}</ul>` : ""}
         </div>
       </section>

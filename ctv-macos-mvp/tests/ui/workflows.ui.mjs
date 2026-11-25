@@ -146,3 +146,80 @@ test("UI round-3 S2: exporting, then re-importing the same file, does not stack 
   assert.deepEqual(errors, []);
   await close();
 });
+
+// Round 4: a K-only sheet, imported as a real file.
+const kSheet = (gain) => `channel,tone,measured_tone\n${[10, 25, 40, 50, 75, 90].map((tone) => `K,${tone},${Math.min(100, tone + gain * Math.sin(Math.PI * tone / 100)).toFixed(2)}`).join("\n")}\n`;
+const toneAt = (csv, channel, tone) => Number(csv.split("\n").find((line) => new RegExp(`^${channel},${tone}(\\.00)?,`).test(line)).split(",")[2]);
+
+async function setJob(page, job) {
+  await page.evaluate((fields) => {
+    document.querySelector("#jobCustomerInput").value = fields.customer;
+    document.querySelector("#jobPressInput").value = fields.press;
+    document.querySelector("#jobPaperInput").value = fields.paper;
+  }, job);
+}
+
+async function importSheet(page, name, text) {
+  await page.setInputFiles("#fileInput", { name, mimeType: "text/csv", buffer: Buffer.from(text) });
+  await page.waitForTimeout(800);
+}
+
+async function exportRip(page, file) {
+  await page.evaluate((path) => { window.__saveAnswer = path; document.querySelector("#exportSimpleRipButton").click(); }, file);
+  await page.waitForTimeout(300);
+  return page.evaluate(() => window.__writes.at(-1).contents);
+}
+
+async function chooseBaseline(page, predicate) {
+  await page.evaluate((source) => {
+    const select = document.querySelector("#baselineSelect");
+    const pick = [...select.options].find(new Function("option", `return ${source}`));
+    select.value = pick.value;
+    select.dispatchEvent(new Event("change"));
+  }, predicate);
+  await page.waitForTimeout(300);
+}
+
+test("UI round-4 S2: the same K readings imported for another customer / press / paper start from linear", async () => {
+  const jobA = { customer: "客户A", press: "印机1", paper: "铜版纸" };
+  const jobB = { customer: "客户B", press: "印机2", paper: "胶版纸" };
+  // Reference: the second sheet computed on a linear baseline in a fresh workspace.
+  const fresh = await openApp();
+  await setJob(fresh.page, jobB);
+  await importSheet(fresh.page, "k2.csv", kSheet(4));
+  const linearK50 = toneAt(await exportRip(fresh.page, "/tmp/ref.csv"), "K", 50);
+  await fresh.close();
+
+  const { page, errors, close } = await openApp();
+  await setJob(page, jobA);
+  await importSheet(page, "k1.csv", kSheet(20));
+  await exportRip(page, "/tmp/a1.csv");
+  await chooseBaseline(page, "option.value !== 'linear' && option.value !== 'keep'");
+  await importSheet(page, "k2.csv", kSheet(4));
+  const jobAK50 = toneAt(await exportRip(page, "/tmp/a2.csv"), "K", 50);
+  assert.notEqual(jobAK50, linearK50, "job A stacks on its confirmed curve");
+
+  await setJob(page, jobB);
+  await importSheet(page, "k2.csv", kSheet(4));
+  assert.equal(await page.$eval("#baselineSelect", (select) => select.value), "linear");
+  assert.equal(toneAt(await exportRip(page, "/tmp/b.csv"), "K", 50), linearK50);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test("UI round-4 S2: a confirmed baseline survives re-importing the same file without a manual save", async () => {
+  const { page, errors, close } = await openApp();
+  await setJob(page, { customer: "客户A", press: "印机1", paper: "铜版纸" });
+  await importSheet(page, "k1.csv", kSheet(20));
+  await exportRip(page, "/tmp/a1.csv");
+  await importSheet(page, "k2.csv", kSheet(4));
+  // The sheet was printed with the round-1 curve: the operator confirms it, then does not save.
+  await chooseBaseline(page, "option.value !== 'linear' && option.value !== 'keep'");
+  const confirmed = await page.$eval("#baselineSelect", (select) => select.value);
+  const before = toneAt(await exportRip(page, "/tmp/a2.csv"), "K", 50);
+  await importSheet(page, "k2.csv", kSheet(4));
+  assert.equal(await page.$eval("#baselineSelect", (select) => select.value), confirmed);
+  assert.equal(toneAt(await exportRip(page, "/tmp/a3.csv"), "K", 50), before);
+  assert.deepEqual(errors, []);
+  await close();
+});

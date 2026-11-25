@@ -141,6 +141,42 @@ export function curvePointsFromRows(rows = []) {
   return byChannel;
 }
 
+// Saved runs are matched on the exact job (customer, press and paper) and on the measurement
+// itself: the same readings filed under another job never bring that job's RIP curve along.
+export function savedRunBaseline(runs = [], job = {}, fingerprint = "", fingerprintOf = () => "") {
+  const run = matchingRun(runs, job, fingerprint, fingerprintOf);
+  return run ? normalizeBaseline(run.archive?.baseline || run.baseline) : null;
+}
+
+// Confirming a baseline is recorded on the newest saved run of this job + measurement at once,
+// so re-importing the same file before a manual save keeps the confirmed curve.
+export function withRunBaseline(runs = [], job = {}, fingerprint = "", fingerprintOf = () => "", baseline) {
+  const run = matchingRun(runs, job, fingerprint, fingerprintOf);
+  if (!run) return null;
+  const stored = normalizeBaseline(baseline);
+  return runs.map((item) => (item === run
+    ? { ...item, baseline: stored, archive: item.archive ? { ...item.archive, baseline: stored } : item.archive }
+    : item));
+}
+
+function matchingRun(runs, job, fingerprint, fingerprintOf) {
+  if (!fingerprint) return null;
+  return (runs || []).find((run) => (run?.archive?.baseline || run?.baseline)
+    && sameJobExact(run.archive?.job || {}, job)
+    && baselineFitsJob(run.archive?.baseline || run.baseline, job)
+    && fingerprintOf(run) === fingerprint) || null;
+}
+
+// A RIP curve belongs to the job it was exported for; linear fits every job.
+export function baselineFitsJob(baseline, job = {}) {
+  if (baseline?.kind !== "curve") return true;
+  return sameJob(baseline.job || {}, job);
+}
+
+function sameJobExact(a, b) {
+  return ["customer", "press", "paper"].every((key) => String(a[key] || "").trim() === String(b[key] || "").trim());
+}
+
 function sameJob(a, b) {
   const same = (x, y) => String(x || "").trim() === String(y || "").trim();
   if (!same(a.customer, b.customer) || !same(a.press, b.press)) return false;

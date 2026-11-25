@@ -23,17 +23,22 @@ if (args[0] === "--update-hashes") {
 
 const allowed = new Set(allowedFiles(root, whitelist));
 // Tauri embeds the frontend as an asset table keyed by "/<path>". In a Mach-O binary those
-// keys are packed back to back ("/src/features.js/src/exporter.js"), so a key ends at the
-// first known extension that is not followed by another letter or digit (".js" vs ".json"),
-// and the next "/src/…" starts a new key.
-// A key may also follow another key or a non-path byte directly ("…index.htmlsrc/app.js"), so
-// no separator is required in front of it.
-// The key can also run straight into the next symbol ("…/src/exporter.jsIllegalEventName"), so
-// only a lowercase letter or digit continues an extension, and a match that merely extends a
-// whitelisted path is read as that path.
-const RESOURCE_PATH_SOURCE = String.raw`((?:samples|reference-data|src)\/[A-Za-z0-9._\/-]+?\.(?:json|txt|csv|js|css|it8|cgats))(?![a-z0-9])`;
+// keys sit back to back with no separator, and can run straight into the next symbol:
+//   "…application/json/src/features.js/src/exporter.jsIllegalEventName…"
+// The scan therefore reads keys key by key:
+//   - a whitelisted key must be present (plain substring test);
+//   - every key-like path under a frontend root is read up to its extension. An extension is only
+//     complete when no lowercase letter or digit follows (".js" vs ".json"), so an uppercase
+//     symbol name may follow, but ".", "-" or "_" may not ("src/app.js.bak" is another file);
+//   - colour or measurement data (.icc .icm .cxf .it8 .cgats) anywhere in the binary must be
+//     whitelisted, whatever folder it sits in.
+const ROOTS = String.raw`(?:samples|reference-data|src|assets|profiles)`;
+const EXTENSIONS = String.raw`(?:json|txt|csv|js|jsx|mjs|ts|map|css|html|svg|png|it8|cgats|icc|icm|cxf)`;
+const RESOURCE_PATH_SOURCE = String.raw`(${ROOTS}\/[A-Za-z0-9._\/-]+?\.${EXTENSIONS})(?![a-z0-9])`;
 const RESOURCE_PATH = new RegExp(RESOURCE_PATH_SOURCE);
 const RESOURCE_PATH_GLOBAL = new RegExp(RESOURCE_PATH_SOURCE, "g");
+const DATA_FILE_GLOBAL = /([A-Za-z0-9_-][A-Za-z0-9._-]*\.(?:icc|icm|cxf|it8|cgats))(?![a-z0-9])/gi;
+const PATH_TAIL = /^[._-][A-Za-z0-9._-]*/;
 
 if (args[0] === "--binary") {
   const binaries = args.slice(1);
@@ -95,7 +100,15 @@ function checkBinary(binary) {
   }
   const text = fs.readFileSync(binary).toString("latin1");
   const found = new Set();
-  for (const match of text.matchAll(RESOURCE_PATH_GLOBAL)) found.add(whitelistedPrefix(match[1]));
+  for (const match of text.matchAll(RESOURCE_PATH_GLOBAL)) {
+    const tail = text.slice(match.index + match[0].length).match(PATH_TAIL)?.[0] || "";
+    // "src/app.js" followed by ".bak" is the key "src/app.js.bak", not src/app.js.
+    found.add(match[1] + tail);
+  }
+  const allowedNames = new Set([...allowed].map((file) => path.posix.basename(file)));
+  for (const match of text.matchAll(DATA_FILE_GLOBAL)) {
+    if (!allowedNames.has(match[1])) failures.push(`${path.basename(binary)} embeds non-whitelisted data file: ${match[1]}`);
+  }
   const present = new Set([...allowed].filter((file) => text.includes(file)));
   for (const file of found) {
     if (!allowed.has(file)) failures.push(`${path.basename(binary)} embeds non-whitelisted resource: ${file}`);
@@ -106,13 +119,6 @@ function checkBinary(binary) {
   const embeddedData = Object.keys(whitelist.data).filter((file) => found.has(file)).length;
   console.log(`${path.basename(binary)}: ${found.size} embedded resource paths, ${embeddedData} whitelisted data files`);
   return { found, present };
-}
-
-// "src/exporter.js" + "x…" (lowercase symbol that happens to follow) still names src/exporter.js.
-function whitelistedPrefix(match) {
-  if (allowed.has(match)) return match;
-  const prefix = [...allowed].filter((file) => match.startsWith(file) && !/^on\b|^on$/.test(match.slice(file.length))).sort((a, b) => b.length - a.length)[0];
-  return prefix || match;
 }
 
 function forbiddenName(file) {

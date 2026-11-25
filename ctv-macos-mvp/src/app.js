@@ -48,7 +48,7 @@ import { buildRunMetrics } from "./run-compare.js?v=20260521-icc-p4";
 import { STANDARD_LIBRARY, addOrUpdateCustomStandard, archivedStandardAsCustom, buildPatchMap, cmykKey, hasStandard, isCustomStandard, makeCustomStandard, removeCustomStandard, setCustomStandards, standardById, targetOptions } from "./standards.js?v=20260604-density-targets-1";
 import { algorithmDescription, deltaFormulaLabel } from "./ui-labels.js";
 import { fetchTextResource } from "./network.js";
-import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCurvePoints, baselineFromApplied, confirmApplied, defaultBaseline, isConfirmedApplied, normalizeBaseline, unconfirmedCurvesForJob, withBaselineChannels } from "./rip-baseline.js";
+import { addAppliedCurve, appliedCurveSnapshot, appliedCurvesForJob, baselineCurvePoints, baselineFromApplied, confirmApplied, defaultBaseline, isConfirmedApplied, normalizeBaseline, savedRunBaseline, withRunBaseline, baselineFitsJob, unconfirmedCurvesForJob, withBaselineChannels } from "./rip-baseline.js";
 import { exportBlockedMessage, validateExportCurve } from "./curve-validation.js";
 import { validateMeasurements } from "./measurement-validation.js";
 import { buildManualMeasurementSet } from "./manual-apply.js";
@@ -582,10 +582,13 @@ function attachEvents() {
       ? { kind: "linear", auto: false }
       : { ...baselineFromApplied(state.appliedCurves.find((item) => item.id === value)), auto: false };
     calculate({ preserveRatio: true });
+    recordBaselineOnCurrentRun();
   });
   for (const input of [els.jobCustomerInput, els.jobPressInput, els.jobPaperInput]) {
     input?.addEventListener("change", () => {
-      if (!state.baseline?.auto || !state.measurements.length) return;
+      if (!state.measurements.length) return;
+      // A curve chosen for another customer / press / paper never follows the job change.
+      if (!state.baseline?.auto && baselineFitsJob(state.baseline, currentJobFields())) return;
       resetBaselineForNewMeasurement();
       calculate({ preserveRatio: true });
     });
@@ -1311,11 +1314,23 @@ function calculate(options = {}) {
 // same customer / press / paper; the user can switch to "linear" or another exported curve.
 function resetBaselineForNewMeasurement() {
   const fingerprint = measurementFingerprint(state.measurements);
-  // The same measurement was saved before: it was printed with the baseline recorded then.
-  const earlier = (state.runs || []).find((run) => run.archive?.baseline && runMeasurementFingerprint(run) === fingerprint);
+  // The same measurement was saved before for this job: it was printed with the baseline recorded then.
+  const earlier = savedRunBaseline(state.runs, currentJobFields(), fingerprint, runMeasurementFingerprint);
   state.baseline = earlier
-    ? { ...normalizeBaseline(earlier.archive.baseline), auto: true }
+    ? { ...earlier, auto: true }
     : defaultBaseline(state.appliedCurves, currentJobFields(), { fingerprint });
+}
+
+// The operator's baseline choice belongs to the current Run straight away, not only after a
+// manual save.
+function recordBaselineOnCurrentRun() {
+  if (!state.measurements.length || !state.results.length || state.manualDirty) return;
+  const nextRuns = withRunBaseline(state.runs, currentJobFields(), measurementFingerprint(state.measurements), runMeasurementFingerprint, state.baseline);
+  if (!nextRuns) return;
+  const saved = saveRunsAndLastProject(nextRuns, projectArchive(exportContext()));
+  if (!saved.ok) return;
+  state.runs = nextRuns;
+  state.lastSavedRunSignature = currentRunSignature();
 }
 
 function currentJobFields() {
@@ -1993,6 +2008,8 @@ function currentRunSignature() {
       finiteSignature(row.density),
     ]),
     overrides: state.curveOverrides,
+    // A different RIP baseline is a different Run, so saving after a baseline change is never skipped.
+    baseline: normalizeBaseline(state.baseline),
   });
 }
 

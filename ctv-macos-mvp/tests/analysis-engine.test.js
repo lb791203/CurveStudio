@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { analyzeCurveSafety, buildLabVerificationRows, deltaE2000, deltaE76, deltaE94, deltaECMC, diagnosePress, g7Preview, summarizeLabVerification } from "../src/analysis-engine.js";
-import { g7CmyNpdcLTarget, g7NpdcLTarget } from "../src/g7-targets.js";
+import { g7CmyNpdcLTarget, g7NpdcLTarget, tr015AbsoluteL } from "../src/g7-targets.js";
 import { g7GrayMagentaYellowFor } from "../src/shared.js";
 
 const g7Gray = (tone) => ({ c: tone, m: g7GrayMagentaYellowFor(tone), y: g7GrayMagentaYellowFor(tone), k: 0 });
@@ -518,6 +518,31 @@ test("round-3 S4: a solid that is not darker than paper white is Data Incomplete
   const g7 = g7Preview({ labRows: lighterK });
   assert.equal(g7.status, "Data Incomplete");
   assert.ok(g7.missing.some((item) => /K 实地不比纸白暗/.test(item)));
-  const lighterCmy = g7BaseLabRows().map((row) => row.label === "CMY 100%" ? { ...row, lab: { l: 94, a: 0, b: 0 } } : row);
+  const lighterCmy = g7BaseLabRows().map((row) => row.label === "CMY 100%" ? { ...row, lab: { l: 96, a: 0, b: 0 } } : row);
   assert.equal(g7Preview({ labRows: lighterCmy }).status, "Data Incomplete");
+});
+
+test("round-4 S4: a low-contrast but valid sheet (paper L* 95, solids L* 90) on TR 015 aims is not Data Incomplete", () => {
+  const paperL = 95;
+  const solidL = 90;
+  const rows = [
+    { label: "Paper", cmyk: { c: 0, m: 0, y: 0, k: 0 }, lab: { l: paperL, a: 0, b: -2 }, deltaE: 1 },
+    ...[10, 20, 30, 40, 50].map((tone) => ({ label: `K ${tone}%`, cmyk: { c: 0, m: 0, y: 0, k: tone }, lab: { l: tr015AbsoluteL(tone, "K", paperL, solidL), a: 0, b: 0 }, deltaE: 1 })),
+    ...["C", "M", "Y", "K"].map((channel) => ({
+      label: `${channel} 100%`,
+      cmyk: { c: channel === "C" ? 100 : 0, m: channel === "M" ? 100 : 0, y: channel === "Y" ? 100 : 0, k: channel === "K" ? 100 : 0 },
+      lab: { l: channel === "K" ? solidL : 50, a: 0, b: 0 },
+      deltaE: 1,
+    })),
+    { label: "CMY 100%", cmyk: { c: 100, m: 100, y: 100, k: 0 }, lab: { l: solidL, a: 0, b: 0 }, deltaE: 1 },
+    ...[25, 50, 75].map((tone) => ({ label: `Gray ${tone}`, cmyk: g7Gray(tone), lab: { l: tr015AbsoluteL(tone, "CMY", paperL, solidL), a: 0, b: -2 * (1 - tone / 100) }, deltaE: 1 })),
+  ];
+  const g7 = g7Preview({ labRows: rows });
+  assert.deepEqual(g7.missing, []);
+  assert.equal(g7.status, "Pass");
+  // The low contrast is shown as its own quality note, not as a data error.
+  assert.ok(g7.qualityNotes.some((item) => /K 实地与纸白 L\* 只差 5\.0/.test(item)));
+  // A solid exactly as light as paper is still invalid.
+  const equal = rows.map((row) => row.label === "K 100%" ? { ...row, lab: { l: paperL, a: 0, b: 0 } } : row);
+  assert.equal(g7Preview({ labRows: equal }).status, "Data Incomplete");
 });

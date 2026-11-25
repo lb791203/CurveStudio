@@ -507,7 +507,9 @@ function curveIssue(level, channel, tone, type, message, relatedTones = [tone]) 
   };
 }
 
-const MIN_SOLID_PAPER_L_GAP = 10;
+// Below this L* gap between paper and solid the sheet is still valid, but the contrast is
+// unusually low and worth re-checking. It is a quality note, never a validity error.
+const LOW_CONTRAST_L_GAP = 10;
 
 function isPlausibleLab(lab) {
   const [lMin, lMax] = LIMITS.labL;
@@ -644,8 +646,12 @@ export function g7Preview(options = {}) {
   if (!cmySolidLab) missing.push("CMY 三色实地缺少有效 Lab");
   // TR 015 needs Y(solid) < Y(paper): a solid as light as (or lighter than) the paper is a
   // measurement error, and would otherwise make the aims fall back to the reference curve.
-  if (paperLab && kSolidLab && !(kSolidLab.l < paperLab.l - MIN_SOLID_PAPER_L_GAP)) missing.push("K 实地不比纸白暗，Lab 关系异常");
-  if (paperLab && cmySolidLab && !(cmySolidLab.l < paperLab.l - MIN_SOLID_PAPER_L_GAP)) missing.push("CMY 三色实地不比纸白暗，Lab 关系异常");
+  const qualityNotes = [];
+  for (const [name, solid] of [["K", kSolidLab], ["CMY 三色", cmySolidLab]]) {
+    if (!paperLab || !solid) continue;
+    if (!(solid.l < paperLab.l)) missing.push(`${name} 实地不比纸白暗，Lab 关系异常`);
+    else if (paperLab.l - solid.l < LOW_CONTRAST_L_GAP) qualityNotes.push(`${name} 实地与纸白 L* 只差 ${(paperLab.l - solid.l).toFixed(1)}，反差偏低，请复核测量`);
+  }
   if (rejectedLabCount) missing.push(`${rejectedLabCount} 个色块 Lab 超出合理范围，已排除`);
   if (patchClasses.cmykSolids < 4) missing.push("CMYK 实地色块不足");
   if (grayCount < 3) {
@@ -672,6 +678,7 @@ export function g7Preview(options = {}) {
     status,
     conclusion,
     missing,
+    qualityNotes,
     kOnlyCount,
     labPatchCount: labReady.length,
     grayPatchCount: grayCount,

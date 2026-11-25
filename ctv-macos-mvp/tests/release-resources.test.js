@@ -89,11 +89,21 @@ test("round-3 M8: keys followed directly by a symbol name (real macOS build) are
   const packed = files.map((file, index) => `${index % 2 ? "IllegalEventName" : "Tauri-Invoke-Keyapplication/json"}/${file}`).join("") + "IllegalEventNameTokioOneshotRecv";
   const result = verifyBinary(packed);
   assert.equal(result.status, 0, result.stderr);
-  // A lowercase symbol right after a key is not read as a different file either.
-  const lower = verifyBinary(files.map((file) => `/${file}xyzsymbol`).join(""));
-  assert.equal(lower.status, 0, lower.stderr);
   // …but a .json next to a whitelisted .js of the same name is still caught.
   const js = files.find((file) => file.endsWith(".js"));
   const extra = verifyBinary(`${files.map((file) => `/${file}`).join("")}/${js}on`);
   assert.notEqual(extra.status, 0);
+});
+
+test("round-4 M8: an extra .icc and an extra file sharing a whitelisted prefix are rejected", () => {
+  const files = allowedFiles(root, loadWhitelist(root));
+  const packed = files.map((file) => `/${file}`).join("");
+  for (const extra of ["/samples/press-profile.icc", "/profiles/CRPC6.icc", "/src/app.js.bak", "/src/app.js-old.js", "/samples/sample-measurements.csv.orig", "/src/app.jsx"]) {
+    const result = verifyBinary(`${packed}${extra}IllegalEventName`);
+    assert.notEqual(result.status, 0, extra);
+    assert.match(result.stderr, /non-whitelisted/, extra);
+  }
+  // The same extras in the middle of the packed table, followed by the next key.
+  const middle = verifyBinary(packed.replace("/src/app.js", "/src/app.js.bak/src/app.js"));
+  assert.notEqual(middle.status, 0);
 });

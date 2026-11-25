@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { calculateCompensation } from "../src/curve-engine.js";
 import { validateExportCurve } from "../src/curve-validation.js";
-import { addAppliedCurve, appliedCurveSnapshot, baselineCurvePoints, confirmApplied, defaultBaseline, normalizeBaseline, unconfirmedCurvesForJob, withBaselineChannels } from "../src/rip-baseline.js";
+import { addAppliedCurve, appliedCurveSnapshot, baselineCurvePoints, baselineFitsJob, baselineFromApplied, savedRunBaseline, withRunBaseline, confirmApplied, defaultBaseline, normalizeBaseline, unconfirmedCurvesForJob, withBaselineChannels } from "../src/rip-baseline.js";
 
 const job = { customer: "示例客户", press: "示例印机", paper: "铜版纸" };
 const gain = (tone, peak) => Math.min(100, tone + peak * Math.sin(Math.PI * tone / 100));
@@ -94,4 +94,31 @@ test("round-3 S2: an unconfirmed export is offered, not defaulted; re-exporting 
   list = addAppliedCurve(list, appliedCurveSnapshot({ rows, job, id: "e2", sourceFingerprint: "m1" }));
   assert.equal(list.length, 1);
   assert.ok(list[0].appliedAt);
+});
+
+test("round-4 S2: the same readings under another customer / press / paper never restore job A's curve", () => {
+  const jobA = { customer: "A", press: "P1", paper: "Coated" };
+  const jobB = { customer: "B", press: "P2", paper: "Uncoated" };
+  const fingerprintOf = (run) => run.fp;
+  const curveA = { ...baselineFromApplied(appliedCurveSnapshot({ rows: compute(measure(["K"], 20)), job: jobA, id: "a" })) };
+  const runs = [
+    // A stale save: job B's fields, but the curve still belongs to job A.
+    { fp: "k-sheet", baseline: curveA, archive: { job: jobB, baseline: curveA } },
+    { fp: "k-sheet", baseline: curveA, archive: { job: jobA, baseline: curveA } },
+  ];
+  assert.equal(savedRunBaseline(runs, jobA, "k-sheet", fingerprintOf).id, "a");
+  assert.equal(savedRunBaseline(runs, jobB, "k-sheet", fingerprintOf), null);
+  assert.equal(savedRunBaseline(runs, { ...jobA, paper: "Uncoated" }, "k-sheet", fingerprintOf), null);
+  assert.equal(baselineFitsJob(curveA, jobB), false);
+  assert.equal(baselineFitsJob({ kind: "linear" }, jobB), true);
+});
+
+test("round-4 S2: a confirmed baseline is written into the matching saved run at once", () => {
+  const fingerprintOf = (run) => run.fp;
+  const curve = baselineFromApplied(appliedCurveSnapshot({ rows: compute(measure(["C"], 20)), job, id: "c" }));
+  const runs = [{ fp: "m1", baseline: { kind: "linear" }, archive: { job, baseline: { kind: "linear" } } }];
+  const next = withRunBaseline(runs, job, "m1", fingerprintOf, curve);
+  assert.equal(next[0].archive.baseline.id, "c");
+  assert.equal(savedRunBaseline(next, job, "m1", fingerprintOf).id, "c");
+  assert.equal(withRunBaseline(runs, job, "other", fingerprintOf, curve), null);
 });
